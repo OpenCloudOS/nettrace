@@ -1,0 +1,341 @@
+{
+	"name": "all",
+	"desc": "trace the whole kernel network stack",
+	"children": [
+		{
+			"name": "link",
+			"desc": "link layer (L2) of the network stack",
+			"children": [
+				{
+					"name": "link-in",
+					"desc": "link layer (L2) of packet in",
+					"visual": true,
+					"children": [
+						{
+							"name": "napi_gro_receive",
+							"skb": 1
+						},
+						{
+							"name": "enqueue_to_backlog",
+							"skb": 0
+						},
+						{
+							"name": "__netif_receive_skb_core"
+						},
+						{
+							"name": "do_xdp_generic",
+							"skb": 1
+						},
+						{
+							"name": "xdp_do_generic_redirect",
+							"skb": 1
+						},
+						{
+							"name": "generic_xdp_tx",
+							"skb": 1
+						},
+						{
+							"name": "sch_handle_ingress",
+							"skb": 0
+						}
+					]
+				},
+				{
+					"name": "link-out",
+					"desc": "link layer (L2) of packet out",
+					"visual": true,
+					"children": [
+						{
+							"name": "dev_queue_xmit",
+							"skb": 0
+						},
+						{
+							"name": "dev_hard_start_xmit",
+							"skb": 0
+						}
+					]
+				},
+				{
+					"name": "sched",
+					"desc": "TC(traffic control) module",
+					"visual": true,
+					"children": [
+						{
+							"name": "tcf_classify",
+							"skb": 0
+						},
+						{
+							"name": "sch_handle_egress",
+							"skb": 0
+						},
+						{
+							"name": "cls_bpf_classify",
+							"skb": 0
+						},
+						{
+							"name": "tcf_bpf_act",
+							"skb": 0
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "packet",
+			"desc": "the process of skb of type PF_PACKET",
+			"children": [
+				{
+					"name": "pkt-in",
+					"desc": "the process of skb of type PF_PACKET",
+					"visual": true,
+					"children": [
+						{
+							"name": "packet_rcv",
+							"skb": 0
+						},
+						{
+							"name": "tpacket_rcv",
+							"skb": 0
+						}
+					]
+				},
+				{
+					"name": "pkt-output",
+					"desc": "the process of skb of type PF_PACKET",
+					"visual": true,
+					"children": []
+				}
+			]
+		},
+		{
+			"name": "ip",
+			"desc": "ip protocol layer (L3) of the network stack",
+			"children": [
+				{
+					"name": "ip-in",
+					"desc": "ip layer of packet in",
+					"visual": true,
+					"children": [
+						{
+							"name": "ip_rcv",
+							"skb": 0
+						},
+						{
+							"name": "ip_rcv_core",
+							"skb": 0,
+							"regex": "ip_rcv_core\\.*"
+						},
+						{
+							"name": "ip_rcv_finish",
+							"skb": 2
+						},
+						{
+							"name": "ip_local_deliver",
+							"skb": 0
+						},
+						{
+							"name": "ip_local_deliver_finish",
+							"skb": 2
+						},
+						{
+							"name": "ip_forward",
+							"skb": 0
+						},
+						{
+							"name": "ip_forward_finish",
+							"skb": 0
+						}
+					]
+				},
+				{
+					"name": "ip-out",
+					"desc": "ip layer of packet out",
+					"visual": true,
+					"children": [
+						{
+							"name": "__ip_local_out",
+							"skb": 2
+						},
+						{
+							"name": "ip_send_skb",
+							"skb": 1
+						},
+						{
+							"name": "ip_output",
+							"skb": 2
+						},
+						{
+							"name": "ip_finish_output",
+							"skb": 2
+						},
+						{
+							"name": "ip_finish_output_gso",
+							"skb": 2
+						},
+						{
+							"name": "ip_finish_output2",
+							"skb": 2
+						}
+					]
+				},
+				{
+					"name": "netfilter",
+					"desc": "netfilter process(filter, nat, etc)",
+					"visual": true,
+					"children": [
+						{
+							"name": "ipt_do_table",
+							"skb": 0
+						},
+						{
+							"name": "nf_hook_slow",
+							"skb": 0
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "tcp",
+			"desc": "tcp protocol layer (L4) of the network stack",
+			"children": [
+				{
+					"name": "tcp-in",
+					"desc": "tcp layer of packet in",
+					"visual": true,
+					"children": [
+						{
+							"name": "tcp_v4_rcv",
+							"skb": 0
+						},
+						{
+							"name": "tcp_filter",
+							"skb": 1
+						},
+						{
+							"name": "tcp_child_process",
+							"skb": 2
+						},
+						{
+							"name": "tcp_v4_send_reset",
+							"skb": 1
+						},
+						{
+							"name": "tcp_v4_do_rcv",
+							"skb": 1
+						},
+						{
+							"name": "tcp_rcv_established",
+							"skb": 1
+						},
+						{
+							"name": "tcp_rcv_state_process",
+							"skb": 1
+						},
+						{
+							"name": "tcp_queue_rcv",
+							"skb": 1
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "udp",
+			"desc": "udp protocol layer (L4) of the network stack",
+			"children": [
+				{
+					"name": "udp-in",
+					"desc": "udp layer of packet in",
+					"visual": true,
+					"children": [
+						{
+							"name": "udp_rcv",
+							"skb": 0
+						},
+						{
+							"name": "udp_unicast_rcv_skb",
+							"skb": 1
+						},
+						{
+							"name": "udp_queue_rcv_skb",
+							"skb": 1
+						},
+						{
+							"name": "xfrm4_udp_encap_rcv",
+							"skb": 1
+						},
+						{
+							"name": "xfrm4_rcv_encap",
+							"skb": 0
+						},
+						{
+							"name": "__udp_queue_rcv_skb",
+							"skb": 1
+						},
+						{
+							"name": "__udp_enqueue_schedule_skb",
+							"skb": 1
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "icmp",
+			"desc": "icmp(ping) protocol layer (L4) of the network stack",
+			"children": [
+				{
+					"name": "icmp-in",
+					"desc": "icmp layer of packet in",
+					"visual": true,
+					"children": [
+						{
+							"name": "icmp_rcv",
+							"skb": 0
+						},
+						{
+							"name": "icmp_echo",
+							"skb": 0
+						},
+						{
+							"name": "icmp_reply",
+							"skb": 1
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "life",
+			"desc": "skb clone and free",
+			"visual": true,
+			"children": [
+				{
+					"name": "__kfree_skb",
+					"skb": 0,
+					"is_end": true
+				},
+				{
+					"name": "skb_clone",
+					"skb": 0,
+					"type": "kretprobe"
+				},
+				{
+					"name": "consume_skb",
+					"tp": "skb:consume_skb",
+					"type": "tracepoint",
+					"skb": "skbaddr",
+					"is_end": true
+				},
+				{
+					"name": "kfree_skb",
+					"tp": "skb:kfree_skb",
+					"type": "tracepoint",
+					"skb": "skbaddr",
+					"is_end": true
+				}
+			]
+		}
+	]
+}
