@@ -163,7 +163,7 @@ begin tracing......
 
 ```shell
 $ nettrace -h
-usage: nettrace [-h] [-s SADDR] [-d DADDR] [--addr ADDR] [-p PROTO] [--dport DPORT] [--sport SPORT] [--port PORT] [-t TRACER] [-v] [--detail] [--stack] [--stack-tracer STACK_TRACER] [--timeline] [-c COUNT] [--ret] [--skb-mode] [--force_stack]
+usage: nettrace [-h] [-s SADDR] [-d DADDR] [--addr ADDR] [-p PROTO] [--dport DPORT] [--sport SPORT] [--port PORT] [-t TRACER] [-v] [--detail] [--stack] [--stack-tracer STACK_TRACER] [--timeline] [-c COUNT] [--ret] [--skb-mode] [--force-stack]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -189,7 +189,7 @@ optional arguments:
                         skb count to trace (timeline should be enabled)
   --ret                 trace the return value
   --skb-mode            keep tracing skb once it is matched
-  --force_stack         force print stack for "all" tracer
+  --force-stack         force print stack for "all" tracer
 ```
 
 - `--stack`: print the function call stack for the kernel function or tracepoint that enabled.

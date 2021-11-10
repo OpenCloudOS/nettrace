@@ -1,0 +1,268 @@
+.\" Manpage for nettrace.
+
+.\" Contact imagedong@tencent.com to correct errors or typos.
+
+.TH man 8 "11 Nov 2020" "1.0" "nettrace man page"
+
+.SH NAME
+nettrace \- A skb (network package) trace tool for kernel
+
+.SH SYNOPSIS
+nettrace [-h] [-s SADDR] [-d DADDR] [--addr ADDR] [-p PROTO]
+         [--dport DPORT] [--sport SPORT] [--port PORT] [-t TRACER] [-v]
+         [--detail] [--stack] [--stack-tracer STACK_TRACER]
+         [--timeline] [-c COUNT] [--ret] [--skb-mode] [--force_stack]
+
+.SH DESCRIPTION
+nettrace is is a powerful tool to trace network packet and diagnose network problem inside kernel on TencentOS.
+
+It make use of eBPF and BCC.
+
+\'skb\' is the struct that used in kernel to store network package. By tracing kernel function and tracepoint (with the help of kprobe based on eBPF) that handle skb, nettrace is able to show the path of skb bypass inside kernel network stack. Therefor, some network issue (such as package drop) can be solved simply.
+
+.SH OPTIONS
+.TP
+.B \-h
+.PD 0
+.TP
+.B \-\-help
+.PD
+show this help message and exit
+.TP
+.B \-s saddr
+.PD 0
+.TP
+.B \-\-saddr saddr
+.PD
+filter by ip source address
+.TP
+.B \-d daddr
+.PD 0
+.TP
+.B \-\-daddr daddr
+.PD
+filter by ip dest address
+.TP
+.B \-\-addr addr
+.PD
+filter by ip source or dest address
+.TP
+.B \-p proto
+.PD 0
+.TP
+.B \-\-proto proto
+.PD
+filter by network protocol (L3 or L4) in lower case, such ip, tcp, udp, etc.
+.TP
+.B \-\-dport dport
+.PD
+filter by TCP/UDP dest port
+.TP
+.B \-\-sport sport
+.PD
+filter by TCP/UDP source port
+.TP
+.B \-\-port port
+.PD
+filter by TCP/UDP source or dest port
+.TP
+.B \-t tracers
+.PD 0
+.TP
+.B \-\-tracer tracers
+.PD
+The network module or kernel function to trace.
+
+kernel function and tracepoint are organized in a 'tracer' tree, and every node of the tree is a tracer. 'all' is the root of the 'tracer' tree. The tree can be displayed with the command: \`nettrace -t ?\`
+
+.RS 9
+$ nettrace -t ?
+.br
+available tracer:
+.br
+---------------------------------------------------
+.br
+
+.br
+all: trace the whole kernel network stack
+.br
+    link: link layer (L2) of the network stack
+.br
+        link-in: link layer (L2) of packet in
+.br
+            napi_gro_receive
+.br
+            enqueue_to_backlog
+.br
+            __netif_receive_skb_core
+.br
+            do_xdp_generic
+.br
+            xdp_do_generic_redirect
+.br
+            generic_xdp_tx
+.br
+            sch_handle_ingress
+.br
+        link-out: link layer (L2) of packet out
+.br
+            dev_queue_xmit
+.br
+            dev_hard_start_xmit
+.br
+        sched: TC(traffic control) module
+.br
+            tcf_classify
+.br
+            sch_handle_egress
+.br
+            cls_bpf_classify
+.br
+            tcf_bpf_act
+.br
+ ......
+.br
+.RE
+
+.RS 7
+This is the part of the tracer tree. 'link' just represent the link layer (L2) of the network stack, and 'link-in' represent receive package, 'link-out' represent send package. 'ip' represent ip layer, 'tcp' represent tcp layer, etc.
+
+When trace skb, tracer can be specified by '-t' (or '--tracer'), and multiple are supported. By default, 'all' tracer is used. For example, 'nettrace -t napi_gro_receive,ip' to trace the function napi_gro_receive (function is tracer too) and ip layer.
+.RE
+
+.TP
+.B -v
+.PD 0
+.TP
+.B --verbose
+.PD
+show more verbose info
+.TP
+.B --detail
+.PD
+show more info for trace output, such as skb address, pid, task name, etc
+.TP
+.B --stack
+.PD
+print the function call stack for the kernel function or tracepoint that enabled.
+.TP
+.B --stack-tracer tracers
+.PD
+maybe you don't want to print stack for all kernel function that enable, you can specify the tracer (or kernel function) that you want to print stack.
+.TP
+.B --timeline
+.PD
+enable timeline mode.
+
+By default, kernel function are printed directly. It's not easy to distinguish single skb, especially multi skb are printed at the same time. To solve this problem, \'timeline mode\' is introduced. In this mode, every skb has a \'context\', which is used to mange the life of the skb. The skb won't be printed until it 'dies', and it will be print singly.
+
+What's more, the skb cloned from one skb is thought to be in the same context, and will be printed together.
+
+.TP
+.B -c count
+.PD 0
+.TP
+.B --count count
+.PD
+skb count to trace (timeline should be enabled)
+.TP
+.B --ret
+.PD
+trace the return value
+.TP
+.B --skb-mode
+.PD
+keep tracing skb once it is matched
+
+Traditional packet filter is supported, such protocol, ip source address, ip destination address, source port, destination port, etc. However, while the data of skb changing (for example, NAT), it can't work probably.
+
+`skb mode` is used to solve this problem. While it is enabled with `--skb-mode`, nettrace will keep tracing the skb once it is matched, even if ip address or port changed. This mode is helpful when you want to trace the skb whose data will be change by iptables.
+
+As we can see below, we want to trace icmp package with ip address `192.168.122.8`. However, DNAT is done by iptables, and the ip source address of this skb changed to `9.135.224.89`. With this mode enabled, we still can keep tracing it.
+
+.RS 9
+$ nettrace -p icmp \-\-addr 192\.168\.122\.8 \-\-timeline \-\-skb\-mode
+.br
+begin tracing......
+.br
+<------------------- skb: ffff88818f02f900 ---------------------->
+.br
+463697.331957: [__netif_receive_skb_core]: ICMP: 192.168.122.8 -> 10.123.119.98, ping request   , seq: 0
+.br
+463697.331972: [nf_hook_slow            ]: ICMP: 192.168.122.8 -> 10.123.119.98, ping request   , seq: 0
+.br
+463697.331985: [nf_hook_slow            ]: ICMP: 192.168.122.8 -> 10.123.119.98, ping request   , seq: 0
+.br
+463697.331990: [__netif_receive_skb_core]: ICMP: 192.168.122.8 -> 10.123.119.98, ping request   , seq: 0
+.br
+463697.331994: [ip_rcv                  ]: ICMP: 192.168.122.8 -> 10.123.119.98, ping request   , seq: 0
+.br
+463697.331998: [ip_rcv_core             ]: ICMP: 192.168.122.8 -> 10.123.119.98, ping request   , seq: 0
+.br
+463697.332001: [nf_hook_slow            ]: ICMP: 192.168.122.8 -> 10.123.119.98, ping request   , seq: 0
+.br
+463697.332004: [ip_rcv_finish           ]: ICMP: 192.168.122.8 -> 10.123.119.98, ping request   , seq: 0
+.br
+463697.332010: [ip_forward              ]: ICMP: 192.168.122.8 -> 10.123.119.98, ping request   , seq: 0
+.br
+463697.332014: [nf_hook_slow            ]: ICMP: 192.168.122.8 -> 10.123.119.98, ping request   , seq: 0
+.br
+463697.332024: [ip_output               ]: ICMP: 192.168.122.8 -> 10.123.119.98, ping request   , seq: 0
+.br
+463697.332027: [nf_hook_slow            ]: ICMP: 192.168.122.8 -> 10.123.119.98, ping request   , seq: 0
+.br
+463697.332037: [ip_finish_output        ]: ICMP: 9.135.224.89  -> 10.123.119.98, ping request   , seq: 0
+.br
+463697.332039: [ip_finish_output2       ]: ICMP: 9.135.224.89  -> 10.123.119.98, ping request   , seq: 0
+.br
+463697.332042: [dev_queue_xmit          ]: ICMP: 9.135.224.89  -> 10.123.119.98, ping request   , seq: 0
+.br
+463697.332046: [dev_hard_start_xmit     ]: ICMP: 9.135.224.89  -> 10.123.119.98, ping request   , seq: 0
+.br
+463697.332060: [consume_skb             ]: ICMP: 9.135.224.89  -> 10.123.119.98, ping request   , seq: 0
+.br
+.RE
+
+.TP
+.B --force-stack
+.PD
+by default, you can't set `-t all` and `--stack` together for performance problem. With this option you can do it.
+
+.SH EXAMPLES
+
+.TP
+trace icmp package with source ip '192.168.1.8':
+#
+.B nettrace -p icmp -s 192.168.1.8
+
+.TP
+trace icmp package with source ip '192.168.1.8' in ip and icmp layer:
+#
+.B nettrace -p icmp -s 192.168.1.8 -t ip,icmp
+
+.TP
+trace icmp package with source ip '192.168.1.8' in timeline mode:
+#
+.B nettrace -p icmp -s 192.168.1.8 --timeline
+
+.TP
+trace icmp package with source ip '192.168.1.8' in skb mode:
+#
+.B nettrace -p icmp -s 192.168.1.8 --skb-mode
+
+.TP
+trace icmp package with source ip '192.168.1.8' and print detail information
+#
+.B nettrace -p icmp -s 192.168.1.8 --detail
+
+.SH REQUIREMENTS
+CONFIG_BPF, CONFIG_KPROBE and bcc.
+
+.SH OS
+Linux
+
+.SH AUTHOR
+Menglong Dong
+
+.SH SEE ALSO
+bpf(2), bcc-*(8)

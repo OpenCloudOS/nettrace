@@ -1,4 +1,4 @@
-#!/bin/python3
+#!/usr/bin/python3
 import argparse
 import json
 import struct
@@ -6,7 +6,6 @@ import socket
 import bcc
 import ctypes
 import re
-import os
 
 from config import project_file
 
@@ -585,7 +584,7 @@ Notice: this may cause performance issue.\n''')
                             help='trace the return value')
         parser.add_argument('--skb-mode', action='store_true',
                             help='keep tracing skb once it is matched')
-        parser.add_argument('--force_stack', action='store_true',
+        parser.add_argument('--force-stack', action='store_true',
                             help='force print stack for "all" tracer')
         return parser.parse_args()
 
