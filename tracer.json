@@ -24,6 +24,7 @@
 						},
 						{
 							"name": "do_xdp_generic",
+							"regex": "do_xdp_generic\\..*",
 							"skb": 1
 						},
 						{

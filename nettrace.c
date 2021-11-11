@@ -64,6 +64,9 @@ typedef struct {
 			u16 seq;
 			u16 id;
 		} icmp;
+		struct {
+			u16 op;
+		} arp_ext;
 #define field_udp field_l4.udp
 	} field_l4;
 	u16 proto_l3;
@@ -218,20 +221,52 @@ static inline int parse_sk(context_t *ctx, struct sock *sk,
 	return 0;
 }
 
+struct arphdr {
+	__be16		ar_hrd;		/* format of hardware address	*/
+	__be16		ar_pro;		/* format of protocol address	*/
+	unsigned char	ar_hln;		/* length of hardware address	*/
+	unsigned char	ar_pln;		/* length of protocol address	*/
+	__be16		ar_op;		/* ARP opcode (command)		*/
+
+	 /*
+	  *	 Ethernet looks like this : This bit is variable sized however...
+	  */
+	unsigned char	ar_sha[ETH_ALEN];	/* sender hardware address	*/
+	unsigned char	ar_sip[4];		/* sender IP address		*/
+	unsigned char	ar_tha[ETH_ALEN];	/* target hardware address	*/
+	unsigned char	ar_tip[4];		/* target IP address		*/
+
+};
+
+static inline int parse_arp(context_t *ctx, sk_buff_t *skb,
+			    struct arphdr *arp)
+{
+	bpf_probe_read_kernel(&ctx->field_saddr, 4, arp->ar_sip);
+	bpf_probe_read_kernel(&ctx->field_daddr, 4, arp->ar_tip);
+	ctx->field_l4.arp_ext.op = arp->ar_op;
+	return 0;
+}
+
 static inline int init_ctx(context_t *ctx, sk_buff_t *skb)
 {
 	struct ethhdr *eth = get_l2(skb);
 	struct sock *sk;
-	void *ip;
+	void *l3;
 
 	if (!eth)
 		goto on_send;
 
-	ip = get_l3(skb);
 	ctx->proto_l3 = eth->h_proto;
-	if (ctx->proto_l3 != htons(ETH_P_IP))
+	l3 = get_l3(skb);
+
+	switch (ctx->proto_l3) {
+	case htons(ETH_P_IP):
+		return parse_ip(ctx, skb, l3);
+	case htons(ETH_P_ARP):
+		return parse_arp(ctx, skb, l3);
+	default:
 		return 0;
-	return parse_ip(ctx, skb, ip);
+	}
 
 on_send:
 	sk = skb->sk;
@@ -239,9 +274,9 @@ on_send:
 		return 0;
 
 	ctx->proto_l3 = htons(ETH_P_IP);
-	ip = get_l3_send(skb);
-	if (ip)
-		return parse_ip(ctx, skb, ip);
+	l3 = get_l3_send(skb);
+	if (l3)
+		return parse_ip(ctx, skb, l3);
 	return 0;
 }
 

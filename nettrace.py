@@ -667,6 +667,11 @@ class Compile:
                 ('daddr', ctypes.c_uint32),
             ]
 
+        class ARP_Ext(ctypes.Structure):
+            _fields_ = [
+                ('op', ctypes.c_uint16)
+            ]
+
         class Tcp(ctypes.Structure):
             _fields_ = [
                 ('sport', ctypes.c_uint16),
@@ -691,14 +696,15 @@ class Compile:
 
         class Field_l3(ctypes.Union):
             _fields_ = [
-                ('ip', IP)
+                ('ip', IP),
             ]
 
         class Field_l4(ctypes.Union):
             _fields_ = [
                 ('tcp', Tcp),
                 ('udp', Udp),
-                ('icmp', Icmp)
+                ('icmp', Icmp),
+                ('arp_ext', ARP_Ext),
             ]
 
         ctx_fields = [('ts', ctypes.c_uint64), ('field_l3', Field_l3),
@@ -767,14 +773,11 @@ class Output:
                   show_module=True, show_offset=True))
 
     @staticmethod
-    def _generate_proto_info(ctx):
-        output_str = ''
-        proto_l3 = socket.ntohs(ctx.proto_l3)
+    def _generate_ip_info(ctx):
         ip = ctx.field_l3.ip
-        if proto_l3 != NetUtils.PROTO_L3['IP']:
-            output_str += '%s' % (NetUtils.int2proto(
-                proto_l3, 3) or str(proto_l3))
-        elif ctx.proto_l4 == socket.IPPROTO_TCP:
+        output_str = ''
+
+        if ctx.proto_l4 == socket.IPPROTO_TCP:
             tcp = ctx.field_l4.tcp
             output_str += 'TCP: %s:%d -> %s:%d, seq: %d, %s' % (
                 NetUtils.int2ip(socket.ntohl(ip.saddr)),
@@ -806,10 +809,42 @@ class Output:
                 icmp_info,
                 socket.ntohs(icmp.seq))
         else:
-            output_str += '%s: %s -> %s' % (NetUtils.int2proto(socket.ntohs(ctx.proto_l3)),
-                                            NetUtils.int2ip(
-                                                socket.ntohl(ip.saddr)),
-                                            NetUtils.int2ip(socket.ntohl(ip.daddr)))
+            fmt = '%s: %s -> %s'
+            output_str += fmt % (NetUtils.int2proto(socket.ntohs(ctx.proto_l3)),
+                                 NetUtils.int2ip(socket.ntohl(ip.saddr)),
+                                 NetUtils.int2ip(socket.ntohl(ip.daddr)))
+        return output_str
+
+    @staticmethod
+    def _generate_arp_info(ctx):
+        arp_ext = ctx.field_l4.arp_ext
+        ip = ctx.field_l3.ip
+        type = ''
+        if socket.ntohs(arp_ext.op) == 1:
+            type = 'request'
+        elif socket.ntohs(arp_ext.op) == 2:
+            type = 'reply'
+        elif socket.ntohs(arp_ext.op) == 3:
+            type = 'rarp request'
+        elif socket.ntohs(arp_ext.op) == 4:
+            type = 'rarp reply'
+        fmt = 'ARP: %s -> %s, %s'
+        return fmt % (NetUtils.int2ip(socket.ntohl(ip.saddr)),
+                      NetUtils.int2ip(socket.ntohl(ip.daddr)),
+                      type)
+
+    @staticmethod
+    def _generate_proto_info(ctx):
+        proto_l3 = socket.ntohs(ctx.proto_l3)
+
+        if proto_l3 == NetUtils.PROTO_L3['IP']:
+            return Output._generate_ip_info(ctx)
+
+        if proto_l3 == NetUtils.PROTO_L3['ARP']:
+            return Output._generate_arp_info(ctx)
+
+        output_str = '%s' % (NetUtils.int2proto(
+            proto_l3, 3) or str(proto_l3))
         return output_str
 
     @staticmethod
