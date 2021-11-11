@@ -6,6 +6,7 @@ import socket
 import bcc
 import ctypes
 import re
+import os
 
 from config import project_file
 
@@ -605,6 +606,10 @@ Notice: this may cause performance issue.\n''')
             exit(0)
 
         Helper.check_stack()
+        if os.geteuid() != 0:
+            Helper.pr_err('Please run nettrace as root! Aborting...')
+            exit(-1)
+
         return args
 
     @staticmethod
