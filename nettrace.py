@@ -197,6 +197,21 @@ class NetUtils:
         return ','.join(res)
 
     @staticmethod
+    def tcp_flags2int(flags):
+        res = 0
+        if 'A' in flags:
+            res += (1 << 4)
+        if 'P' in flags:
+            res += (1 << 3)
+        if 'F' in flags:
+            res += (1 << 0)
+        if 'S' in flags:
+            res += (1 << 1)
+        if 'R' in flags:
+            res += (1 << 2)
+        return res
+
+    @staticmethod
     def b2str(b):
         return 'true' if b else 'false'
 
@@ -565,6 +580,8 @@ Notice: this may cause performance issue.\n''')
         parser.add_argument('--sport', type=int, help='TCP/UDP source port')
         parser.add_argument('--port', type=int,
                             help='TCP/UDP source or dest port')
+        parser.add_argument('--tcp-flags',
+                            help='TCP flags to filter, such as S(syn), A(ack), R(rst), etc')
         parser.add_argument('-t', '--tracer',
                             help='The network module or kernel function '
                             'to trace. Use "-t ?" to see available tracer')
@@ -974,6 +991,11 @@ class Core:
                 port = socket.htons(args.port)
                 ph_filter.append('(ctx->field_dport == %d || ctx->field_sport == %d)' %
                                  (port, port))
+
+            if args.tcp_flags:
+                flags = NetUtils.tcp_flags2int(args.tcp_flags)
+                ph_filter.append('(ctx->field_flags & %d)' %
+                                 socket.htons(flags))
 
             bpf_text = bpf_text.replace(
                 'BPF_PH_filter', '&&'.join(ph_filter) or '1')
