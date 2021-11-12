@@ -9,9 +9,10 @@ nettrace \- A skb (network package) trace tool for kernel
 
 .SH SYNOPSIS
 nettrace [-h] [-s SADDR] [-d DADDR] [--addr ADDR] [-p PROTO]
-         [--dport DPORT] [--sport SPORT] [--port PORT] [-t TRACER] [-v]
-         [--detail] [--stack] [--stack-tracer STACK_TRACER]
-         [--timeline] [-c COUNT] [--ret] [--skb-mode] [--force_stack]
+         [--dport DPORT] [--sport SPORT] [--port PORT]
+         [--tcp-flags TCP_FLAGS] [-t TRACER] [-v] [--detail] [--stack]
+         [--stack-tracer STACK_TRACER] [--timeline] [-c COUNT] [--ret]
+         [--skb-mode] [--force-stack]
 
 .SH DESCRIPTION
 nettrace is is a powerful tool to trace network packet and diagnose network problem inside kernel on TencentOS.
@@ -61,6 +62,12 @@ filter by TCP/UDP dest port
 .B \-\-sport sport
 .PD
 filter by TCP/UDP source port
+.TP
+.B \-\-tcp\-flags tcp_flags
+.PD
+filter by TCP flags, such as S(syn), A(ack), R(rst) and P(push). Multiple flags are supported, such as:
+.B --tcp-flags SA
+means filter tcp packet with flags syn + ack.
 .TP
 .B \-\-port port
 .PD
@@ -234,6 +241,11 @@ by default, you can't set `-t all` and `--stack` together for performance proble
 trace icmp package with source ip '192.168.1.8':
 #
 .B nettrace -p icmp -s 192.168.1.8
+
+.TP
+trace tcp package with source ip '192.168.1.8' and syn+ack flags:
+#
+.B nettrace -p tcp -s 192.168.1.8 --tcp-flags SA
 
 .TP
 trace icmp package with source ip '192.168.1.8' in ip and icmp layer:

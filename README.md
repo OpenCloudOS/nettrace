@@ -177,6 +177,9 @@ optional arguments:
   --dport DPORT         TCP/UDP dest port
   --sport SPORT         TCP/UDP source port
   --port PORT           TCP/UDP source or dest port
+  --tcp-flags TCP_FLAGS
+                        TCP flags to filter, such as S(syn), A(ack), R(rst),
+                        etc
   -t TRACER, --tracer TRACER
                         The network module or kernel function to trace. Use "-t ?" to see available tracer
   -v, --verbose         show more verbose info
@@ -195,4 +198,31 @@ optional arguments:
 - `--stack`: print the function call stack for the kernel function or tracepoint that enabled.
 - `--stack-tracer`: maybe you don't want to print stack for all kernel function that enable, you can specify the tracer (or kernel function) that you want to print stack.
 - `--force_stack`: by default, you can't set `-t all` and `--stack` together for performance problem. With this option, you can do it.
+- `--tcp-flags`: use tcp flags to filter tcp skb. S(syn), A(ack), R(rst) and P(push) are supported.
+
+## example
+
+trace icmp package with source ip '192.168.1.8':
+
+**# nettrace -p icmp -s 192.168.1.8**
+
+trace tcp package with source ip '192.168.1.8' and syn+ack flags:
+
+**# nettrace -p tcp -s 192.168.1.8 --tcp-flags SA**
+
+trace icmp package with source ip '192.168.1.8' in ip and icmp layer:
+
+**# nettrace -p icmp -s 192.168.1.8 -t ip,icmp**
+
+trace icmp package with source ip '192.168.1.8' in timeline mode:
+
+**# nettrace -p icmp -s 192.168.1.8 --timeline**
+
+trace icmp package with source ip '192.168.1.8' in skb mode:
+
+**# nettrace -p icmp -s 192.168.1.8 --skb-mode**
+
+trace icmp package with source ip '192.168.1.8' and print detail information
+
+**# nettrace -p icmp -s 192.168.1.8 --detail**
 
