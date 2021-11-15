@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 import argparse
 import json
 import struct
@@ -352,12 +352,8 @@ class TracePoint:
 
     @staticmethod
     def fix_version():
-        try:
-            import subprocess
-            code, ver_str = subprocess.getstatusoutput('uname -r')
-        except Exception:
-            import commands
-            code, ver_str = commands.getstatusoutput('uname -r')
+        import subprocess
+        code, ver_str = subprocess.getstatusoutput('uname -r')
         if code != 0:
             return
         m = re.match(r'([0-9]+\.[0-9]+)\.', ver_str)
