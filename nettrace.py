@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/python2
 import argparse
 import json
 import struct
@@ -8,6 +8,7 @@ import ctypes
 import re
 import os
 
+from if_indextoname import *
 from config import project_file
 
 
@@ -352,8 +353,8 @@ class TracePoint:
 
     @staticmethod
     def fix_version():
-        import subprocess
-        code, ver_str = subprocess.getstatusoutput('uname -r')
+        import commands
+        code, ver_str = commands.getstatusoutput('uname -r')
         if code != 0:
             return
         m = re.match(r'([0-9]+\.[0-9]+)\.', ver_str)
@@ -882,7 +883,7 @@ class Output:
                 ifname = '%d:%s' % (ctx.ifindex, ifname)
             elif ctx.ifindex:
                 try:
-                    ifname = socket.if_indextoname(ctx.ifindex)
+                    ifname = if_indextoname(ctx.ifindex)
                     ifname = '%d:%s' % (ctx.ifindex, ifname)
                 except Exception:
                     ifname = '%d' % ctx.ifindex

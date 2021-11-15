@@ -16,7 +16,7 @@ Source0:%{name}-%{version}.tar.gz
 
 # URL:
 
-Requires:bcc,python3-bcc
+Requires:bcc >= 0.10.0, python-bcc >= 0.10.0
 
 %description
 nettrace is is a powerful tool to trace network packet and diagnose
