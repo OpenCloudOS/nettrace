@@ -2,11 +2,11 @@
 #include <linux/skbuff.h>
 #include <net/sock.h>
 #include <linux/types.h>
-#include <linux/if_ether.h>
-#include <linux/tcp.h>
-#include <linux/ip.h>
-#include <linux/udp.h>
-#include <linux/icmp.h>
+#include <uapi/linux/if_ether.h>
+#include <uapi/linux/tcp.h>
+#include <uapi/linux/ip.h>
+#include <uapi/linux/udp.h>
+#include <uapi/linux/icmp.h>
 #include <bcc/proto.h>
 
 #define DO_TRACE(regs, args...) {		\
@@ -144,17 +144,18 @@ static inline void *get_l4(sk_buff_t *skb)
 		return NULL;
 }
 
-static inline bool do_filter(context_t *ctx)
+static inline bool do_filter(context_t *ctx, sk_buff_t *skb)
 {
 #ifdef NT_ENABLE_SKB_MODE
-	bool *matched = (bool *)(m_match.lookup(&ctx->id));
+	u64 key = (u64)(void *)skb;
+	bool *matched = (bool *)(m_match.lookup(&key));
 	if (matched)
 		return true;
 #endif
 	bool res = (BPF_PH_filter);
 #ifdef NT_ENABLE_SKB_MODE
 	if (res)
-		m_match.update(&ctx->id, &res);
+		m_match.update(&key, &res);
 #endif
 	return res;
 }
@@ -241,8 +242,8 @@ struct arphdr {
 static inline int parse_arp(context_t *ctx, sk_buff_t *skb,
 			    struct arphdr *arp)
 {
-	bpf_probe_read_kernel(&ctx->field_saddr, 4, arp->ar_sip);
-	bpf_probe_read_kernel(&ctx->field_daddr, 4, arp->ar_tip);
+	bpf_probe_read(&ctx->field_saddr, 4, arp->ar_sip);
+	bpf_probe_read(&ctx->field_daddr, 4, arp->ar_tip);
 	ctx->field_l4.arp_ext.op = arp->ar_op;
 	return 0;
 }
@@ -322,7 +323,7 @@ static inline int do_trace(void *regs, sk_buff_t *skb, u32 func
 	ctx->id = (u64)(void *)skb;
 #endif
 
-	if (!do_filter(ctx))
+	if (!do_filter(ctx, skb))
 		return 0;
 
 #ifdef NT_ENABLE_STACK
@@ -335,8 +336,7 @@ static inline int do_trace(void *regs, sk_buff_t *skb, u32 func
 	ctx->pid = t->pid;
 	bpf_get_current_comm(&ctx->comm, sizeof(ctx->comm));
 	if (skb->dev) {
-		bpf_probe_read_kernel(&ctx->ifname, IFNAMSIZ,
-				      &skb->dev->name);
+		bpf_probe_read_str(ctx->ifname, IFNAMSIZ, skb->dev->name);
 		ctx->ifindex = skb->dev->ifindex;
 	} else {
 		ctx->ifindex = skb->skb_iif;
@@ -368,13 +368,15 @@ static inline int ret_trace(struct pt_regs *regs, u32 func, bool is_clone)
 		return 0;
 
 	context_t *ctx = (context_t *)rctx;
-	ctx->ret_val = PT_REGS_RC(regs);
+
+	u64 ret_val = PT_REGS_RC(regs);
+	ctx->ret_val = ret_val;
 	ctx->is_ret = true;
 	do_output(regs, (context_t *)rctx);
 
 #ifdef NT_ENABLE_SKB_MODE
 	if (is_clone)
-		m_match.update(&ctx->ret_val, &is_clone);
+		m_match.update(&ret_val, &is_clone);
 #endif
 
 	rctx->match = false;
