@@ -2,9 +2,9 @@ Summary: A skb (network package) trace tool for kernel
 
 Name: nettrace
 
-Version: 0.1.1
+Version: %{getenv:VERSION}
 
-Release: 2.tl3
+Release: %{getenv:RELEASE}
 
 License: GPL
 
@@ -34,25 +34,9 @@ issue (such as package drop) can be solved simply.
 %setup -q
 
 %install
-DESTDIR=$RPM_BUILD_ROOT/opt/nettrace/
 rm -rf $RPM_BUILD_ROOT
-mkdir -p $DESTDIR
-
-cd /home/xm/project/nettrace/
-cp nettrace.c $DESTDIR/
-cp nettrace.py $DESTDIR/
-cp config.py $DESTDIR/
-cp tracer.json $DESTDIR/
-
-mkdir -p $RPM_BUILD_ROOT/usr/share/man/man8/
-gzip -k nettrace.8
-mv nettrace.8.gz $RPM_BUILD_ROOT/usr/share/man/man8/
-
-mkdir -p $RPM_BUILD_ROOT/usr/share/bash-completion/completions/
-cp bash-completion.sh $RPM_BUILD_ROOT/usr/share/bash-completion/completions/nettrace
-
-mkdir -p $RPM_BUILD_ROOT/usr/sbin/
-ln -s /opt/nettrace/nettrace.py $RPM_BUILD_ROOT/usr/sbin/nettrace
+make DESTDIR=$RPM_BUILD_ROOT install
+DESTDIR=$RPM_BUILD_ROOT/opt/nettrace/
 
 %files
 %defattr (-,root,root,0755)
