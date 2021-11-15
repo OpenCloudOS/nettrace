@@ -41,12 +41,14 @@ mkdir -p $DESTDIR
 cd /home/xm/project/nettrace/
 cp nettrace.c $DESTDIR/
 cp nettrace.py $DESTDIR/
+cp if_indextoname.py $DESTDIR/
 cp config.py $DESTDIR/
 cp tracer.json $DESTDIR/
 
 mkdir -p $RPM_BUILD_ROOT/usr/share/man/man8/
-gzip -k nettrace.8
-mv nettrace.8.gz $RPM_BUILD_ROOT/usr/share/man/man8/
+gzip nettrace.8
+cp nettrace.8.gz $RPM_BUILD_ROOT/usr/share/man/man8/
+gunzip nettrace.8.gz
 
 mkdir -p $RPM_BUILD_ROOT/usr/share/bash-completion/completions/
 cp bash-completion.sh $RPM_BUILD_ROOT/usr/share/bash-completion/completions/nettrace
