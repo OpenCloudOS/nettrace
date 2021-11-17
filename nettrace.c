@@ -138,10 +138,11 @@ static inline void *get_l4(sk_buff_t *skb)
 {
 	if (skb_l4_was_set(skb))
 		return skb->head + skb->transport_header;
-	else if (get_l3(skb))
-		return get_l3(skb) + sizeof(struct iphdr);
-	else
+	void *ip = get_l3(skb);
+	if (!ip)
 		return NULL;
+	u8 hlen = (*(u8*)ip & 0xf) * 4;
+	return ip + hlen;
 }
 
 static inline bool do_filter(context_t *ctx, sk_buff_t *skb)
