@@ -549,8 +549,9 @@ class Helper:
         print('\nWARNING: %s' % info)
 
     @staticmethod
-    def pr_err(info):
+    def pr_err(info, do_exit=True):
         print('\nERROR: %s' % info)
+        exit(-1)
 
     @staticmethod
     def check_stack():
@@ -620,12 +621,10 @@ Notice: this may cause performance issue.\n''')
 
         if args.count and not args.timeline:
             Helper.pr_err('"--timeline" should be enabled when "-c" is seted')
-            exit(0)
 
         Helper.check_stack()
         if os.geteuid() != 0:
             Helper.pr_err('Please run nettrace as root! Aborting...')
-            exit(-1)
 
         return args
 
@@ -963,46 +962,70 @@ class Core:
 
             ph_filter = []
             args = Helper.get_args()
-            if args.proto:
-                proto, level = NetUtils.proto2int(args.proto)
-                if proto is None:
-                    Helper.pr_err('proto: %s not found!' % args.proto)
-                    return None
-                if level == 3:
-                    proto = socket.htons(proto)
-                ph_filter.append('ctx->proto_l%d == %d' % (level, proto))
+            has_port = False
+            has_ip = False
             if args.saddr:
                 ph_filter.append('ctx->field_saddr == %d' %
                                  socket.htonl(NetUtils.ip2int(args.saddr)))
+                has_ip = True
             if args.daddr:
                 ph_filter.append('ctx->field_daddr == %d' %
                                  socket.htonl(NetUtils.ip2int(args.daddr)))
+                has_ip = True
             if args.addr:
                 addr = socket.htonl(NetUtils.ip2int(args.addr))
                 ph_filter.append('(ctx->field_saddr == %d || ctx->field_daddr == %d)' %
                                  (addr, addr))
+                has_ip = True
             if args.sport:
                 ph_filter.append('ctx->field_sport == %d' %
                                  socket.htons(args.sport))
+                has_port = True
             if args.dport:
                 ph_filter.append('ctx->field_dport == %d' %
                                  socket.htons(args.dport))
+                has_port = True
             if args.port:
                 port = socket.htons(args.port)
                 ph_filter.append('(ctx->field_dport == %d || ctx->field_sport == %d)' %
                                  (port, port))
+                has_port = True
 
             if args.tcp_flags:
                 flags = NetUtils.tcp_flags2int(args.tcp_flags)
-                ph_filter.append('(ctx->field_flags & %d)' %
-                                 socket.htons(flags))
+                ph_filter.append(
+                    '(ctx->field_flags & %d)' % socket.htons(flags))
+                if not args.proto:
+                    args.proto = 'tcp'
+                elif args.proto != 'tcp':
+                    Helper.pr_err(
+                        'protocol (-p) should be "tcp" while "tcp-flags" is set')
+            if args.proto:
+                if has_port and args.proto not in ['tcp', 'udp']:
+                    Helper.pr_err(
+                        'protocol (-p) should be "tcp" or "udp" while port is set')
+                proto, level = NetUtils.proto2int(args.proto)
+                if proto is None:
+                    Helper.pr_err('proto: %s not found!' % args.proto)
+                if level == 3:
+                    proto = socket.htons(proto)
+                    if has_ip and args.proto not in ['ip', 'arp']:
+                        Helper.pr_err(
+                            'protocol (-p) should be "ip" while addr is set')
+                else:
+                    ph_filter.append('ctx->proto_l3 == htons(ETH_P_IP)')
+                ph_filter.append('ctx->proto_l%d == %d' % (level, proto))
+            elif has_port:
+                p_udp, level = NetUtils.proto2int('udp')
+                p_tcp, level = NetUtils.proto2int('tcp')
+                ph_filter.append(
+                    '(ctx->proto_l4 == %d || ctx->proto_l4 == %d)' % (p_udp, p_tcp))
 
             bpf_text = bpf_text.replace(
                 'BPF_PH_filter', '&&'.join(ph_filter) or '1')
             ph_functions = TracePoint.generate_func_code()
             if not ph_functions:
                 Helper.pr_err('no tracer found!')
-                return None
             func_count = len(TracePoint._functions)
             bpf_text = bpf_text.replace('BPF_PH_count', str(func_count))
             bpf_text = bpf_text.replace('BPF_PH_function', ph_functions)
