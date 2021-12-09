@@ -742,6 +742,7 @@ class Compile:
                 ('ifindex', ctypes.c_uint32),
                 ('comm', ctypes.c_char * 16),
                 ('pid', ctypes.c_uint32),
+                ('cpu', ctypes.c_uint32),
             ])
             cflags.append('-DNT_ENABLE_DETAIL')
         if Helper.stack_enabled():
@@ -886,8 +887,8 @@ class Output:
                 except Exception:
                     ifname = '%d' % ctx.ifindex
 
-            d_info = '[%x][%-4s][%-24s][%-12s]' % (
-                ctx.id, ifname, p_info, item['parent_str'])
+            d_info = '[%-3u][%x][%-8s][%-24s][%-12s]' % (
+                ctx.cpu, ctx.id, ifname, p_info, item['parent_str'])
         else:
             d_info = ''
 
