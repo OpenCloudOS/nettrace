@@ -104,7 +104,111 @@
 					"name": "pkt-output",
 					"desc": "the process of skb of type PF_PACKET",
 					"visual": true,
-					"children": []
+					"children": [
+						{
+							"name": "packet_direct_xmit",
+							"skb": 0
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "netfilter",
+			"desc": "netfilter process(filter, nat, etc)",
+			"children": [
+				{
+					"name": "netfilter",
+					"desc": "base netfilter entry",
+					"visual": true,
+					"children": [
+						{
+							"name": "ipt_do_table",
+							"skb": 0
+						},
+						{
+							"name": "nf_hook_slow",
+							"skb": 0
+						}
+					]
+				},
+				{
+					"name": "conntrack",
+					"desc": "connection track (used by nat mostly)",
+					"visual": true,
+					"children": [
+						{
+							"name": "ipv4_confirm",
+							"skb": 1
+						},
+						{
+							"name": "nf_confirm",
+							"skb": 0
+						},
+						{
+							"name": "ipv4_conntrack_in",
+							"skb": 1
+						},
+						{
+							"name": "nf_conntrack_in",
+							"skb": 3
+						},
+						{
+							"name": "ipv4_pkt_to_tuple",
+							"skb": 0
+						},
+						{
+							"name": "tcp_new",
+							"skb": 1
+						},
+						{
+							"name": "tcp_pkt_to_tuple",
+							"skb": 0
+						},
+						{
+							"name": "resolve_normal_ct",
+							"skb": 2
+						},
+						{
+							"name": "init_conntrack",
+							"skb": 5
+						},
+						{
+							"name": "tcp_packet",
+							"skb": 1
+						},
+						{
+							"name": "tcp_in_window",
+							"skb": 4
+						},
+						{
+							"name": "__nf_ct_refresh_acct",
+							"skb": 2
+						}
+					]
+				},
+				{
+					"name": "nat",
+					"desc": "NAT (net address translation)",
+					"visual": true,
+					"children": [
+						{
+							"name": "iptable_nat_ipv4_in",
+							"skb": 1
+						},
+						{
+							"name": "nf_nat_ipv4_fn",
+							"skb": 1
+						},
+						{
+							"name": "iptable_nat_ipv4_fn",
+							"skb": 1
+						},
+						{
+							"name": "iptable_nat_do_chain",
+							"skb": 1
+						}
+					]
 				}
 			]
 		},
@@ -176,21 +280,6 @@
 						{
 							"name": "ip_finish_output2",
 							"skb": 2
-						}
-					]
-				},
-				{
-					"name": "netfilter",
-					"desc": "netfilter process(filter, nat, etc)",
-					"visual": true,
-					"children": [
-						{
-							"name": "ipt_do_table",
-							"skb": 0
-						},
-						{
-							"name": "nf_hook_slow",
-							"skb": 0
 						}
 					]
 				}
