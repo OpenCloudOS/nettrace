@@ -542,6 +542,13 @@ version in '_v_tracer' of nettrace.py\n''')
 
 
 class Helper:
+    _output_fmt = {
+        'id': '[%x]',
+        'cpu': '[cpu:%-3u]',
+        'if': '[%-8s]',
+        'pid': '[%-24s]',
+        'module': '[%-12s]'
+    }
     _user_args = {}
 
     @staticmethod
@@ -551,7 +558,8 @@ class Helper:
     @staticmethod
     def pr_err(info, do_exit=True):
         print('\nERROR: %s' % info)
-        exit(-1)
+        if do_exit:
+            exit(-1)
 
     @staticmethod
     def check_stack():
@@ -586,25 +594,30 @@ Notice: this may cause performance issue.\n''')
         parser.add_argument('-t', '--tracer',
                             help='The network module or kernel function '
                             'to trace. Use "-t ?" to see available tracer')
-        parser.add_argument('-v', '--verbose',
-                            action='store_true', help='show more verbose info')
+        parser.add_argument('-o', '--output',
+                            help='print extern info. options include: pid, if, id and cpu. '
+                            'pid: process info; if: ifindex and ifname; id: memory address '
+                            'of skb; cpu: the cpu id that run on. multiple options should be '
+                            'splited by ","')
         parser.add_argument('--detail', action='store_true',
-                            help='show more info for trace output, such as skb '
-                            'address, pid, task name, etc')
+                            help='show all info for trace output, which means '
+                            'enable all options in "--output"')
         parser.add_argument('--stack', action='store_true',
                             help='print kernel function call stack')
         parser.add_argument('--stack-tracer',
                             help='print kernel call stack for special tracer.')
+        parser.add_argument('--force-stack', action='store_true',
+                            help='force print stack for "all" tracer')
+        parser.add_argument('--ret', action='store_true',
+                            help='trace the return value')
         parser.add_argument('--timeline', action='store_true',
                             help='print skb on timeline')
         parser.add_argument('-c', '--count', type=int,
                             help='skb count to trace (timeline should be enabled)')
-        parser.add_argument('--ret', action='store_true',
-                            help='trace the return value')
         parser.add_argument('--skb-mode', action='store_true',
                             help='keep tracing skb once it is matched')
-        parser.add_argument('--force-stack', action='store_true',
-                            help='force print stack for "all" tracer')
+        parser.add_argument('-v', '--verbose',
+                            action='store_true', help='show more verbose info')
         return parser.parse_args()
 
     @staticmethod
@@ -621,6 +634,17 @@ Notice: this may cause performance issue.\n''')
 
         if args.count and not args.timeline:
             Helper.pr_err('"--timeline" should be enabled when "-c" is seted')
+
+        if args.output:
+            outputs = args.output.split(',')
+            for o in outputs:
+                if o not in Helper._output_fmt.keys():
+                    Helper.pr_err('output option not found:%s' % o)
+            args.output = outputs
+        elif args.detail:
+            args.output = Helper._output_fmt.keys()
+        else:
+            args.output = []
 
         Helper.check_stack()
         if os.geteuid() != 0:
@@ -658,11 +682,16 @@ Notice: this may cause performance issue.\n''')
 
     @staticmethod
     def detail_enabled():
-        return Helper._user_args.detail
+        args = Helper._user_args
+        if 'id' in args.output:
+            return len(args.output) > 1
+        else:
+            return args.output
 
     @staticmethod
     def id_enabled():
-        return Helper._user_args.detail or Helper._user_args.skb_mode or Helper._user_args.ret
+        args = Helper._user_args
+        return args.skb_mode or args.ret or 'id' in args.output
 
     @staticmethod
     def tl_enabled():
@@ -671,6 +700,10 @@ Notice: this may cause performance issue.\n''')
     @staticmethod
     def get_args():
         return Helper._user_args
+
+    @staticmethod
+    def get_output():
+        return Helper._user_args.output
 
 
 class Compile:
@@ -874,9 +907,9 @@ class Output:
         item = TracePoint.get_func_by_index(ctx.func)
         ts = float(ctx.ts)/1000000000
 
-        if Helper.detail_enabled():
-            p_info = 'pid:%d,%s' % (ctx.pid, ctx.comm.decode(encoding='utf-8'))
-
+        output_fmt = Helper.get_output()
+        d_info = ifname = p_info = ''
+        if 'if' in output_fmt:
             ifname = ctx.ifname.decode(encoding='utf-8')
             if ifname:
                 ifname = '%d:%s' % (ctx.ifindex, ifname)
@@ -886,11 +919,18 @@ class Output:
                     ifname = '%d:%s' % (ctx.ifindex, ifname)
                 except Exception:
                     ifname = '%d' % ctx.ifindex
+            ctx.__dict__['if'] = ifname
+        if 'pid' in output_fmt:
+            p_info = 'pid:%d,%s' % (ctx.pid, ctx.comm.decode(encoding='utf-8'))
+            ctx.__dict__['pid'] = p_info
+        ctx.__dict__['module'] = item['parent_str']
 
-            d_info = '[%-3u][%x][%-8s][%-24s][%-12s]' % (
-                ctx.cpu, ctx.id, ifname, p_info, item['parent_str'])
-        else:
-            d_info = ''
+        for k in output_fmt:
+            if k in ctx.__dict__:
+                val = ctx.__dict__[k]
+            else:
+                val = getattr(ctx, k)
+            d_info += Helper._output_fmt[k] % val
 
         output_str = '%f: %s[%-24s]: ' % (ts, d_info, item['name'])
 
