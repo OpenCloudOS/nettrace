@@ -1,4 +1,4 @@
-export VERSION=0.1.2
+export VERSION=0.1.3
 export RELEASE=1.tl3
 
 TARGET_DIR=${DESTDIR}/opt/nettrace/
