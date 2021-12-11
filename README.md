@@ -40,7 +40,9 @@ and use the command 'nettrace' in it.
 
 **Way 2:**
 
-unzip the tar file with the command `mkdir nettrace && tar -xf ./docker-nettrace.tar.bz2 -C nettrace` and run the command `cd nettrace && ./ntenter.sh`, then you can use the command 'nettrace'.
+directly unzip the tar file with the command `mkdir nettrace && tar -xf ./docker-nettrace.tar.bz2 -C nettrace` and run the command `cd nettrace && ./ntenter.sh`, then you can use the command 'nettrace'.
+
+the command `./ntenter.sh clean` is able to umount the mountpoint and header files that it created, so run this command to do the clean job if you don't need nettrace anymore.
 
 ## 2. usage
 
