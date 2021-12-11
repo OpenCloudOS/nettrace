@@ -641,6 +641,7 @@ Notice: this may cause performance issue.\n''')
                 if o not in Helper._output_fmt.keys():
                     Helper.pr_err('output option not found:%s' % o)
             args.output = outputs
+            args.detail = 'cpu' in outputs or 'if' in outputs or 'pid' in outputs
         elif args.detail:
             args.output = Helper._output_fmt.keys()
         else:
@@ -682,16 +683,12 @@ Notice: this may cause performance issue.\n''')
 
     @staticmethod
     def detail_enabled():
-        args = Helper._user_args
-        if 'id' in args.output:
-            return len(args.output) > 1
-        else:
-            return args.output
+        return Helper._user_args.detail
 
     @staticmethod
     def id_enabled():
         args = Helper._user_args
-        return args.skb_mode or args.ret or 'id' in args.output
+        return args.skb_mode or args.ret or args.detail or 'id' in args.output
 
     @staticmethod
     def tl_enabled():
