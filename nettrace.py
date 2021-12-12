@@ -544,7 +544,7 @@ version in '_v_tracer' of nettrace.py\n''')
 class Helper:
     _output_fmt = {
         'id': '[%x]',
-        'cpu': '[cpu:%-3u]',
+        'cpu': '[cpu:%03u]',
         'if': '[%-8s]',
         'pid': '[%-24s]',
         'module': '[%-12s]'
