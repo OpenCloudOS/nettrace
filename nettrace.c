@@ -36,6 +36,7 @@ typedef struct {
 	u32 ifindex;
 	char comm[16];
 	u32 pid;
+	u32 cpu;
 #endif
 #ifdef NT_ENABLE_STACK
 	u32 stack_id;
@@ -342,6 +343,7 @@ static inline int do_trace(void *regs, sk_buff_t *skb, u32 func
 	} else {
 		ctx->ifindex = skb->skb_iif;
 	}
+	ctx->cpu = bpf_get_smp_processor_id();
 #endif
 
 #ifdef NT_ENABLE_SKB_MODE

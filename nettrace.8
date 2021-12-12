@@ -12,7 +12,7 @@ nettrace [-h] [-s SADDR] [-d DADDR] [--addr ADDR] [-p PROTO]
          [--dport DPORT] [--sport SPORT] [--port PORT]
          [--tcp-flags TCP_FLAGS] [-t TRACER] [-v] [--detail] [--stack]
          [--stack-tracer STACK_TRACER] [--timeline] [-c COUNT] [--ret]
-         [--skb-mode] [--force-stack]
+         [--skb-mode] [--force-stack] [-o] [--output]
 
 .SH DESCRIPTION
 nettrace is is a powerful tool to trace network packet and diagnose network problem inside kernel on TencentOS.
@@ -63,15 +63,15 @@ filter by TCP/UDP dest port
 .PD
 filter by TCP/UDP source port
 .TP
+.B \-\-port port
+.PD
+filter by TCP/UDP source or dest port
+.TP
 .B \-\-tcp\-flags tcp_flags
 .PD
 filter by TCP flags, such as S(syn), A(ack), R(rst) and P(push). Multiple flags are supported, such as:
 .B --tcp-flags SA
 means filter tcp packet with flags syn + ack.
-.TP
-.B \-\-port port
-.PD
-filter by TCP/UDP source or dest port
 .TP
 .B \-t tracers
 .PD 0
@@ -138,16 +138,16 @@ When trace skb, tracer can be specified by '-t' (or '--tracer'), and multiple ar
 .RE
 
 .TP
-.B -v
+.B \-o output_format
 .PD 0
 .TP
-.B --verbose
+.B \-\-output output_format
 .PD
-show more verbose info
+print extern info. options include: pid, if, id and cpu. pid: process info; if: ifindex and ifname; id: memory address of skb; cpu: the cpu id that run on. multiple options should be splited by ','
 .TP
 .B --detail
 .PD
-show more info for trace output, such as skb address, pid, task name, etc
+show all info for trace output, which means enable all options in "--output"
 .TP
 .B --stack
 .PD
@@ -156,6 +156,14 @@ print the function call stack for the kernel function or tracepoint that enabled
 .B --stack-tracer tracers
 .PD
 maybe you don't want to print stack for all kernel function that enable, you can specify the tracer (or kernel function) that you want to print stack.
+.TP
+.B --force-stack
+.PD
+by default, you can't set `-t all` and `--stack` together for performance problem. With this option you can do it.
+.TP
+.B --ret
+.PD
+trace the return value. once this enabled, both kprobe and kretprobe will be create for kernel function in the tracer that enabled, and the return value will be printed.
 .TP
 .B --timeline
 .PD
@@ -172,10 +180,6 @@ What's more, the skb cloned from one skb is thought to be in the same context, a
 .B --count count
 .PD
 skb count to trace (timeline should be enabled)
-.TP
-.B --ret
-.PD
-trace the return value
 .TP
 .B --skb-mode
 .PD
@@ -231,9 +235,12 @@ begin tracing......
 .RE
 
 .TP
-.B --force-stack
+.B -v
+.PD 0
+.TP
+.B --verbose
 .PD
-by default, you can't set `-t all` and `--stack` together for performance problem. With this option you can do it.
+show more verbose info
 
 .SH EXAMPLES
 
