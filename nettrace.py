@@ -728,7 +728,8 @@ class Compile:
                 ('sport', ctypes.c_uint16),
                 ('dport', ctypes.c_uint16),
                 ('seq', ctypes.c_uint32),
-                ('flags', ctypes.c_uint16),
+                ('ack', ctypes.c_uint32),
+                ('flags', ctypes.c_uint8),
             ]
 
         class Udp(ctypes.Structure):
@@ -831,13 +832,14 @@ class Output:
 
         if ctx.proto_l4 == socket.IPPROTO_TCP:
             tcp = ctx.field_l4.tcp
-            output_str += 'TCP: %s:%d -> %s:%d, seq: %d, %s' % (
+            output_str += 'TCP: %s:%d -> %s:%d, seq:%d, ack:%d %s' % (
                 NetUtils.int2ip(socket.ntohl(ip.saddr)),
                 socket.ntohs(tcp.sport),
                 NetUtils.int2ip(socket.ntohl(ip.daddr)),
                 socket.ntohs(tcp.dport),
                 socket.ntohl(tcp.seq),
-                NetUtils.int2tcp_flags(socket.ntohs(tcp.flags)))
+                socket.ntohl(tcp.ack),
+                NetUtils.int2tcp_flags(tcp.flags))
         elif ctx.proto_l4 == socket.IPPROTO_UDP:
             udp = ctx.field_l4.udp
             output_str += 'UDP: %s:%d -> %s:%d' % (

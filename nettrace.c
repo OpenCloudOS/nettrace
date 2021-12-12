@@ -49,7 +49,8 @@ typedef struct {
 			u16 sport;
 			u16 dport;
 			u32 seq;
-			u16 flags;
+			u32 ack;
+			u8 flags;
 		} tcp;
 #define field_tcp field_l4.tcp
 #define field_sport field_tcp.sport
@@ -175,11 +176,11 @@ static inline int parse_ip(context_t *ctx, sk_buff_t *skb,
 	switch (ctx->proto_l4) {
 	case IPPROTO_TCP: {
 		struct tcphdr *tcp = l4;
-		ctx->field_flags = *((u16 *)((void *)&tcp->ack_seq +
-					     sizeof(u32)));
+		ctx->field_flags = ((u8 *)tcp)[13];
 		ctx->field_sport = tcp->source;
 		ctx->field_dport = tcp->dest;
 		ctx->field_l4.tcp.seq = tcp->seq;
+		ctx->field_l4.tcp.ack = tcp->ack_seq;
 		break;
 	}
 	case IPPROTO_UDP: {
