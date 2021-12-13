@@ -282,6 +282,21 @@
 							"skb": 2
 						}
 					]
+				},
+				{
+					"name": "ip-route",
+					"desc": "ip route for packet in and out",
+					"visual": true,
+					"children": [
+						{
+							"name": "fib_validate_source",
+							"skb": 0
+						},
+						{
+							"name": "ip_route_input_slow",
+							"skb": 0
+						}
+					]
 				}
 			]
 		},
