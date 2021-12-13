@@ -595,10 +595,10 @@ Notice: this may cause performance issue.\n''')
                             help='The network module or kernel function '
                             'to trace. Use "-t ?" to see available tracer')
         parser.add_argument('-o', '--output',
-                            help='print extern info. options include: pid, if, id and cpu. '
+                            help='print extern info. options include: pid, if, id, cpu and module. '
                             'pid: process info; if: ifindex and ifname; id: memory address '
-                            'of skb; cpu: the cpu id that run on. multiple options should be '
-                            'splited by ","')
+                            'of skb; cpu: the cpu id that run on; module: the network module of '
+                            'the tracer belong to. multiple options should be splited by ","')
         parser.add_argument('--detail', action='store_true',
                             help='show all info for trace output, which means '
                             'enable all options in "--output"')

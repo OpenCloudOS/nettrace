@@ -109,7 +109,7 @@ optional arguments:
   -t TRACER, --tracer TRACER
                         The network module or kernel function to trace. Use "-t ?" to see available tracer
   -o OUTPUT, --output OUTPUT
-                        print extern info. options include: pid, if, id and cpu. pid: process info; if: ifindex and ifname; id: memory address of skb; cpu: the cpu id that run on. multiple options should be splited by ','
+                        print extern info. options include: pid, if, id, cpu and module. pid: process info; if: ifindex and ifname; id: memory address of skb; cpu: the cpu id that run on; module: the network module of the tracer belong to. multiple options should be splited by ","
   --detail              show all info for trace output, which means enable all options in "--output"
   --stack               print kernel function call stack
   --stack-tracer STACK_TRACER
