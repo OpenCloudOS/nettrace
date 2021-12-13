@@ -200,6 +200,9 @@ Tracer tree is keep in `tracer.json`, so it is simple to extend your own tracer.
 - type: the type of this item, which can be 'kprobe' by default, 'kretprobe' and 'tracepoint'.
 - tp: this is for tracpoint, which shoud be the path of tracepint in format of 'skb:kfree_skb'.
 - is_end: if this function/tracepoint is the end of the life of the skb. This is used to trace the life of skb.
+- regex: the regex for kernel function name. Sometimes, the function name compiled can be different, such as 'do_xdp_generic' is compiled to 'do_xdp_generic.cold'. So we can use regex to match the compiled name with 'do_xdp_generic.*'.
+
+If nettrace is used by rpm package or docker image, the 'tracer.json' is located in '/opt/nettrace/tracer.json'.
 
 ## 4. timeline mode
 
