@@ -962,7 +962,9 @@ class Output:
         if queue['refs'] > 0:
             return
         print('<------------------- skb: %x ---------------------->' % ctx.id)
-        for i in queue['items']:
+        items = queue['items']
+        items.sort(key=lambda x: x.ts)
+        for i in items:
             Output._print_event(i)
         print('')
         if not Helper.get_count():
