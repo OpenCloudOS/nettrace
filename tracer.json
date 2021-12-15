@@ -78,6 +78,48 @@
 							"skb": 0
 						}
 					]
+				},
+				{
+					"name": "ipvaln",
+					"desc": "ipvlan network interface",
+					"visual": true,
+					"children": [
+						{
+							"name": "ipvlan_queue_xmit",
+							"skb": 0
+						},
+						{
+							"name": "ipvlan_handle_frame",
+							"pskb": 0
+						},
+						{
+							"name": "ipvlan_rcv_frame",
+							"pskb": 1
+						},
+						{
+							"name": "ipvlan_xmit_mode_l3",
+							"skb": 0
+						},
+						{
+							"name": "ipvlan_process_v4_outbound",
+							"skb": 0
+						}
+					]
+				},
+				{
+					"name": "arp",
+					"visual": true,
+					"desc": "arp protocol",
+					"children": [
+						{
+							"name": "arp_rcv",
+							"skb": 0
+						},
+						{
+							"name": "arp_process",
+							"skb": 2
+						}
+					]
 				}
 			]
 		},
