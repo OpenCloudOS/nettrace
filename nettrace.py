@@ -246,6 +246,7 @@ class TracePoint:
             tracer = json.loads(data)
             TracePoint._all_tracer = tracer
             f.close()
+            TracePoint.init_tracer(tracer)
             return tracer
 
     @staticmethod
@@ -326,14 +327,6 @@ class TracePoint:
             TracePoint.bind_parent(i)
 
     @staticmethod
-    def get_parent_str(tp):
-        p = tp['parent']
-        res = ''
-        while p and 'visual' in p:
-            res += '-> %s' % p['name']
-        return res
-
-    @staticmethod
     def print_tracer(tracer, tab=''):
         if TracePoint.is_item(tracer):
             if tracer.get('hidden'):
@@ -367,6 +360,34 @@ version in '_v_tracer' of nettrace.py\n''')
         for item in TracePoint._v_tracer[ver]:
             origin = TracePoint.get_tracer(item['name'])
             origin.update(item)
+
+    @staticmethod
+    def init_tracer(root=None):
+        if not root:
+            root = TracePoint.get_all_tracer()
+        if TracePoint.is_item(root):
+            return
+        children = root['children']
+        i = 0
+        while i < len(children):
+            c = children[i]
+            if not isinstance(c, str):
+                TracePoint.init_tracer(c)
+                i += 1
+                continue
+            children.remove(c)
+            data = c.split(':')
+            if len(data) <= 1:
+                c = {
+                    "name": data[0]
+                }
+            else:
+                c = {
+                    "name": data[0],
+                    "skb": int(data[1])
+                }
+            children.insert(i, c)
+            i += 1
 
     @staticmethod
     def init_functions():

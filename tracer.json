@@ -11,34 +11,17 @@
 					"desc": "link layer (L2) of packet in",
 					"visual": true,
 					"children": [
-						{
-							"name": "napi_gro_receive",
-							"skb": 1
-						},
-						{
-							"name": "enqueue_to_backlog",
-							"skb": 0
-						},
-						{
-							"name": "__netif_receive_skb_core"
-						},
+						"napi_gro_receive:1",
+						"enqueue_to_backlog:0",
+						"__netif_receive_skb_core",
 						{
 							"name": "do_xdp_generic",
 							"regex": "do_xdp_generic\\..*",
 							"skb": 1
 						},
-						{
-							"name": "xdp_do_generic_redirect",
-							"skb": 1
-						},
-						{
-							"name": "generic_xdp_tx",
-							"skb": 1
-						},
-						{
-							"name": "sch_handle_ingress",
-							"skb": 0
-						}
+						"xdp_do_generic_redirect:1",
+						"generic_xdp_tx:1",
+						"sch_handle_ingress:0"
 					]
 				},
 				{
@@ -46,14 +29,8 @@
 					"desc": "link layer (L2) of packet out",
 					"visual": true,
 					"children": [
-						{
-							"name": "dev_queue_xmit",
-							"skb": 0
-						},
-						{
-							"name": "dev_hard_start_xmit",
-							"skb": 0
-						}
+						"dev_queue_xmit:0",
+						"dev_hard_start_xmit:0"
 					]
 				},
 				{
@@ -61,22 +38,10 @@
 					"desc": "TC(traffic control) module",
 					"visual": true,
 					"children": [
-						{
-							"name": "tcf_classify",
-							"skb": 0
-						},
-						{
-							"name": "sch_handle_egress",
-							"skb": 0
-						},
-						{
-							"name": "cls_bpf_classify",
-							"skb": 0
-						},
-						{
-							"name": "tcf_bpf_act",
-							"skb": 0
-						}
+						"tcf_classify:0",
+						"sch_handle_egress:0",
+						"cls_bpf_classify:0",
+						"tcf_bpf_act:0"
 					]
 				},
 				{
@@ -84,26 +49,11 @@
 					"desc": "ipvlan network interface",
 					"visual": true,
 					"children": [
-						{
-							"name": "ipvlan_queue_xmit",
-							"skb": 0
-						},
-						{
-							"name": "ipvlan_handle_frame",
-							"pskb": 0
-						},
-						{
-							"name": "ipvlan_rcv_frame",
-							"pskb": 1
-						},
-						{
-							"name": "ipvlan_xmit_mode_l3",
-							"skb": 0
-						},
-						{
-							"name": "ipvlan_process_v4_outbound",
-							"skb": 0
-						}
+						"ipvlan_queue_xmit:0",
+						"ipvlan_handle_frame:0",
+						"ipvlan_rcv_frame:1",
+						"ipvlan_xmit_mode_l3:0",
+						"ipvlan_process_v4_outbound:0"
 					]
 				},
 				{
@@ -111,14 +61,8 @@
 					"visual": true,
 					"desc": "arp protocol",
 					"children": [
-						{
-							"name": "arp_rcv",
-							"skb": 0
-						},
-						{
-							"name": "arp_process",
-							"skb": 2
-						}
+						"arp_rcv:0",
+						"arp_process:2"
 					]
 				}
 			]
@@ -132,14 +76,8 @@
 					"desc": "the process of skb of type PF_PACKET",
 					"visual": true,
 					"children": [
-						{
-							"name": "packet_rcv",
-							"skb": 0
-						},
-						{
-							"name": "tpacket_rcv",
-							"skb": 0
-						}
+						"packet_rcv:0",
+						"tpacket_rcv:0"
 					]
 				},
 				{
@@ -147,10 +85,7 @@
 					"desc": "the process of skb of type PF_PACKET",
 					"visual": true,
 					"children": [
-						{
-							"name": "packet_direct_xmit",
-							"skb": 0
-						}
+						"packet_direct_xmit:0"
 					]
 				}
 			]
@@ -164,14 +99,8 @@
 					"desc": "base netfilter entry",
 					"visual": true,
 					"children": [
-						{
-							"name": "ipt_do_table",
-							"skb": 0
-						},
-						{
-							"name": "nf_hook_slow",
-							"skb": 0
-						}
+						"ipt_do_table:0",
+						"nf_hook_slow:0"
 					]
 				},
 				{
@@ -179,54 +108,18 @@
 					"desc": "connection track (used by nat mostly)",
 					"visual": true,
 					"children": [
-						{
-							"name": "ipv4_confirm",
-							"skb": 1
-						},
-						{
-							"name": "nf_confirm",
-							"skb": 0
-						},
-						{
-							"name": "ipv4_conntrack_in",
-							"skb": 1
-						},
-						{
-							"name": "nf_conntrack_in",
-							"skb": 3
-						},
-						{
-							"name": "ipv4_pkt_to_tuple",
-							"skb": 0
-						},
-						{
-							"name": "tcp_new",
-							"skb": 1
-						},
-						{
-							"name": "tcp_pkt_to_tuple",
-							"skb": 0
-						},
-						{
-							"name": "resolve_normal_ct",
-							"skb": 2
-						},
-						{
-							"name": "init_conntrack",
-							"skb": 5
-						},
-						{
-							"name": "tcp_packet",
-							"skb": 1
-						},
-						{
-							"name": "tcp_in_window",
-							"skb": 4
-						},
-						{
-							"name": "__nf_ct_refresh_acct",
-							"skb": 2
-						}
+						"ipv4_confirm:1",
+						"nf_confirm:0",
+						"ipv4_conntrack_in:1",
+						"nf_conntrack_in:3",
+						"ipv4_pkt_to_tuple:0",
+						"tcp_new:1",
+						"tcp_pkt_to_tuple:0",
+						"resolve_normal_ct:2",
+						"init_conntrack:5",
+						"tcp_packet:1",
+						"tcp_in_window:4",
+						"__nf_ct_refresh_acct:2"
 					]
 				},
 				{
