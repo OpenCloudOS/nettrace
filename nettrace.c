@@ -9,10 +9,6 @@
 #include <uapi/linux/icmp.h>
 #include <bcc/proto.h>
 
-#define DO_TRACE(regs, args...) {		\
-	return do_trace(regs, skb, args);	\
-}
-
 #if defined(NT_ENABLE_DETAIL) || defined(NT_ENABLE_RET) || \
     defined(NT_ENABLE_SKB_MODE)
 #define NT_ENABLE_ID
@@ -27,7 +23,9 @@ typedef struct {
 			u32 daddr;
 		} ip;
 	} field_l3;
+#ifdef NT_ENABLE_RET
 	u64 ret_val;
+#endif
 #ifdef NT_ENABLE_ID
 	u64 id;
 #endif
@@ -72,18 +70,39 @@ typedef struct {
 #define field_udp field_l4.udp
 	} field_l4;
 	u16 proto_l3;
+	u16  func;
 	u8  proto_l4;
-	u8  func;
 #ifdef NT_ENABLE_RET
 	bool is_ret;
 #endif
-	u8 align0;
 } context_t;
 
 typedef struct {
 	context_t ctx;
 	bool match;
 } ret_context_t;
+
+typedef struct {
+	u32 func;
+	bool ret;
+	bool ret_only;
+	bool is_end;
+	bool stack;
+} func_params_t;
+
+struct arphdr {
+	__be16		ar_hrd;
+	__be16		ar_pro;
+	unsigned char	ar_hln;
+	unsigned char	ar_pln;
+	__be16		ar_op;
+
+	unsigned char	ar_sha[ETH_ALEN];
+	unsigned char	ar_sip[4];
+	unsigned char	ar_tha[ETH_ALEN];
+	unsigned char	ar_tip[4];
+
+};
 
 BPF_PERF_OUTPUT(m_output);
 
@@ -225,23 +244,6 @@ static inline int parse_sk(context_t *ctx, struct sock *sk,
 	return 0;
 }
 
-struct arphdr {
-	__be16		ar_hrd;		/* format of hardware address	*/
-	__be16		ar_pro;		/* format of protocol address	*/
-	unsigned char	ar_hln;		/* length of hardware address	*/
-	unsigned char	ar_pln;		/* length of protocol address	*/
-	__be16		ar_op;		/* ARP opcode (command)		*/
-
-	 /*
-	  *	 Ethernet looks like this : This bit is variable sized however...
-	  */
-	unsigned char	ar_sha[ETH_ALEN];	/* sender hardware address	*/
-	unsigned char	ar_sip[4];		/* sender IP address		*/
-	unsigned char	ar_tha[ETH_ALEN];	/* target hardware address	*/
-	unsigned char	ar_tip[4];		/* target IP address		*/
-
-};
-
 static inline int parse_arp(context_t *ctx, sk_buff_t *skb,
 			    struct arphdr *arp)
 {
@@ -290,32 +292,23 @@ static inline void do_output(void *regs, context_t *ctx)
 	m_output.perf_submit(regs, ctx, sizeof(context_t));
 }
 
-static inline int do_trace(void *regs, sk_buff_t *skb, u32 func
-#ifdef NT_ENABLE_RET
-			   ,bool ret, bool ret_only
-#endif
-#ifdef NT_ENABLE_SKB_MODE
-			   ,bool is_end
-#endif
-#ifdef NT_ENABLE_STACK
-			   ,bool stack
-#endif
-			   )
+static inline int do_trace(void *regs, sk_buff_t *skb,
+			   func_params_t *param)
 {
-	context_t lctx = {.func = (u8)func}, *ctx = &lctx;
+	context_t lctx = {.func = (u16)param->func}, *ctx = &lctx;
 	ret_context_t *rctx;
 
 	if (!skb)
 		return 0;
 
 #ifdef NT_ENABLE_RET
-	if (ret) {
-		rctx = (ret_context_t *)m_rets.lookup(&func);
+	if (param->ret) {
+		rctx = (ret_context_t *)m_rets.lookup(&param->func);
 		if (!rctx)
 			return 0;
 		memset(rctx, 0, sizeof(ret_context_t));
 		ctx = (context_t *)rctx;
-		ctx->func = (u8) func;
+		ctx->func = (u16)param->func;
 	}
 #endif
 
@@ -330,7 +323,7 @@ static inline int do_trace(void *regs, sk_buff_t *skb, u32 func
 		return 0;
 
 #ifdef NT_ENABLE_STACK
-	if (stack)
+	if (param->stack)
 		ctx->stack_id = stacks.get_stackid(regs, 0);
 #endif
 
@@ -348,14 +341,14 @@ static inline int do_trace(void *regs, sk_buff_t *skb, u32 func
 #endif
 
 #ifdef NT_ENABLE_SKB_MODE
-	if (is_end)
+	if (param->is_end)
 		m_match.delete(&ctx->id);
 #endif
 
 #ifdef NT_ENABLE_RET
-	if (ret) {
+	if (param->ret) {
 		rctx->match = true;
-		if(!ret_only)
+		if(!param->ret_only)
 			do_output(regs, ctx);
 		return 0;
 	}
@@ -379,7 +372,10 @@ static inline int ret_trace(struct pt_regs *regs, u32 func, bool is_clone)
 	do_output(regs, (context_t *)rctx);
 
 #ifdef NT_ENABLE_SKB_MODE
-	if (is_clone)
+	/* in ske-mode, ret_val is the address of the skb cloned. so
+	 * keep tracing it.
+	 */
+	if (is_clone && ret_val)
 		m_match.update(&ret_val, &is_clone);
 #endif
 

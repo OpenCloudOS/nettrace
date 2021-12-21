@@ -1,222 +1,16 @@
 #!/usr/bin/python3
 import argparse
 import json
-import struct
 import socket
 import bcc
 import ctypes
 import re
 import os
 
-from config import project_file
+from utils import *
 
 
-class NetUtils:
-
-    PROTO_L3 = {
-        'LOOP':	0x0060,
-        'PUP':	0x0200,
-        'PUPAT':	0x0201,
-        'TSN':	0x22F0,
-        'ERSPAN2':	0x22EB,
-        'IP':	0x0800,
-        'X25':	0x0805,
-        'ARP':	0x0806,
-        'BPQ':	0x08FF,
-        'IEEEPUP':	0x0a00,
-        'IEEEPUPAT':	0x0a01,
-        'BATMAN':	0x4305,
-        'DEC':       0x6000,
-        'DNA_DL':    0x6001,
-        'DNA_RC':    0x6002,
-        'DNA_RT':    0x6003,
-        'LAT':       0x6004,
-        'DIAG':      0x6005,
-        'CUST':      0x6006,
-        'SCA':       0x6007,
-        'TEB':	0x6558,
-        'RARP':      0x8035,
-        'ATALK':	0x809B,
-        'AARP':	0x80F3,
-        '8021Q':	0x8100,
-        'ERSPAN':	0x88BE,
-        'IPX':	0x8137,
-        'IPV6':	0x86DD,
-        'PAUSE':	0x8808,
-        'SLOW':	0x8809,
-        'WCCP':	0x883E,
-        'MPLS_UC':	0x8847,
-        'MPLS_MC':	0x8848,
-        'ATMMPOA':	0x884c,
-        'PPP_DISC':	0x8863,
-        'PPP_SES':	0x8864,
-        'LINK_CTL':	0x886c,
-        'ATMFATE':	0x8884,
-        'PAE':	0x888E,
-        'AOE':	0x88A2,
-        '8021AD':	0x88A8,
-        '802_EX1':	0x88B5,
-        'PREAUTH':	0x88C7,
-        'TIPC':	0x88CA,
-        'LLDP':	0x88CC,
-        'MACSEC':	0x88E5,
-        '8021AH':	0x88E7,
-        'MVRP':	0x88F5,
-        '1588':	0x88F7,
-        'NCSI':	0x88F8,
-        'PRP':	0x88FB,
-        'FCOE':	0x8906,
-        'IBOE':	0x8915,
-        'TDLS':	0x890D,
-        'FIP':	0x8914,
-        '80221':	0x8917,
-        'HSR':	0x892F,
-        'NSH':	0x894F,
-        'LOOPBACK':	0x9000,
-        'QINQ1':	0x9100,
-        'QINQ2':	0x9200,
-        'QINQ3':	0x9300,
-        'EDSA':	0xDADA,
-        'DSA_8021Q':	0xDADB,
-        'IFE':	0xED3E,
-        'AF_IUCV':   0xFBFB,
-        '802_3_MIN':	0x0600,
-        '802_3':	0x0001,
-        'AX25':	0x0002,
-        'ALL':	0x0003,
-        '802_2':	0x0004,
-        'SNAP':	0x0005,
-        'DDCMP':     0x0006,
-        'WAN_PPP':   0x0007,
-        'PPP_MP':    0x0008,
-        'LOCALTALK': 0x0009,
-        'CAN':	0x000C,
-        'CANFD':	0x000D,
-        'PPPTALK':	0x0010,
-        'TR_802_2':	0x0011,
-        'MOBITEX':	0x0015,
-        'CONTROL':	0x0016,
-        'IRDA':	0x0017,
-        'ECONET':	0x0018,
-        'HDLC':	0x0019,
-        'ARCNET':	0x001A,
-        'DSA':	0x001B,
-        'TRAILER':	0x001C,
-        'PHONET':	0x00F5,
-        'IEEE802154': 0x00F6,
-        'CAIF':	0x00F7,
-        'XDSA':	0x00F8,
-        'MAP':	0x00F9,
-    }
-
-    PROTO_L4 = {
-        'ICMP': 1,
-        'IGMP': 2,
-        'IPIP': 4,
-        'TCP': 6,
-        'EGP': 8,
-        'PUP': 12,
-        'UDP': 17,
-        'IDP': 22,
-        'TP': 29,
-        'DCCP': 33,
-        'IPV6': 41,
-        'RSVP': 46,
-        'GRE': 47,
-        'ESP': 50,
-        'AH': 51,
-        'MTP': 92,
-        'BEETPH': 94,
-        'ENCAP': 98,
-        'PIM': 103,
-        'COMP': 108,
-        'SCTP': 132,
-        'UDPLITE': 136,
-        'MPLS': 137,
-        'RAW': 255,
-    }
-
-    ICMP_TYPE = {
-        'ICMP_ECHOREPLY': 0,
-        'ICMP_DEST_UNREACH': 3,
-        'ICMP_SOURCE_QUENCH': 4,
-        'ICMP_REDIRECT': 5,
-        'ICMP_ECHO': 8,
-        'ICMP_TIME_EXCEEDED': 11,
-        'ICMP_PARAMETERPROB': 12,
-        'ICMP_TIMESTAMP': 13,
-        'ICMP_TIMESTAMPREPLY': 14,
-        'ICMP_INFO_REQUEST': 15,
-        'ICMP_INFO_REPLY': 16,
-        'ICMP_ADDRESS': 17,
-        'ICMP_ADDRESSREPLY': 18,
-    }
-
-    @staticmethod
-    def ip2int(addr):
-        return struct.unpack("!I", socket.inet_aton(addr))[0]
-
-    @staticmethod
-    def int2ip(addr):
-        return socket.inet_ntoa(struct.pack("!I", addr))
-
-    @staticmethod
-    def proto2int(proto):
-        proto = proto.upper()
-        if proto in NetUtils.PROTO_L3:
-            return NetUtils.PROTO_L3[proto], 3
-        if proto in NetUtils.PROTO_L4:
-            return NetUtils.PROTO_L4[proto], 4
-        return (None, None)
-
-    @staticmethod
-    def int2proto(proto, level):
-        if level == 3:
-            for (k, v) in NetUtils.PROTO_L3.items():
-                if v == proto:
-                    return k
-        elif level == 4:
-            for (k, v) in NetUtils.PROTO_L4.items():
-                if v == proto:
-                    return k
-        return None
-
-    @staticmethod
-    def int2tcp_flags(flags):
-        res = []
-        if flags & (1 << 4):
-            res.append('A')
-        if flags & (1 << 3):
-            res.append('P')
-        if flags & (1 << 1):
-            res.append('S')
-        if flags & 1:
-            res.append('F')
-        if flags & (1 << 2):
-            res.append('R')
-        return ','.join(res)
-
-    @staticmethod
-    def tcp_flags2int(flags):
-        res = 0
-        if 'A' in flags:
-            res += (1 << 4)
-        if 'P' in flags:
-            res += (1 << 3)
-        if 'F' in flags:
-            res += (1 << 0)
-        if 'S' in flags:
-            res += (1 << 1)
-        if 'R' in flags:
-            res += (1 << 2)
-        return res
-
-    @staticmethod
-    def b2str(b):
-        return 'true' if b else 'false'
-
-
-class TracePoint:
+class Tracer:
     KPROBE_PREFIX = 'nettrace_kprobe__'
     KRETPROBE_PREFIX = 'nettrace_kretprobe__'
     TP_PREFIX = 'nettrace_tp__'
@@ -224,9 +18,9 @@ class TracePoint:
     TYPE_KPROBE = 'kprobe'
     TYPE_KRETPROBE = 'kretprobe'
 
-    _functions = []
-    _tracers = []
-    _all_tracer = None
+    _tracer_enabled = []
+    _cata_enabled = []
+    _cata_all = None
 
     _v_tracer = {
         '4.14': [
@@ -238,97 +32,97 @@ class TracePoint:
     }
 
     @staticmethod
-    def get_all_tracer():
-        if TracePoint._all_tracer:
-            return TracePoint._all_tracer
+    def get_cata_all():
+        if Tracer._cata_all:
+            return Tracer._cata_all
         with open(project_file('tracer.json'), 'r') as f:
             data = f.read()
-            tracer = json.loads(data)
-            TracePoint._all_tracer = tracer
+            cata = json.loads(data)
+            Tracer._cata_all = cata
             f.close()
-            TracePoint.init_tracer(tracer)
-            return tracer
+            Tracer.prepare_cata(cata)
+            return cata
 
     @staticmethod
-    def is_item(tracer):
+    def is_tracer(tracer):
         return 'children' not in tracer
 
     @staticmethod
-    def is_tp(item):
-        return item.get('type') == TracePoint.TYPE_TRACEPOINT
+    def is_tp(tracer):
+        return tracer.get('type') == Tracer.TYPE_TRACEPOINT
 
     @staticmethod
-    def is_ret_enabled(item):
-        return item.get('ret_enabled')
+    def is_ret_enabled(tracer):
+        return tracer.get('ret_enabled')
 
     @staticmethod
-    def is_valid(item):
-        if TracePoint.is_tp(item):
+    def is_valid(tracer):
+        if Tracer.is_tp(tracer):
             return True
-        if 'skb' not in item and 'pskb' not in item:
+        if 'skb' not in tracer and 'pskb' not in tracer:
             return False
         return True
 
     @staticmethod
-    def is_ret_only(item):
-        return item.get('ret_only')
+    def is_ret_only(tracer):
+        return tracer.get('ret_only')
 
     @staticmethod
     def has_any_ret():
-        for item in TracePoint._functions:
-            if TracePoint.is_ret_enabled(item):
+        for tracer in Tracer._tracer_enabled:
+            if Tracer.is_ret_enabled(tracer):
                 return True
         return False
 
     @staticmethod
-    def is_end(item):
-        return item.get('is_end')
+    def is_end(tracer):
+        return tracer.get('is_end')
 
     @staticmethod
-    def is_clone(item):
-        return item['name'] == 'skb_clone'
+    def is_clone(tracer):
+        return tracer['name'] == 'skb_clone'
 
     @staticmethod
-    def get_tracer(tracer, root=None):
+    def get_cata_or_tracer(name, root=None):
         if not root:
-            root = TracePoint.get_all_tracer()
-            if tracer == root['name']:
+            root = Tracer.get_cata_all()
+            if name == root['name']:
                 return root
-        for item in root['children']:
-            if item['name'] == tracer:
-                return item
-            elif not TracePoint.is_item(item):
-                t = TracePoint.get_tracer(tracer, item)
+        for cata in root['children']:
+            if cata['name'] == name:
+                return cata
+            elif not Tracer.is_tracer(cata):
+                t = Tracer.get_cata_or_tracer(name, cata)
                 if t:
                     return t
         return None
 
     @staticmethod
-    def get_items(tracer):
+    def get_tracers(cata):
         result = []
-        if not tracer:
+        if not cata:
             return []
-        if TracePoint.is_item(tracer):
-            result.append(tracer)
+        if Tracer.is_tracer(cata):
+            result.append(cata)
         else:
-            for v in tracer['children']:
-                if TracePoint.is_item(v):
+            for v in cata['children']:
+                if Tracer.is_tracer(v):
                     result.append(v)
                 else:
-                    result += TracePoint.get_items(v)
+                    result += Tracer.get_tracers(v)
         return result
 
     @staticmethod
     def bind_parent(root):
         for i in root['children']:
             i['parent'] = root
-            if TracePoint.is_item(i):
+            if Tracer.is_tracer(i):
                 continue
-            TracePoint.bind_parent(i)
+            Tracer.bind_parent(i)
 
     @staticmethod
     def print_tracer(tracer, tab=''):
-        if TracePoint.is_item(tracer):
+        if Tracer.is_tracer(tracer):
             if tracer.get('hidden'):
                 return
             if 'attached' in tracer:
@@ -341,7 +135,7 @@ class TracePoint:
             print('%s%s: %s' % (tab, tracer['name'], tracer['desc']))
 
         for i in tracer['children']:
-            TracePoint.print_tracer(i, tab + '    ')
+            Tracer.print_tracer(i, tab + '    ')
 
     @staticmethod
     def fix_version():
@@ -353,26 +147,26 @@ class TracePoint:
         if not m:
             return
         ver = m.group(1)
-        if ver not in TracePoint._v_tracer:
+        if ver not in Tracer._v_tracer:
             Helper.pr_warn('''kernel version not found! You can add your kernel
 version in '_v_tracer' of nettrace.py\n''')
             return
-        for item in TracePoint._v_tracer[ver]:
-            origin = TracePoint.get_tracer(item['name'])
-            origin.update(item)
+        for tracer in Tracer._v_tracer[ver]:
+            origin = Tracer.get_cata_or_tracer(tracer['name'])
+            origin.update(tracer)
 
     @staticmethod
-    def init_tracer(root=None):
+    def prepare_cata(root=None):
         if not root:
-            root = TracePoint.get_all_tracer()
-        if TracePoint.is_item(root):
+            root = Tracer.get_cata_all()
+        if Tracer.is_tracer(root):
             return
         children = root['children']
         i = 0
         while i < len(children):
             c = children[i]
             if not isinstance(c, str):
-                TracePoint.init_tracer(c)
+                Tracer.prepare_cata(c)
                 i += 1
                 continue
             children.remove(c)
@@ -390,31 +184,31 @@ version in '_v_tracer' of nettrace.py\n''')
             i += 1
 
     @staticmethod
-    def init_functions():
-        functions, tracers, stack_funcs = [], [], []
-        for tracer_str in set(Helper.get_tracer()):
-            tracer = TracePoint.get_tracer(tracer_str)
-            if not tracer:
-                Helper.pr_warn('the tracer:%s not found' % tracer_str)
+    def init_tracers():
+        tracers, catalogs, stack_tracers = [], [], []
+        for cata_str in set(Helper.get_tracer()):
+            cata = Tracer.get_cata_or_tracer(cata_str)
+            if not cata:
+                Helper.pr_warn('the tracer:%s not found' % cata_str)
                 continue
-            functions += TracePoint.get_items(tracer)
-            tracers.append(tracer)
+            tracers += Tracer.get_tracers(cata)
+            catalogs.append(cata)
 
         for t in set(Helper.get_stack_tracer()):
-            stack_funcs += TracePoint.get_items(TracePoint.get_tracer(t))
+            stack_tracers += Tracer.get_tracers(Tracer.get_cata_or_tracer(t))
 
-        enable_func = [i for i in functions if i.get('is_end')]
-        if not enable_func and Helper.tl_enabled():
-            tracer = TracePoint.get_tracer('life')
-            functions += TracePoint.get_items(tracer)
-            tracers.append(tracer)
+        end_tracers = [i for i in tracers if i.get('is_end')]
+        if not end_tracers and Helper.tl_enabled():
+            cata = Tracer.get_cata_or_tracer('life')
+            tracers += Tracer.get_tracers(cata)
+            catalogs.append(cata)
             Helper.pr_warn('''no end tracer is found in timeline mode!
 "life" tracer is enabled automatically
 ''')
 
-        for f in functions:
-            if stack_funcs:
-                if f in stack_funcs:
+        for f in tracers:
+            if stack_tracers:
+                if f in stack_tracers:
                     f['stack'] = True
                 else:
                     f['stack'] = False
@@ -423,143 +217,148 @@ version in '_v_tracer' of nettrace.py\n''')
             else:
                 f['stack'] = False
 
-        TracePoint._functions = functions
-        TracePoint._tracers = tracers
-        TracePoint.bind_parent(TracePoint.get_all_tracer())
-        TracePoint.fix_version()
+        Tracer._tracer_enabled = tracers
+        Tracer._cata_enabled = catalogs
+        Tracer.bind_parent(Tracer.get_cata_all())
+        Tracer.fix_version()
 
-        for item in functions:
-            p = item['parent']
+        for t in tracers:
+            p = t['parent']
             parents = []
             while p and 'visual' in p:
                 parents.append(p['name'])
                 p = p.get('parent')
-            item['parent_str'] = '->'.join(parents)
-            if Helper.get_args().ret:
-                item['ret_enabled'] = True
-            if Helper.tl_enabled() and TracePoint.is_clone(item):
-                item['ret_only'] = True
-                item['ret_enabled'] = True
+            t['parent_str'] = '->'.join(parents)
+            if Helper.get_args().ret and not Tracer.is_tp(t):
+                t['ret_enabled'] = True
+            if Helper.tl_enabled() and Tracer.is_clone(t):
+                t['ret_only'] = True
+                t['ret_enabled'] = True
 
     @staticmethod
-    def generate_func_code():
+    def _generate_tracer_code(tracer, index):
         kprobe_template = '''int %s%s(struct pt_regs *regs, %s)
-        { BPF_prep DO_TRACE(regs, %d%s) }\n'''
+        { BPF_prep func_params_t param = {%s}; return do_trace(regs, skb, &param); }\n'''
         kretprobe_template = '''int %s%s(void *ctx)
         { return ret_trace(ctx, %d, %s); }\n'''
         tp_template = '''TRACEPOINT_PROBE(%s)
-        { BPF_prep DO_TRACE(args, %d%s) }\n'''
-        ph_functions = ''
+        { BPF_prep func_params_t param = {%s}; return do_trace(args, skb, &param); }\n'''
 
-        for func_index in range(len(TracePoint._functions)):
-            func = TracePoint._functions[func_index]
-            trace_params = []
+        code = ''
+        param_code = '.func = %d,' % index
 
-            if not TracePoint.is_valid(func):
-                continue
+        ret_only = b2str(Tracer.is_ret_only(tracer))
 
-            if Helper.ret_enabled():
-                trace_params.append(NetUtils.b2str(
-                    TracePoint.is_ret_enabled(func)))
-                trace_params.append(NetUtils.b2str(
-                    TracePoint.is_ret_only(func)))
-            if Helper.stack_enabled():
-                is_stack = NetUtils.b2str(func['stack'])
-                trace_params.append(is_stack)
-            if Helper.skb_mode_enabled():
-                trace_params.append(NetUtils.b2str(TracePoint.is_end(func)))
-            trace_params = ', '.join(trace_params)
-            if trace_params:
-                trace_params = ', ' + trace_params
+        if Helper.ret_enabled():
+            param_code += '.ret = %s, .ret_only = %s,' % (
+                b2str(Tracer.is_ret_enabled(tracer)),
+                ret_only)
+        if Helper.stack_enabled():
+            param_code += '.stack = %s,' % b2str(tracer['stack'])
+        if Helper.skb_mode_enabled():
+            param_code += '.is_end = %s,' % b2str(Tracer.is_end(tracer))
+        param_code = param_code.strip(',')
 
-            if TracePoint.is_tp(func):
-                tp_info = func['tp'].split(':')
-                if not bcc.BPF.tracepoint_exists(tp_info[0], tp_info[1]):
-                    continue
-                tp_name = func['tp'].replace(':', ', ')
-                ph_functions += tp_template % (tp_name, func_index,
-                                               trace_params)
-                bpf_prep = 'struct sk_buff *skb = args->%s;' % func['skb']
+        if Tracer.is_tp(tracer):
+            tp_info = tracer['tp'].split(':')
+            if not bcc.BPF.tracepoint_exists(tp_info[0], tp_info[1]):
+                return
+            tp_name = tracer['tp'].replace(':', ', ')
+            code += tp_template % (tp_name, param_code)
+            bpf_prep = 'struct sk_buff *skb = args->%s;' % tracer['skb']
+        else:
+            name = tracer['name']
+            if 'regex' not in tracer and bcc.BPF.ksymname(name) < 0:
+                return
+            if 'skb' in tracer:
+                pad_index = tracer['skb']
+                skb_param = 'struct sk_buff *skb'
+                bpf_prep = ''
+            elif 'pskb' in tracer:
+                pad_index = tracer['pskb']
+                skb_param = 'struct sk_buff **pskb'
+                bpf_prep = 'struct sk_buff *skb = *pskb;'
             else:
-                name = func['name']
-                if 'regex' not in func and bcc.BPF.ksymname(name) < 0:
-                    continue
-                if 'skb' in func:
-                    pad_index = func['skb']
-                    skb_param = 'struct sk_buff *skb'
-                    bpf_prep = ''
-                elif 'pskb' in func:
-                    pad_index = func['pskb']
-                    skb_param = 'struct sk_buff **pskb'
-                    bpf_prep = 'struct sk_buff *skb = *pskb;'
-                else:
-                    continue
+                return
 
-                skb_params = ''
-                for i in range(pad_index):
-                    skb_params += 'void *arg_%d, ' % i
-                skb_params += skb_param
+            skb_params = ''
+            for i in range(pad_index):
+                skb_params += 'void *arg_%d, ' % i
+            skb_params += skb_param
 
-                if TracePoint.is_ret_enabled(func):
-                    ret_str = kretprobe_template % (
-                        TracePoint.KRETPROBE_PREFIX, name, func_index,
-                        NetUtils.b2str(TracePoint.is_clone(func)))
-                else:
-                    ret_str = ''
+            if Tracer.is_ret_enabled(tracer):
+                ret_str = kretprobe_template % (
+                    Tracer.KRETPROBE_PREFIX, name, index,
+                    ret_only)
+            else:
+                ret_str = ''
 
-                ph_functions += kprobe_template % (TracePoint.KPROBE_PREFIX,
-                                                   name, skb_params,
-                                                   func_index, trace_params)
-                ph_functions += ret_str
-            ph_functions = ph_functions.replace('BPF_prep', bpf_prep)
+            code += kprobe_template % (Tracer.KPROBE_PREFIX,
+                                       name, skb_params, param_code)
+            code += ret_str
+        code = code.replace('BPF_prep', bpf_prep)
 
-        return ph_functions
+        return code
 
     @staticmethod
-    def get_func_by_index(index):
-        return TracePoint._functions[index]
+    def generate_code():
+        code = ''
+        for func_index in range(len(Tracer._tracer_enabled)):
+            func = Tracer._tracer_enabled[func_index]
+            if not Tracer.is_valid(func):
+                continue
+            tracer_code = Tracer._generate_tracer_code(func, func_index)
+            if not tracer_code:
+                continue
+            code += tracer_code
+        return code
 
     @staticmethod
-    def attach_item(bpf, item):
-        if not TracePoint.is_valid(item):
+    def get_tracer_by_index(index):
+        return Tracer._tracer_enabled[index]
+
+    @staticmethod
+    def attach_tracer(tracer):
+        if not Tracer.is_valid(tracer):
             return False
 
-        if TracePoint.is_tp(item):
-            tp_info = item['tp'].split(':')
+        if Tracer.is_tp(tracer):
+            tp_info = tracer['tp'].split(':')
             if bcc.BPF.tracepoint_exists(tp_info[0], tp_info[1]):
                 return True
             else:
                 return False
 
-        name = item['name']
-        name_re = item.get('regex')
-        kretprobe_name = '%s%s' % (TracePoint.KRETPROBE_PREFIX, name)
-        kprobe_name = '%s%s' % (TracePoint.KPROBE_PREFIX, name)
+        name = tracer['name']
+        name_re = tracer.get('regex')
+        kretprobe_name = '%s%s' % (Tracer.KRETPROBE_PREFIX, name)
+        kprobe_name = '%s%s' % (Tracer.KPROBE_PREFIX, name)
+        bpf = Core.get_bpf()
 
         if name_re:
             bpf.attach_kprobe(event_re=name_re, fn_name=kprobe_name)
-            if TracePoint.is_ret_enabled(item):
+            if Tracer.is_ret_enabled(tracer):
                 bpf.attach_kretprobe(event_re=name_re, fn_name=kretprobe_name)
         else:
             if bpf.ksymname(name) < 0:
                 return False
             bpf.attach_kprobe(event=name, fn_name=kprobe_name)
-            if TracePoint.is_ret_enabled(item):
+            if Tracer.is_ret_enabled(tracer):
                 bpf.attach_kretprobe(event=name, fn_name=kretprobe_name)
 
         return True
 
     @staticmethod
-    def attach_all_item(bpf):
-        for item in TracePoint._functions:
-            if TracePoint.attach_item(bpf, item):
-                item['attached'] = True
+    def attach_all():
+        for tracer in Tracer._tracer_enabled:
+            if Tracer.attach_tracer(tracer):
+                tracer['attached'] = True
                 if Helper.verbose_enabled():
-                    print('attach %s success' % item['name'])
+                    print('attach %s success' % tracer['name'])
             else:
-                item['attached'] = False
+                tracer['attached'] = False
                 if Helper.verbose_enabled():
-                    Helper.pr_warn('attach %s failed' % item['name'])
+                    Helper.pr_warn('attach %s failed' % tracer['name'])
 
 
 class Helper:
@@ -649,7 +448,7 @@ Notice: this may cause performance issue.\n''')
         if args.tracer == '?':
             print('available tracer:')
             print('---------------------------------------------------\n')
-            TracePoint.print_tracer(TracePoint.get_all_tracer())
+            Tracer.print_tracer(Tracer.get_cata_all())
             print('\n---------------------------------------------------')
             exit(0)
 
@@ -780,13 +579,13 @@ class Compile:
                 ('arp_ext', ARP_Ext),
             ]
 
-        ctx_fields = [('ts', ctypes.c_uint64), ('field_l3', Field_l3),
-                      ('ret_val', ctypes.c_uint64)]
+        ctx_fields = [('ts', ctypes.c_uint64), ('field_l3', Field_l3)]
         cflags = []
 
-        if TracePoint.has_any_ret():
+        if Tracer.has_any_ret():
+            ctx_fields.append(('ret_val', ctypes.c_uint64))
             cflags.append('-DNT_ENABLE_RET')
-        if TracePoint.has_any_ret() or Helper.id_enabled():
+        if Tracer.has_any_ret() or Helper.id_enabled():
             ctx_fields.append(('id', ctypes.c_uint64))
         if Helper.detail_enabled():
             ctx_fields.extend([
@@ -806,11 +605,11 @@ class Compile:
         ctx_fields += [
             ('field_l4', Field_l4),
             ('proto_l3', ctypes.c_uint16),
-            ('proto_l4', ctypes.c_uint8),
-            ('func', ctypes.c_uint8)
+            ('func', ctypes.c_uint16),
+            ('proto_l4', ctypes.c_uint8)
         ]
 
-        if TracePoint.has_any_ret():
+        if Tracer.has_any_ret():
             ctx_fields.append(('is_ret', ctypes.c_uint8))
 
         class Context(ctypes.Structure):
@@ -924,7 +723,7 @@ class Output:
 
     @staticmethod
     def _print_event(ctx):
-        item = TracePoint.get_func_by_index(ctx.func)
+        tracer = Tracer.get_tracer_by_index(ctx.func)
         ts = float(ctx.ts)/1000000000
 
         output_fmt = Helper.get_output()
@@ -943,7 +742,7 @@ class Output:
         if 'pid' in output_fmt:
             p_info = 'pid:%d,%s' % (ctx.pid, ctx.comm.decode(encoding='utf-8'))
             ctx.__dict__['pid'] = p_info
-        ctx.__dict__['module'] = item['parent_str']
+        ctx.__dict__['module'] = tracer['parent_str']
 
         for k in output_fmt:
             if k in ctx.__dict__:
@@ -952,40 +751,34 @@ class Output:
                 val = getattr(ctx, k)
             d_info += Helper._output_fmt[k] % val
 
-        output_str = '%f: %s[%-24s]: ' % (ts, d_info, item['name'])
+        tracer_symbol = '  '
+        desc_info = ''
+        if Tracer.is_ret_enabled(tracer):
+            if ctx.is_ret:
+                desc_info = 'return value:%x' % ctx.ret_val
+                if not Tracer.is_ret_only(tracer):
+                    tracer_symbol = '<<'
+            else:
+                tracer_symbol = '>>'
 
-        if TracePoint.is_ret_enabled(item) and ctx.is_ret:
-            desc_info = 'return value:%x' % ctx.ret_val
-        else:
-            desc_info = ''
-
+        output_str = '%f: %s[%-24s %s]: ' % (ts, d_info, tracer['name'],
+                                             tracer_symbol)
         output_str += Output._generate_proto_info(ctx)
         if desc_info:
             output_str = '%s\n%-16s%s' % (output_str, '', desc_info)
         print(output_str)
-        item['stack'] and Output._print_stack(ctx.stack_id, -1)
+        tracer['stack'] and Output._print_stack(ctx.stack_id, -1)
 
     @staticmethod
-    def _handle_timeline(ctx):
-        item = TracePoint.get_func_by_index(ctx.func)
-        queue = Output._tl_table.setdefault(ctx.id, {'refs': 1, 'items': []})
-        queue['items'].append(ctx)
-        if TracePoint.is_clone(item):
-            new_skb = ctx.ret_val
-            queue['refs'] += 1
-            Output._tl_table[new_skb] = queue
-            return
-
-        if not TracePoint.is_end(item):
-            return
+    def _handle_skb_dead(shared, ctx):
         Output._tl_table.pop(ctx.id)
-        queue['refs'] -= 1
-        if queue['refs'] > 0:
+        shared['refs'] -= 1
+        if shared['refs'] > 0:
             return
         print('<------------------- skb: %x ---------------------->' % ctx.id)
-        items = queue['items']
-        items.sort(key=lambda x: x.ts)
-        for i in items:
+        tracers = shared['tracers']
+        tracers.sort(key=lambda x: x.ts)
+        for i in tracers:
             Output._print_event(i)
         print('')
         if not Helper.get_count():
@@ -993,6 +786,40 @@ class Output:
         Output._count += 1
         if Output._count >= Helper.get_count():
             Output._stop = True
+
+    @staticmethod
+    def _handle_timeline(ctx):
+        tracer = Tracer.get_tracer_by_index(ctx.func)
+        data = Output._tl_table.setdefault(ctx.id, {'refs': 0, 'shared': {
+            'refs': 1, 'tracers': []
+        }, 'dead': False})
+        shared = data['shared']
+        shared['tracers'].append(ctx)
+        if Tracer.is_clone(tracer) and ctx.ret_val:
+            shared['refs'] += 1
+            Output._tl_table[ctx.ret_val] = {
+                'refs': 0, 'shared': shared, 'dead': False
+            }
+            return
+
+        if Tracer.is_ret_enabled(tracer):
+            if ctx.is_ret:
+                data['refs'] -= 1
+            else:
+                data['refs'] += 1
+
+            if data['dead'] and not data['refs']:
+                Output._handle_skb_dead(shared, ctx)
+                return
+
+        if not Tracer.is_end(tracer):
+            return
+
+        if Tracer.is_ret_enabled(tracer) and not ctx.is_ret:
+            return
+        data['dead'] = True
+        if not data['refs']:
+            Output._handle_skb_dead(shared, ctx)
 
     @staticmethod
     def _handle_event(cpu, data, size):
@@ -1086,10 +913,10 @@ class Core:
 
             bpf_text = bpf_text.replace(
                 'BPF_PH_filter', '&&'.join(ph_filter) or '1')
-            ph_functions = TracePoint.generate_func_code()
+            ph_functions = Tracer.generate_code()
             if not ph_functions:
                 Helper.pr_err('no tracer found!')
-            func_count = len(TracePoint._functions)
+            func_count = len(Tracer._tracer_enabled)
             bpf_text = bpf_text.replace('BPF_PH_count', str(func_count))
             bpf_text = bpf_text.replace('BPF_PH_function', ph_functions)
             return bpf_text
@@ -1103,12 +930,12 @@ class Core:
         bpf = bcc.BPF(text=bpf_text, cflags=Compile.get_cflags())
         Core._bpf_ins = bpf
 
-        TracePoint.attach_all_item(bpf)
+        Tracer.attach_all()
         if Helper.verbose_enabled():
             print('\nfollowing tracers are enabled:')
             print('-----------------------------------\n')
-            for t in TracePoint._tracers:
-                TracePoint.print_tracer(t)
+            for t in Tracer._cata_enabled:
+                Tracer.print_tracer(t)
             print('-----------------------------------\n')
 
     @staticmethod
@@ -1118,7 +945,7 @@ class Core:
     @staticmethod
     def run():
         Helper.init_args()
-        TracePoint.init_functions()
+        Tracer.init_tracers()
         Core.load_bpf()
         Output.do_output()
 
