@@ -193,7 +193,7 @@ When trace skb, tracer can be specified by `-t` (or `--tracer`), and multiple ar
 
 ### 3.2. custom
 
-Tracer tree is keep in `tracer.json`, so it is simple to extend your own tracer. Leaf node of the tree can be the kernel function or tracepoint that we want to trace, and they have the following fields:
+Tracer tree is keep in `skb.yaml`, so it is simple to extend your own tracer. Leaf node of the tree can be the kernel function or tracepoint that we want to trace, and they have the following fields:
 
 - name: The name of kernel function or tracepoint.
 - skb: For kprobe, this is the index of 'struct sk_buff' in the function params which begin from 0; For tracepoint, this is the name of 'struct sk_buff', which may be 'skbaddr'.
@@ -202,7 +202,7 @@ Tracer tree is keep in `tracer.json`, so it is simple to extend your own tracer.
 - is_end: if this function/tracepoint is the end of the life of the skb. This is used to trace the life of skb.
 - regex: the regex for kernel function name. Sometimes, the function name compiled can be different, such as 'do_xdp_generic' is compiled to 'do_xdp_generic.cold'. So we can use regex to match the compiled name with 'do_xdp_generic.*'.
 
-If nettrace is used by rpm package or docker image, the 'tracer.json' is located in '/opt/nettrace/tracer.json'.
+If nettrace is used by rpm package or docker image, the 'skb.yaml' is located in '/opt/nettrace/skb.yaml'.
 
 ## 4. timeline mode
 

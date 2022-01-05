@@ -5,6 +5,7 @@ import socket
 import ctypes
 import re
 import os
+import yaml
 import bcc
 
 from utils import *
@@ -35,9 +36,9 @@ class Tracer:
     def get_cata_all():
         if Tracer._cata_all:
             return Tracer._cata_all
-        with open(project_file('tracer.json'), 'r') as f:
+        with open(project_file('skb.yaml'), 'r') as f:
             data = f.read()
-            cata = json.loads(data)
+            cata = yaml.load(data, yaml.BaseLoader)
             Tracer._cata_all = cata
             f.close()
             Tracer.prepare_cata(cata)
@@ -282,7 +283,7 @@ version in '_v_tracer' of nettrace.py\n''')
                 return
 
             skb_params = ''
-            for i in range(pad_index):
+            for i in range(int(pad_index)):
                 skb_params += 'void *arg_%d, ' % i
             skb_params += skb_param
 

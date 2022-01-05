@@ -10,7 +10,7 @@ install:
 	cp nettrace.c ${TARGET_DIR}
 	cp nettrace.py ${TARGET_DIR}
 	cp utils.py ${TARGET_DIR}
-	cp tracer.json ${TARGET_DIR}
+	cp skb.yaml ${TARGET_DIR}
 
 	mkdir -p ${DESTDIR}/usr/share/man/man8/
 	gzip -k nettrace.8

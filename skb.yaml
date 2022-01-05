@@ -1,0 +1,187 @@
+---
+name: all
+desc: trace the whole kernel network stack
+children:
+- name: link
+  desc: link layer (L2) of the network stack
+  children:
+  - name: link-in
+    desc: link layer (L2) of packet in
+    visual: true
+    children:
+    - napi_gro_receive:1
+    - enqueue_to_backlog:0
+    - __netif_receive_skb_core
+    - name: do_xdp_generic
+      regex: do_xdp_generic\..*
+      skb: 1
+    - xdp_do_generic_redirect:1
+    - generic_xdp_tx:1
+    - sch_handle_ingress:0
+  - name: link-out
+    desc: link layer (L2) of packet out
+    visual: true
+    children:
+    - dev_queue_xmit:0
+    - dev_hard_start_xmit:0
+  - name: sched
+    desc: TC(traffic control) module
+    visual: true
+    children:
+    - tcf_classify:0
+    - sch_handle_egress:0
+    - cls_bpf_classify:0
+    - tcf_bpf_act:0
+  - name: ipvaln
+    desc: ipvlan network interface
+    visual: true
+    children:
+    - ipvlan_queue_xmit:0
+    - ipvlan_handle_frame:0
+    - ipvlan_rcv_frame:1
+    - ipvlan_xmit_mode_l3:0
+    - ipvlan_process_v4_outbound:0
+  - name: arp
+    visual: true
+    desc: arp protocol
+    children:
+    - arp_rcv:0
+    - arp_process:2
+- name: packet
+  desc: the process of skb of type PF_PACKET
+  children:
+  - name: pkt-in
+    desc: the process of skb of type PF_PACKET
+    visual: true
+    children:
+    - packet_rcv:0
+    - tpacket_rcv:0
+  - name: pkt-output
+    desc: the process of skb of type PF_PACKET
+    visual: true
+    children:
+    - packet_direct_xmit:0
+- name: netfilter
+  desc: netfilter process(filter, nat, etc)
+  children:
+  - name: netfilter
+    desc: base netfilter entry
+    visual: true
+    children:
+    - ipt_do_table:0
+    - nf_hook_slow:0
+  - name: conntrack
+    desc: connection track (used by nat mostly)
+    visual: true
+    children:
+    - ipv4_confirm:1
+    - nf_confirm:0
+    - ipv4_conntrack_in:1
+    - nf_conntrack_in:3
+    - ipv4_pkt_to_tuple:0
+    - tcp_new:1
+    - tcp_pkt_to_tuple:0
+    - resolve_normal_ct:2
+    - init_conntrack:5
+    - tcp_packet:1
+    - tcp_in_window:4
+    - __nf_ct_refresh_acct:2
+  - name: nat
+    desc: NAT (net address translation)
+    visual: true
+    children:
+    - iptable_nat_ipv4_in:1
+    - nf_nat_ipv4_fn:1
+    - iptable_nat_ipv4_fn:1
+    - iptable_nat_do_chain:1
+- name: ip
+  desc: ip protocol layer (L3) of the network stack
+  children:
+  - name: ip-in
+    desc: ip layer of packet in
+    visual: true
+    children:
+    - ip_rcv:0
+    - name: ip_rcv_core
+      skb: 0
+      regex: ip_rcv_core\.*
+    - ip_rcv_finish:2
+    - ip_local_deliver:0
+    - ip_local_deliver_finish:2
+    - ip_forward:0
+    - ip_forward_finish:0
+  - name: ip-out
+    desc: ip layer of packet out
+    visual: true
+    children:
+    - __ip_local_out:2
+    - ip_send_skb:1
+    - ip_output:2
+    - ip_finish_output:2
+    - ip_finish_output_gso:2
+    - ip_finish_output2:2
+  - name: ip-route
+    desc: ip route for packet in and out
+    visual: true
+    children:
+    - fib_validate_source:0
+    - ip_route_input_slow:0
+- name: tcp
+  desc: tcp protocol layer (L4) of the network stack
+  children:
+  - name: tcp-in
+    desc: tcp layer of packet in
+    visual: true
+    children:
+    - tcp_v4_rcv:0
+    - tcp_filter:1
+    - tcp_child_process:2
+    - tcp_v4_send_reset:1
+    - tcp_v4_do_rcv:1
+    - tcp_rcv_established:1
+    - tcp_rcv_state_process:1
+    - tcp_queue_rcv:1
+- name: udp
+  desc: udp protocol layer (L4) of the network stack
+  children:
+  - name: udp-in
+    desc: udp layer of packet in
+    visual: true
+    children:
+    - udp_rcv:0
+    - udp_unicast_rcv_skb:1
+    - udp_queue_rcv_skb:1
+    - xfrm4_udp_encap_rcv:1
+    - xfrm4_rcv_encap:0
+    - __udp_queue_rcv_skb:1
+    - __udp_enqueue_schedule_skb:1
+- name: icmp
+  desc: icmp(ping) protocol layer (L4) of the network stack
+  children:
+  - name: icmp-in
+    desc: icmp layer of packet in
+    visual: true
+    children:
+    - icmp_rcv:0
+    - icmp_echo:0
+    - icmp_reply:1
+- name: life
+  desc: skb clone and free
+  visual: true
+  children:
+  - name: __kfree_skb
+    skb: 0
+    is_end: true
+  - name: skb_clone
+    skb: 0
+    type: kretprobe
+  - name: consume_skb
+    tp: skb:consume_skb
+    type: tracepoint
+    skb: skbaddr
+    is_end: true
+  - name: kfree_skb
+    tp: skb:kfree_skb
+    type: tracepoint
+    skb: skbaddr
+    is_end: true
