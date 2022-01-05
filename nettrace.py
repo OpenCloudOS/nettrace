@@ -2,10 +2,10 @@
 import argparse
 import json
 import socket
-import bcc
 import ctypes
 import re
 import os
+import bcc
 
 from utils import *
 
@@ -538,7 +538,7 @@ class Compile:
                 ('daddr', ctypes.c_uint32),
             ]
 
-        class ARP_Ext(ctypes.Structure):
+        class ArpExt(ctypes.Structure):
             _fields_ = [
                 ('op', ctypes.c_uint16)
             ]
@@ -566,20 +566,20 @@ class Compile:
                 ('id', ctypes.c_uint16),
             ]
 
-        class Field_l3(ctypes.Union):
+        class FieldL3(ctypes.Union):
             _fields_ = [
                 ('ip', IP),
             ]
 
-        class Field_l4(ctypes.Union):
+        class FieldL4(ctypes.Union):
             _fields_ = [
                 ('tcp', Tcp),
                 ('udp', Udp),
                 ('icmp', Icmp),
-                ('arp_ext', ARP_Ext),
+                ('arp_ext', ArpExt),
             ]
 
-        ctx_fields = [('ts', ctypes.c_uint64), ('field_l3', Field_l3)]
+        ctx_fields = [('ts', ctypes.c_uint64), ('field_l3', FieldL3)]
         cflags = []
 
         if Tracer.has_any_ret():
@@ -603,7 +603,7 @@ class Compile:
             cflags.append('-DNT_ENABLE_SKB_MODE')
 
         ctx_fields += [
-            ('field_l4', Field_l4),
+            ('field_l4', FieldL4),
             ('proto_l3', ctypes.c_uint16),
             ('func', ctypes.c_uint16),
             ('proto_l4', ctypes.c_uint8)
@@ -637,10 +637,7 @@ class Output:
         stack_map = Core.get_bpf()['stacks']
         if stack_id < 0:
             return
-        try:
-            stack = list(stack_map.walk(stack_id))
-        except Exception as e:
-            return
+        stack = list(stack_map.walk(stack_id))
         for addr in stack:
             print("        %s" % Core.get_bpf().sym(addr, tgid,
                   show_module=True, show_offset=True))
@@ -736,7 +733,7 @@ class Output:
                 try:
                     ifname = socket.if_indextoname(ctx.ifindex)
                     ifname = '%d:%s' % (ctx.ifindex, ifname)
-                except Exception:
+                except OSError:
                     ifname = '%d' % ctx.ifindex
             ctx.__dict__['if'] = ifname
         if 'pid' in output_fmt:
