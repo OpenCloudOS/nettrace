@@ -539,6 +539,12 @@ class Compile:
                 ('daddr', ctypes.c_uint32),
             ]
 
+        class IPV6(ctypes.Structure):
+            _fields_ = [
+                ('saddr', ctypes.c_uint16*8),
+                ('daddr', ctypes.c_uint16*8),
+            ]
+
         class ArpExt(ctypes.Structure):
             _fields_ = [
                 ('op', ctypes.c_uint16)
@@ -570,6 +576,7 @@ class Compile:
         class FieldL3(ctypes.Union):
             _fields_ = [
                 ('ip', IP),
+                ('ipv6', IPV6),
             ]
 
         class FieldL4(ctypes.Union):
@@ -644,16 +651,24 @@ class Output:
                   show_module=True, show_offset=True))
 
     @staticmethod
-    def _generate_ip_info(ctx):
-        ip = ctx.field_l3.ip
+    def _generate_ip_info(ctx, is_ipv6=False):
         output_str = ''
+
+        if not is_ipv6:
+            ip = ctx.field_l3.ip
+            saddr = NetUtils.int2ip(socket.ntohl(ip.saddr))
+            daddr = NetUtils.int2ip(socket.ntohl(ip.daddr))
+        else:
+            ip = ctx.field_l3.ipv6
+            saddr = NetUtils.int2ipv6(ip.saddr)
+            daddr = NetUtils.int2ipv6(ip.daddr)
 
         if ctx.proto_l4 == socket.IPPROTO_TCP:
             tcp = ctx.field_l4.tcp
             output_str += 'TCP: %s:%d -> %s:%d, seq:%d, ack:%d %s' % (
-                NetUtils.int2ip(socket.ntohl(ip.saddr)),
+                saddr,
                 socket.ntohs(tcp.sport),
-                NetUtils.int2ip(socket.ntohl(ip.daddr)),
+                daddr,
                 socket.ntohs(tcp.dport),
                 socket.ntohl(tcp.seq),
                 socket.ntohl(tcp.ack),
@@ -661,9 +676,9 @@ class Output:
         elif ctx.proto_l4 == socket.IPPROTO_UDP:
             udp = ctx.field_l4.udp
             output_str += 'UDP: %s:%d -> %s:%d' % (
-                NetUtils.int2ip(socket.ntohl(ip.saddr)),
+                saddr,
                 socket.ntohs(udp.sport),
-                NetUtils.int2ip(socket.ntohl(ip.daddr)),
+                daddr,
                 socket.ntohs(udp.dport))
         elif ctx.proto_l4 == socket.IPPROTO_ICMP:
             icmp = ctx.field_l4.icmp
@@ -674,17 +689,15 @@ class Output:
             else:
                 icmp_info = 'type: %d, code: %d' % (icmp.type, icmp.code)
             output_str += 'ICMP: %s -> %s, %-15s, seq: %d' % (
-                NetUtils.int2ip(
-                    socket.ntohl(ip.saddr)),
-                NetUtils.int2ip(
-                    socket.ntohl(ip.daddr)),
+                saddr,
+                daddr,
                 icmp_info,
                 socket.ntohs(icmp.seq))
         else:
             fmt = '%s: %s -> %s'
-            output_str += fmt % (NetUtils.int2proto(socket.ntohs(ctx.proto_l3)),
-                                 NetUtils.int2ip(socket.ntohl(ip.saddr)),
-                                 NetUtils.int2ip(socket.ntohl(ip.daddr)))
+            output_str += fmt % (NetUtils.int2proto(socket.ntohs(ctx.proto_l3), 4),
+                                 saddr,
+                                 daddr)
         return output_str
 
     @staticmethod
@@ -711,6 +724,9 @@ class Output:
 
         if proto_l3 == NetUtils.PROTO_L3['IP']:
             return Output._generate_ip_info(ctx)
+
+        if proto_l3 == NetUtils.PROTO_L3['IPV6']:
+            return Output._generate_ip_info(ctx, True)
 
         if proto_l3 == NetUtils.PROTO_L3['ARP']:
             return Output._generate_arp_info(ctx)

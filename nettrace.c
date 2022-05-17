@@ -5,6 +5,7 @@
 #include <uapi/linux/if_ether.h>
 #include <uapi/linux/tcp.h>
 #include <uapi/linux/ip.h>
+#include <uapi/linux/ipv6.h>
 #include <uapi/linux/udp.h>
 #include <uapi/linux/icmp.h>
 #include <bcc/proto.h>
@@ -22,6 +23,10 @@ typedef struct {
 			u32 saddr;
 			u32 daddr;
 		} ip;
+		struct {
+			u8 saddr[16];
+			u8 daddr[16];
+		} ipv6;
 	} field_l3;
 #ifdef NT_ENABLE_RET
 	u64 ret_val;
@@ -183,13 +188,21 @@ static inline bool do_filter(context_t *ctx, sk_buff_t *skb)
 }
 
 static inline int parse_ip(context_t *ctx, sk_buff_t *skb,
-			   struct iphdr *ip)
+			   struct iphdr *ip, bool is_ipv6)
 {
 	void *l4;
 
-	ctx->proto_l4 = ip->protocol;
-	ctx->field_saddr = ip->saddr;
-	ctx->field_daddr = ip->daddr;
+	if (is_ipv6) {
+		struct ipv6hdr *ipv6 = (void *)ip;
+		ctx->proto_l4 = ipv6->nexthdr;
+
+		bpf_probe_read(ctx->field_l3.ipv6.saddr, 16, &ipv6->saddr);
+		bpf_probe_read(ctx->field_l3.ipv6.daddr, 16, &ipv6->daddr);
+	} else {
+		ctx->proto_l4 = ip->protocol;
+		ctx->field_saddr = ip->saddr;
+		ctx->field_daddr = ip->daddr;
+	}
 
 	l4 = get_l4(skb);
 	switch (ctx->proto_l4) {
@@ -267,9 +280,11 @@ static inline int init_ctx(context_t *ctx, sk_buff_t *skb)
 
 	switch (ctx->proto_l3) {
 	case htons(ETH_P_IP):
-		return parse_ip(ctx, skb, l3);
+		return parse_ip(ctx, skb, l3, false);
 	case htons(ETH_P_ARP):
 		return parse_arp(ctx, skb, l3);
+	case htons(ETH_P_IPV6):
+		return parse_ip(ctx, skb, l3, true);
 	default:
 		return 0;
 	}
@@ -282,7 +297,7 @@ on_send:
 	ctx->proto_l3 = htons(ETH_P_IP);
 	l3 = get_l3_send(skb);
 	if (l3)
-		return parse_ip(ctx, skb, l3);
+		return parse_ip(ctx, skb, l3, false);
 	return 0;
 }
 

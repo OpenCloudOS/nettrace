@@ -163,6 +163,17 @@ class NetUtils:
         return socket.inet_ntoa(struct.pack("!I", addr))
 
     @staticmethod
+    def int2ipv6(addr):
+        return '%x:%x:%x:%x:%x:%x:%x:%x' % (socket.ntohs(addr[0]),
+                                            socket.ntohs(addr[1]),
+                                            socket.ntohs(addr[2]),
+                                            socket.ntohs(addr[3]),
+                                            socket.ntohs(addr[4]),
+                                            socket.ntohs(addr[5]),
+                                            socket.ntohs(addr[6]),
+                                            socket.ntohs(addr[7]))
+
+    @staticmethod
     def proto2int(proto):
         proto = proto.upper()
         if proto in NetUtils.PROTO_L3:
