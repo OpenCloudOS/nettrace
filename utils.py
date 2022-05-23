@@ -1,8 +1,13 @@
 import os
 import struct
 import socket
+import subprocess
+import re
+
+from numpy import mat
 
 cur_dir = os.path.dirname(os.path.abspath(__file__))
+_cur_version = None
 
 
 def project_file(name):
@@ -12,6 +17,27 @@ def project_file(name):
 def b2str(b):
     return 'true' if b else 'false'
 
+def kernel_version_num(version):
+    if not version:
+        return 0
+
+    match = re.match("([0-9]+)\.([0-9]+)\.", version)
+    if not match:
+        return None
+    return int(match.group(1)) * 100 + int(match.group(2))
+
+def kernel_version_cur():
+    return kernel_version_num(kernel_version())
+
+def kernel_version():
+    global _cur_version
+    if _cur_version:
+        return _cur_version
+    (code, result) = subprocess.getstatusoutput('uname -r')
+    if code != 0:
+        return None
+    _cur_version = result
+    return result
 
 class NetUtils:
 
