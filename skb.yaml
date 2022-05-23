@@ -22,7 +22,7 @@ children:
     desc: link layer (L2) of packet out
     visual: true
     children:
-    - dev_queue_xmit:0
+    - __dev_queue_xmit:0
     - dev_hard_start_xmit:0
   - name: sched
     desc: TC(traffic control) module
