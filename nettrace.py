@@ -23,15 +23,6 @@ class Tracer:
     _cata_enabled = []
     _cata_all = None
 
-    _v_tracer = {
-        '4.14': [
-            {'name': '__netif_receive_skb_core', 'skb': 0, 'level': 1},
-        ],
-        '5.4': [
-            {'name': '__netif_receive_skb_core', 'pskb': 0, 'level': 1},
-        ]
-    }
-
     @staticmethod
     def get_cata_all():
         if Tracer._cata_all:
@@ -139,22 +130,16 @@ class Tracer:
             Tracer.print_tracer(i, tab + '    ')
 
     @staticmethod
-    def fix_version():
-        import subprocess
-        code, ver_str = subprocess.getstatusoutput('uname -r')
-        if code != 0:
-            return
-        m = re.match(r'([0-9]+\.[0-9]+)\.', ver_str)
-        if not m:
-            return
-        ver = m.group(1)
-        if ver not in Tracer._v_tracer:
-            Helper.pr_warn('''kernel version not found! You can add your kernel
-version in '_v_tracer' of nettrace.py\n''')
-            return
-        for tracer in Tracer._v_tracer[ver]:
-            origin = Tracer.get_cata_or_tracer(tracer['name'])
-            origin.update(tracer)
+    def check_if(tracer):
+        if 'if' not in tracer:
+            return True
+        cond = tracer['if']
+        kernelVersion = kernel_version_cur()
+        cond = cond.replace('kernelVersion', str(kernelVersion))
+        ret = {'value': False}
+        cond = '''value = %s''' % cond
+        exec(cond, ret)
+        return ret['value']
 
     @staticmethod
     def prepare_cata(root=None):
@@ -192,7 +177,11 @@ version in '_v_tracer' of nettrace.py\n''')
             if not cata:
                 Helper.pr_warn('the tracer:%s not found' % cata_str)
                 continue
-            tracers += Tracer.get_tracers(cata)
+            for tracer in Tracer.get_tracers(cata):
+                if Tracer.check_if(tracer):
+                    tracers.append(tracer)
+                else:
+                    tracer['hidden'] = True
             catalogs.append(cata)
 
         for t in set(Helper.get_stack_tracer()):
@@ -221,7 +210,6 @@ version in '_v_tracer' of nettrace.py\n''')
         Tracer._tracer_enabled = tracers
         Tracer._cata_enabled = catalogs
         Tracer.bind_parent(Tracer.get_cata_all())
-        Tracer.fix_version()
 
         for t in tracers:
             p = t['parent']
@@ -447,6 +435,8 @@ Notice: this may cause performance issue.\n''')
         Helper._user_args = args
 
         if args.tracer == '?':
+            args.tracer = 'all'
+            Tracer.init_tracers()
             print('available tracer:')
             print('---------------------------------------------------\n')
             Tracer.print_tracer(Tracer.get_cata_all())
