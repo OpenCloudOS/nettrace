@@ -1,1 +1,0 @@
-../nodetrace/README.md
