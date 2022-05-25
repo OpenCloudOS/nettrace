@@ -35,8 +35,8 @@ issue (such as package drop) can be solved simply.
 
 %install
 rm -rf $RPM_BUILD_ROOT
-make DESTDIR=$RPM_BUILD_ROOT install
-DESTDIR=$RPM_BUILD_ROOT/opt/nettrace/
+make PREFIX=$RPM_BUILD_ROOT install
+PREFIX=$RPM_BUILD_ROOT/opt/nettrace/
 
 %files
 %defattr (-,root,root,0755)

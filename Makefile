@@ -1,30 +1,25 @@
+
 export VERSION=0.1.3
 export RELEASE=1.tl3
 
-TARGET_DIR=${DESTDIR}/opt/nettrace/
-SOURCE_DIR=~/rpmbuild/SOURCES/nettrace-${VERSION}
+targets = dropdump nodetrace
+targets-call = for i in $^; do make -C $$i $@; done
+
+PREFIX ?= ./output
+PREFIX := $(abspath $(PREFIX))
+export PREFIX
+
+all: $(targets)
+	$(call targets-call, all)
+
+clean: $(targets)
+	$(call targets-call, clean)
+	rm -rf output
 
 install:
-	mkdir -p ${TARGET_DIR}
-
-	cp nettrace.c ${TARGET_DIR}
-	cp nettrace.py ${TARGET_DIR}
-	cp utils.py ${TARGET_DIR}
-	cp skb.yaml ${TARGET_DIR}
-
-	mkdir -p ${DESTDIR}/usr/share/man/man8/
-	gzip -k nettrace.8
-	mv nettrace.8.gz ${DESTDIR}/usr/share/man/man8/
-
-	mkdir -p ${DESTDIR}/usr/share/bash-completion/completions/
-	cp bash-completion.sh ${DESTDIR}/usr/share/bash-completion/completions/nettrace
-
-	mkdir -p ${DESTDIR}/usr/sbin/
-	ln -s /opt/nettrace/nettrace.py ${DESTDIR}/usr/sbin/nettrace
+	make -C src install
 
 rpm:
-	rm -rf ${SOURCE_DIR} && mkdir -p ${SOURCE_DIR}
-	cp -r ./* ${SOURCE_DIR}/
-	cd ~/rpmbuild/SOURCES/ && tar -czf nettrace-${VERSION}.tar.gz nettrace-${VERSION}
-	rpmbuild -ba ./nettrace.spec
+	make -C src rpm
 
+.PHONY: $(targets)
