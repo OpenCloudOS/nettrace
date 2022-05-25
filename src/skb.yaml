@@ -11,18 +11,23 @@ children:
     children:
     - napi_gro_receive:1
     - enqueue_to_backlog:0
-    - __netif_receive_skb_core
     - name: do_xdp_generic
       regex: do_xdp_generic\..*
       skb: 1
     - xdp_do_generic_redirect:1
     - generic_xdp_tx:1
     - sch_handle_ingress:0
+    - name: __netif_receive_skb_core
+      skb: 0
+      if: kernelVersion < 504
+    - name: __netif_receive_skb_core
+      pskb: 0
+      if: kernelVersion >= 504
   - name: link-out
     desc: link layer (L2) of packet out
     visual: true
     children:
-    - dev_queue_xmit:0
+    - __dev_queue_xmit:0
     - dev_hard_start_xmit:0
   - name: sched
     desc: TC(traffic control) module
