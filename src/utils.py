@@ -4,8 +4,6 @@ import socket
 import subprocess
 import re
 
-from numpy import mat
-
 cur_dir = os.path.dirname(os.path.abspath(__file__))
 _cur_version = None
 

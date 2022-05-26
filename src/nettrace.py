@@ -1,9 +1,8 @@
 #!/usr/bin/python3
 import argparse
-import json
 import socket
 import ctypes
-import re
+import sys
 import os
 import yaml
 import bcc
@@ -368,7 +367,7 @@ class Helper:
     def pr_err(info, do_exit=True):
         print('\nERROR: %s' % info)
         if do_exit:
-            exit(-1)
+            sys.exit(-1)
 
     @staticmethod
     def check_stack():
@@ -383,7 +382,7 @@ a tracer by "-t". Otherwise, use "--force-stack" to print stack for all
 tracer.
 
 Notice: this may cause performance issue.\n''')
-            exit(-1)
+            sys.exit(-1)
 
     @staticmethod
     def parse_args():
@@ -441,7 +440,7 @@ Notice: this may cause performance issue.\n''')
             print('---------------------------------------------------\n')
             Tracer.print_tracer(Tracer.get_cata_all())
             print('\n---------------------------------------------------')
-            exit(0)
+            sys.exit(0)
 
         if args.count and not args.timeline:
             Helper.pr_err('"--timeline" should be enabled when "-c" is seted')
@@ -842,7 +841,7 @@ class Output:
                 Core.get_bpf().perf_buffer_poll()
             except KeyboardInterrupt:
                 print('end tracing......')
-                exit(0)
+                sys.exit(0)
 
 
 class Core:
@@ -929,7 +928,7 @@ class Core:
     def load_bpf():
         # generate BPF object and attach the C code to BPF.
         bpf_text = Core.generate_bpf_code()
-        not bpf_text and exit(-1)
+        not bpf_text and sys.exit(-1)
 
         bpf = bcc.BPF(text=bpf_text, cflags=Compile.get_cflags())
         Core._bpf_ins = bpf
