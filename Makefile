@@ -9,11 +9,10 @@ PREFIX ?= ./output
 PREFIX := $(abspath $(PREFIX))
 export PREFIX
 
-all: $(targets)
-	$(call targets-call, all)
+all clean:: $(targets)
+	$(call targets-call)
 
-clean: $(targets)
-	$(call targets-call, clean)
+clean::
 	rm -rf output
 
 install:
