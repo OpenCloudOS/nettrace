@@ -30,3 +30,11 @@ rpm:
 		nettrace-${VERSION}
 	@rpmbuild -ba $(SCRIPT)/nettrace.spec
 
+bin:
+	pyinstaller --onefile --add-data ./nettrace.c:. --add-data \
+		skb.yaml:. ./nettrace.py
+
+all:
+
+clean:
+	rm -rf build dist *.spec
