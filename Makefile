@@ -18,8 +18,8 @@ clean::
 install:
 	make -C src install
 
-nettrace-bin:
-	make -C src bin
+pack:
+	make -C src pack
 
 rpm:
 	make -C src rpm

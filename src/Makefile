@@ -30,11 +30,14 @@ rpm:
 		nettrace-${VERSION}
 	@rpmbuild -ba $(SCRIPT)/nettrace.spec
 
-bin:
-	pyinstaller --onefile --add-data ./nettrace.c:. --add-data \
-		skb.yaml:. ./nettrace.py
+pack:
+	@rm -rf ../nettrace.zip && zip -r ../nettrace.zip *.c *.py *.yaml
+	@echo '#!/usr/bin/env python3' | cat - ../nettrace.zip > nettrace
+	@chmod +x nettrace
+	@rm -rf ../nettrace.zip
+	@echo "`pwd`/nettrace is generated"
 
 all:
 
 clean:
-	rm -rf build dist *.spec
+	rm -rf build dist *.spec nettrace

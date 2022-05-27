@@ -26,13 +26,11 @@ class Tracer:
     def get_cata_all():
         if Tracer._cata_all:
             return Tracer._cata_all
-        with open(project_file('skb.yaml'), 'r') as f:
-            data = f.read()
-            cata = yaml.load(data, yaml.BaseLoader)
-            Tracer._cata_all = cata
-            f.close()
-            Tracer.prepare_cata(cata)
-            return cata
+        data = load_resource('skb.yaml')
+        cata = yaml.load(data, yaml.BaseLoader)
+        Tracer._cata_all = cata
+        Tracer.prepare_cata(cata)
+        return cata
 
     @staticmethod
     def is_tracer(tracer):
@@ -849,80 +847,78 @@ class Core:
 
     @staticmethod
     def generate_bpf_code():
-        # parse C code and return the text that parsed.
-        with open(project_file('nettrace.c'), 'r') as f:
-            bpf_text = f.read()
+        bpf_text = load_resource('nettrace.c')
+        ph_filter = []
+        args = Helper.get_args()
+        has_port = False
+        has_ip = False
+        if args.saddr:
+            ph_filter.append('ctx->field_saddr == %d' %
+                             socket.htonl(NetUtils.ip2int(args.saddr)))
+            has_ip = True
+        if args.daddr:
+            ph_filter.append('ctx->field_daddr == %d' %
+                             socket.htonl(NetUtils.ip2int(args.daddr)))
+            has_ip = True
+        if args.addr:
+            addr = socket.htonl(NetUtils.ip2int(args.addr))
+            ph_filter.append('(ctx->field_saddr == %d || ctx->field_daddr == %d)' %
+                             (addr, addr))
+            has_ip = True
+        if args.sport:
+            ph_filter.append('ctx->field_sport == %d' %
+                             socket.htons(args.sport))
+            has_port = True
+        if args.dport:
+            ph_filter.append('ctx->field_dport == %d' %
+                             socket.htons(args.dport))
+            has_port = True
+        if args.port:
+            port = socket.htons(args.port)
+            ph_filter.append('(ctx->field_dport == %d || ctx->field_sport == %d)' %
+                             (port, port))
+            has_port = True
 
-            ph_filter = []
-            args = Helper.get_args()
-            has_port = False
-            has_ip = False
-            if args.saddr:
-                ph_filter.append('ctx->field_saddr == %d' %
-                                 socket.htonl(NetUtils.ip2int(args.saddr)))
-                has_ip = True
-            if args.daddr:
-                ph_filter.append('ctx->field_daddr == %d' %
-                                 socket.htonl(NetUtils.ip2int(args.daddr)))
-                has_ip = True
-            if args.addr:
-                addr = socket.htonl(NetUtils.ip2int(args.addr))
-                ph_filter.append('(ctx->field_saddr == %d || ctx->field_daddr == %d)' %
-                                 (addr, addr))
-                has_ip = True
-            if args.sport:
-                ph_filter.append('ctx->field_sport == %d' %
-                                 socket.htons(args.sport))
-                has_port = True
-            if args.dport:
-                ph_filter.append('ctx->field_dport == %d' %
-                                 socket.htons(args.dport))
-                has_port = True
-            if args.port:
-                port = socket.htons(args.port)
-                ph_filter.append('(ctx->field_dport == %d || ctx->field_sport == %d)' %
-                                 (port, port))
-                has_port = True
-
-            if args.tcp_flags:
-                flags = NetUtils.tcp_flags2int(args.tcp_flags)
-                ph_filter.append(
-                    '(ctx->field_flags & %d)' % socket.htons(flags))
-                if not args.proto:
-                    args.proto = 'tcp'
-                elif args.proto != 'tcp':
+        if args.tcp_flags:
+            flags = NetUtils.tcp_flags2int(args.tcp_flags)
+            ph_filter.append(
+                '(ctx->field_flags & %d)' % socket.htons(flags))
+            if not args.proto:
+                args.proto = 'tcp'
+            elif args.proto != 'tcp':
+                Helper.pr_err(
+                    'protocol (-p) should be "tcp" while "tcp-flags" is set')
+        if args.proto:
+            if has_port and args.proto not in ['tcp', 'udp']:
+                Helper.pr_err(
+                    'protocol (-p) should be "tcp" or "udp" while port is set')
+            proto, level = NetUtils.proto2int(args.proto)
+            if proto is None:
+                Helper.pr_err('proto: %s not found!' % args.proto)
+            if level == 3:
+                proto = socket.htons(proto)
+                if has_ip and args.proto not in ['ip', 'arp']:
                     Helper.pr_err(
-                        'protocol (-p) should be "tcp" while "tcp-flags" is set')
-            if args.proto:
-                if has_port and args.proto not in ['tcp', 'udp']:
-                    Helper.pr_err(
-                        'protocol (-p) should be "tcp" or "udp" while port is set')
-                proto, level = NetUtils.proto2int(args.proto)
-                if proto is None:
-                    Helper.pr_err('proto: %s not found!' % args.proto)
-                if level == 3:
-                    proto = socket.htons(proto)
-                    if has_ip and args.proto not in ['ip', 'arp']:
-                        Helper.pr_err(
-                            'protocol (-p) should be "ip" while addr is set')
-                else:
-                    ph_filter.append('ctx->proto_l3 == htons(ETH_P_IP)')
-                ph_filter.append('ctx->proto_l%d == %d' % (level, proto))
-            elif has_port:
-                p_udp, level = NetUtils.proto2int('udp')
-                p_tcp, level = NetUtils.proto2int('tcp')
-                ph_filter.append(
-                    '(ctx->proto_l4 == %d || ctx->proto_l4 == %d)' % (p_udp, p_tcp))
+                        'protocol (-p) should be "ip" while addr is set')
+            else:
+                ph_filter.append('ctx->proto_l3 == htons(ETH_P_IP)')
+            ph_filter.append('ctx->proto_l%d == %d' % (level, proto))
+        elif has_port:
+            p_udp, level = NetUtils.proto2int('udp')
+            p_tcp, level = NetUtils.proto2int('tcp')
+            ph_filter.append(
+                '(ctx->proto_l4 == %d || ctx->proto_l4 == %d)' % (p_udp, p_tcp))
 
-            bpf_text = bpf_text.replace(
-                'BPF_PH_filter', '&&'.join(ph_filter) or '1')
-            ph_functions = Tracer.generate_code()
-            if not ph_functions:
-                Helper.pr_err('no tracer found!')
-            func_count = len(Tracer._tracer_enabled)
-            bpf_text = bpf_text.replace('BPF_PH_count', str(func_count))
-            bpf_text = bpf_text.replace('BPF_PH_function', ph_functions)
-            return bpf_text
+        bpf_text = bpf_text.replace(
+            'BPF_PH_filter', '&&'.join(ph_filter) or '1')
+        ph_functions = Tracer.generate_code()
+        if not ph_functions:
+            Helper.pr_err('no tracer found!')
+        func_count = len(Tracer._tracer_enabled)
+        bpf_text = bpf_text.replace('BPF_PH_count', str(func_count))
+        bpf_text = bpf_text.replace('BPF_PH_function', ph_functions)
+        return bpf_text
+
 
     @staticmethod
     def load_bpf():
