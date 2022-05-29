@@ -1,8 +1,8 @@
 
 ROOT = ../
-bpf_progs = progs/dropdump
-progs = dropdump
-prog-dropdump = dropdump.c parse_sym.c $(COMMON_SHARED)
+bpf_progs = progs/droptrace
+progs = droptrace
+prog-droptrace = droptrace.c parse_sym.c $(COMMON_SHARED)
 
 include ../common.mk
 
@@ -14,7 +14,7 @@ drop_reason: vmlinux.h
 	echo '\n#endif' >> drop_reason.h
 
 all: drop_reason bpf
-	make dropdump
+	make droptrace
 
 clean:
-	rm -rf drop_reason.h dropdump vmlinux.h progs/*.skel.h progs/*.o
+	rm -rf drop_reason.h droptrace vmlinux.h progs/*.skel.h progs/*.o

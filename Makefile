@@ -2,7 +2,7 @@
 export VERSION=0.1.3
 export RELEASE=1.tl3
 
-targets = dropdump nodetrace src
+targets = droptrace nodetrace src
 targets-call = for i in $^; do make -C $$i $@; done
 
 PREFIX ?= ./output

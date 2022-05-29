@@ -13,7 +13,7 @@
 #include <pkt_utils.h>
 
 #include "./progs/shared.h"
-#include "progs/dropdump.skel.h"
+#include "progs/droptrace.skel.h"
 #include "reasons.h"
 #include "parse_sym.h"
 
@@ -29,7 +29,7 @@ static bool snmp_mode	= false,
 	    raw_sym	= false;
 static char buf[1024];
 static arg_config_t prog_config = {
-	.name = "dropdump",
+	.name = "droptrace",
 	.summary = "a tool to monitor the packet dropped by kernel",
 	.desc = ""
 };
@@ -67,7 +67,7 @@ static int do_drop_monitor(int map_fd)
 {
 	struct perf_buffer_opts pb_opts = {};
 	struct perf_buffer *pb;
-	struct dropdump *obj;
+	struct droptrace *obj;
 	int ret;
 
 	pb_opts.sample_cb = print_drop_packet;
@@ -98,7 +98,7 @@ err:
 	return -1;
 }
 
-static int parse_opts(int argc, char *argv[], struct dropdump *obj)
+static int parse_opts(int argc, char *argv[], struct droptrace *obj)
 {
 	bool stat_stop = false;
 	u16 proto;
@@ -194,10 +194,10 @@ static void print_drop_stat(int fd)
 
 int main(int argc, char *argv[])
 {
-	struct dropdump *obj = NULL;
+	struct droptrace *obj = NULL;
 	int map_fd;
 
-	if (!(obj = dropdump__open())) {
+	if (!(obj = droptrace__open())) {
 		printf("failed to open program\n");
 		goto err;
 	}
@@ -209,12 +209,12 @@ int main(int argc, char *argv[])
 		goto do_snmp;
 
 do_load:
-	if (dropdump__load(obj)) {
+	if (droptrace__load(obj)) {
 		printf("failed to load program\n");
 		goto err;
 	}
 
-	if (dropdump__attach(obj)) {
+	if (droptrace__attach(obj)) {
 		printf("failed to attach kfree_skb event\n");
 		goto err;
 	}
@@ -224,11 +224,11 @@ do_load:
 
 	do_drop_monitor(BPF_MAP_FD(m_event));
 out:
-	dropdump__destroy(obj);
+	droptrace__destroy(obj);
 	return 0;
 
 err:
-	dropdump__destroy(obj);
+	droptrace__destroy(obj);
 	return -1;
 
 do_snmp_pin:
