@@ -22,9 +22,16 @@ clean::
 install: $(targets)
 	@mkdir -p $(PREFIX)
 	$(call targets-call)
+
 	@mkdir -p ${PREFIX}/usr/share/man/man8/
 	@gzip -k $(SCRIPT)/*.8
 	@mv $(SCRIPT)/*.8.gz ${PREFIX}/usr/share/man/man8/
+
+	@mkdir -p ${PREFIX}/usr/share/bash-completion/completions/
+	@cd ${PREFIX}/usr/share/bash-completion/completions/;\
+		cp $(SCRIPT)/bash-completion.sh ./nettrace;\
+		ln -s nettrace droptrace
+
 
 pack:
 	make -C src pack

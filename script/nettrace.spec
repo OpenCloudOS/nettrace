@@ -48,6 +48,7 @@ PREFIX=$RPM_BUILD_ROOT
 /usr/share/man/man8/nettrace.8.gz
 /usr/share/man/man8/dropreason.8.gz
 /usr/share/bash-completion/completions/nettrace
+/usr/share/bash-completion/completions/droptrace
 
 %doc
 
