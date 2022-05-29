@@ -9,5 +9,10 @@ include ../common.mk
 
 all: $(progs)
 
+install: $(progs)
+	@mkdir -p $(PREFIX)/usr/bin/
+	@cp mark $(PREFIX)/usr/bin/nodetrace-mark
+	@cp watch $(PREFIX)/usr/bin/nodetrace-watch
+
 clean:
 	rm -rf progs/*.skel.h progs/*.o vmlinux.h watch mark

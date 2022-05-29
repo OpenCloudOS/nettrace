@@ -16,5 +16,8 @@ drop_reason: vmlinux.h
 all: drop_reason bpf
 	make droptrace
 
+install: all
+	@mkdir -p $(PREFIX)/usr/bin/ && cp droptrace $(PREFIX)/usr/bin/
+
 clean:
 	rm -rf drop_reason.h droptrace vmlinux.h progs/*.skel.h progs/*.o

@@ -36,13 +36,17 @@ issue (such as package drop) can be solved simply.
 %install
 rm -rf $RPM_BUILD_ROOT
 make PREFIX=$RPM_BUILD_ROOT install
-PREFIX=$RPM_BUILD_ROOT/opt/nettrace/
+PREFIX=$RPM_BUILD_ROOT
 
 %files
 %defattr (-,root,root,0755)
 /opt/nettrace/
-/usr/sbin/nettrace
+/usr/bin/nettrace
+/usr/bin/droptrace
+/usr/bin/nodetrace-mark
+/usr/bin/nodetrace-watch
 /usr/share/man/man8/nettrace.8.gz
+/usr/share/man/man8/dropreason.8.gz
 /usr/share/bash-completion/completions/nettrace
 
 %doc
