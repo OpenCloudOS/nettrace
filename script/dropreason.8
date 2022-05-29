@@ -1,0 +1,438 @@
+.TH "Kernel API" 9 "enum skb_drop_reason" "May 2022" "API Manual" LINUX
+.SH NAME
+enum skb_drop_reason \- the reasons of skb drops
+.SH SYNOPSIS
+enum skb_drop_reason {
+.br
+.BI "    SKB_NOT_DROPPED_YET"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_NOT_SPECIFIED"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_NO_SOCKET"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_PKT_TOO_SMALL"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_TCP_CSUM"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_SOCKET_FILTER"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_UDP_CSUM"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_NETFILTER_DROP"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_OTHERHOST"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_IP_CSUM"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_IP_INHDR"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_IP_RPFILTER"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_UNICAST_IN_L2_MULTICAST"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_XFRM_POLICY"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_IP_NOPROTO"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_SOCKET_RCVBUFF"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_PROTO_MEM"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_TCP_MD5NOTFOUND"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_TCP_MD5UNEXPECTED"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_TCP_MD5FAILURE"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_SOCKET_BACKLOG"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_TCP_FLAGS"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_TCP_ZEROWINDOW"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_TCP_OLD_DATA"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_TCP_OVERWINDOW"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_TCP_OFOMERGE"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_TCP_RFC7323_PAWS"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_TCP_INVALID_SEQUENCE"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_TCP_RESET"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_TCP_INVALID_SYN"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_TCP_CLOSE"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_TCP_FASTOPEN"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_TCP_OLD_ACK"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_TCP_TOO_OLD_ACK"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_TCP_ACK_UNSENT_DATA"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_TCP_OFO_QUEUE_PRUNE"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_TCP_OFO_DROP"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_IP_OUTNOROUTES"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_BPF_CGROUP_EGRESS"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_IPV6DISABLED"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_NEIGH_CREATEFAIL"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_NEIGH_FAILED"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_NEIGH_QUEUEFULL"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_NEIGH_DEAD"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_TC_EGRESS"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_QDISC_DROP"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_CPU_BACKLOG"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_XDP"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_TC_INGRESS"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_UNHANDLED_PROTO"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_SKB_CSUM"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_SKB_GSO_SEG"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_SKB_UCOPY_FAULT"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_DEV_HDR"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_DEV_READY"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_FULL_RING"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_NOMEM"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_HDR_TRUNC"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_TAP_FILTER"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_TAP_TXFILTER"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_ICMP_CSUM"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_INVALID_PROTO"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_IP_INADDRERRORS"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_IP_INNOROUTES"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_PKT_TOO_BIG"
+, 
+.br
+.br
+.BI "    SKB_DROP_REASON_MAX"
+
+};
+.SH Constants
+.IP "SKB_NOT_DROPPED_YET" 12
+skb is not dropped yet (used for no-drop case)
+.IP "SKB_DROP_REASON_NOT_SPECIFIED" 12
+drop reason is not specified
+.IP "SKB_DROP_REASON_NO_SOCKET" 12
+socket not found
+.IP "SKB_DROP_REASON_PKT_TOO_SMALL" 12
+packet size is too small
+.IP "SKB_DROP_REASON_TCP_CSUM" 12
+TCP checksum error
+.IP "SKB_DROP_REASON_SOCKET_FILTER" 12
+dropped by socket filter
+.IP "SKB_DROP_REASON_UDP_CSUM" 12
+UDP checksum error
+.IP "SKB_DROP_REASON_NETFILTER_DROP" 12
+dropped by netfilter
+.IP "SKB_DROP_REASON_OTHERHOST" 12
+packet don't belong to current host
+(interface is in promisc mode)
+.IP "SKB_DROP_REASON_IP_CSUM" 12
+IP checksum error
+.IP "SKB_DROP_REASON_IP_INHDR" 12
+there is something wrong with IP header (see
+IPSTATS_MIB_INHDRERRORS)
+.IP "SKB_DROP_REASON_IP_RPFILTER" 12
+IP rpfilter validate failed. see the
+document for rp_filter in ip-sysctl.rst for more information
+.IP "SKB_DROP_REASON_UNICAST_IN_L2_MULTICAST" 12
+destination address of L2 is
+multicast, but L3 is unicast.
+.IP "SKB_DROP_REASON_XFRM_POLICY" 12
+xfrm policy check failed
+.IP "SKB_DROP_REASON_IP_NOPROTO" 12
+no support for IP protocol
+.IP "SKB_DROP_REASON_SOCKET_RCVBUFF" 12
+socket receive buff is full
+.IP "SKB_DROP_REASON_PROTO_MEM" 12
+proto memory limition, such as udp packet
+drop out of udp_memory_allocated.
+.IP "SKB_DROP_REASON_TCP_MD5NOTFOUND" 12
+no MD5 hash and one expected,
+corresponding to LINUX_MIB_TCPMD5NOTFOUND
+.IP "SKB_DROP_REASON_TCP_MD5UNEXPECTED" 12
+MD5 hash and we're not expecting
+one, corresponding to LINUX_MIB_TCPMD5UNEXPECTED
+.IP "SKB_DROP_REASON_TCP_MD5FAILURE" 12
+MD5 hash and its wrong, corresponding
+to LINUX_MIB_TCPMD5FAILURE
+.IP "SKB_DROP_REASON_SOCKET_BACKLOG" 12
+failed to add skb to socket backlog (
+see LINUX_MIB_TCPBACKLOGDROP)
+.IP "SKB_DROP_REASON_TCP_FLAGS" 12
+TCP flags invalid
+.IP "SKB_DROP_REASON_TCP_ZEROWINDOW" 12
+TCP receive window size is zero,
+see LINUX_MIB_TCPZEROWINDOWDROP
+.IP "SKB_DROP_REASON_TCP_OLD_DATA" 12
+the TCP data reveived is already
+received before (spurious retrans may happened), see
+LINUX_MIB_DELAYEDACKLOST
+.IP "SKB_DROP_REASON_TCP_OVERWINDOW" 12
+the TCP data is out of window,
+the seq of the first byte exceed the right edges of receive
+window
+.IP "SKB_DROP_REASON_TCP_OFOMERGE" 12
+the data of skb is already in the ofo
+queue, corresponding to LINUX_MIB_TCPOFOMERGE
+.IP "SKB_DROP_REASON_TCP_RFC7323_PAWS" 12
+PAWS check, corresponding to
+LINUX_MIB_PAWSESTABREJECTED
+.IP "SKB_DROP_REASON_TCP_INVALID_SEQUENCE" 12
+Not acceptable SEQ field
+.IP "SKB_DROP_REASON_TCP_RESET" 12
+Invalid RST packet
+.IP "SKB_DROP_REASON_TCP_INVALID_SYN" 12
+Incoming packet has unexpected SYN flag
+.IP "SKB_DROP_REASON_TCP_CLOSE" 12
+TCP socket in CLOSE state
+.IP "SKB_DROP_REASON_TCP_FASTOPEN" 12
+dropped by FASTOPEN request socket
+.IP "SKB_DROP_REASON_TCP_OLD_ACK" 12
+TCP ACK is old, but in window
+.IP "SKB_DROP_REASON_TCP_TOO_OLD_ACK" 12
+TCP ACK is too old
+.IP "SKB_DROP_REASON_TCP_ACK_UNSENT_DATA" 12
+TCP ACK for data we haven't sent yet
+.IP "SKB_DROP_REASON_TCP_OFO_QUEUE_PRUNE" 12
+pruned from TCP OFO queue
+.IP "SKB_DROP_REASON_TCP_OFO_DROP" 12
+data already in receive queue
+.IP "SKB_DROP_REASON_IP_OUTNOROUTES" 12
+route lookup failed
+.IP "SKB_DROP_REASON_BPF_CGROUP_EGRESS" 12
+dropped by BPF_PROG_TYPE_CGROUP_SKB
+eBPF program
+.IP "SKB_DROP_REASON_IPV6DISABLED" 12
+IPv6 is disabled on the device
+.IP "SKB_DROP_REASON_NEIGH_CREATEFAIL" 12
+failed to create neigh entry
+.IP "SKB_DROP_REASON_NEIGH_FAILED" 12
+neigh entry in failed state
+.IP "SKB_DROP_REASON_NEIGH_QUEUEFULL" 12
+arp_queue for neigh entry is full
+.IP "SKB_DROP_REASON_NEIGH_DEAD" 12
+neigh entry is dead
+.IP "SKB_DROP_REASON_TC_EGRESS" 12
+dropped in TC egress HOOK
+.IP "SKB_DROP_REASON_QDISC_DROP" 12
+dropped by qdisc when packet outputting (
+failed to enqueue to current qdisc)
+.IP "SKB_DROP_REASON_CPU_BACKLOG" 12
+failed to enqueue the skb to the per CPU
+backlog queue. This can be caused by backlog queue full (see
+netdev_max_backlog in net.rst) or RPS flow limit
+.IP "SKB_DROP_REASON_XDP" 12
+dropped by XDP in input path
+.IP "SKB_DROP_REASON_TC_INGRESS" 12
+dropped in TC ingress HOOK
+.IP "SKB_DROP_REASON_UNHANDLED_PROTO" 12
+protocol not implemented or not supported
+.IP "SKB_DROP_REASON_SKB_CSUM" 12
+sk_buff checksum computation error
+.IP "SKB_DROP_REASON_SKB_GSO_SEG" 12
+gso segmentation error
+.IP "SKB_DROP_REASON_SKB_UCOPY_FAULT" 12
+failed to copy data from user space,
+e.g., via \fBzerocopy_sg_from_iter\fP or \fBskb_orphan_frags_rx\fP
+.IP "SKB_DROP_REASON_DEV_HDR" 12
+device driver specific header/metadata is invalid
+.IP "SKB_DROP_REASON_DEV_READY" 12
+the device is not ready to xmit/recv due to
+any of its data structure that is not up/ready/initialized,
+e.g., the IFF_UP is not set, or driver specific tun->tfiles[txq]
+is not initialized
+.IP "SKB_DROP_REASON_FULL_RING" 12
+ring buffer is full
+.IP "SKB_DROP_REASON_NOMEM" 12
+error due to OOM
+.IP "SKB_DROP_REASON_HDR_TRUNC" 12
+failed to trunc/extract the header from
+networking data, e.g., failed to pull the protocol header from
+frags via \fBpskb_may_pull\fP
+.IP "SKB_DROP_REASON_TAP_FILTER" 12
+dropped by (ebpf) filter directly attached
+to tun/tap, e.g., via TUNSETFILTEREBPF
+.IP "SKB_DROP_REASON_TAP_TXFILTER" 12
+dropped by tx filter implemented at
+tun/tap, e.g., \fBcheck_filter\fP
+.IP "SKB_DROP_REASON_ICMP_CSUM" 12
+ICMP checksum error
+.IP "SKB_DROP_REASON_INVALID_PROTO" 12
+the packet doesn't follow RFC 2211,
+such as a broadcasts ICMP_TIMESTAMP
+.IP "SKB_DROP_REASON_IP_INADDRERRORS" 12
+host unreachable, corresponding to
+IPSTATS_MIB_INADDRERRORS
+.IP "SKB_DROP_REASON_IP_INNOROUTES" 12
+network unreachable, corresponding to
+IPSTATS_MIB_INADDRERRORS
+.IP "SKB_DROP_REASON_PKT_TOO_BIG" 12
+packet size is too big (maybe exceed the
+MTU)
+.IP "SKB_DROP_REASON_MAX" 12
+the maximum of drop reason, which shouldn't be
+used as a real 'reason'
+.SH "Description"
+The reason of skb drop, which is used in \fBkfree_skb_reason\fP.
+en...maybe they should be splited by group?
