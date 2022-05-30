@@ -1,6 +1,5 @@
-ROOT = ../
-progs = mark watch
-bpf_progs = progs/ntrace
+progs := mark watch
+bpf_progs := progs/ntrace
 
 prog-mark = mark.c $(COMMON_SHARED)
 prog-watch = watch.c $(COMMON_SHARED)

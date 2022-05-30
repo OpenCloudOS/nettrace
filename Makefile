@@ -6,6 +6,7 @@ targets = droptrace nodetrace src
 targets-call = for i in $^; do make -C $$i $@; done
 
 ROOT := $(abspath .)
+export ROOT
 PREFIX ?= ./output
 PREFIX := $(abspath $(PREFIX))
 export PREFIX
