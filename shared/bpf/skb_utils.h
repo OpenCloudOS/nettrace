@@ -255,7 +255,10 @@ static inline int probe_parse_ip(struct sk_buff *skb, packet_t *pkt, bool ipv4)
 	if (PARAM_CHECK_ENABLE(l4_proto, pkt->proto_l4))
 		return -1;
 
+	bool port_filter = PARAM_ENABLED(sport) || PARAM_ENABLED(dport) ||
+			   PARAM_ENABLED(port);
 	void *l4 = get_l4(skb);
+
 	switch (pkt->proto_l4) {
 	case IPPROTO_TCP: {
 		struct tcphdr *tcp = l4;
@@ -285,6 +288,8 @@ static inline int probe_parse_ip(struct sk_buff *skb, packet_t *pkt, bool ipv4)
 		break;
 	}
 	case IPPROTO_ICMP: {
+		if (port_filter)
+			return -1;
 		struct icmphdr *icmp = l4;
 		pkt->l4.icmp.code = _(icmp->code);
 		pkt->l4.icmp.type = _(icmp->type);
@@ -292,6 +297,9 @@ static inline int probe_parse_ip(struct sk_buff *skb, packet_t *pkt, bool ipv4)
 		pkt->l4.icmp.id = _(icmp->un.echo.id);
 		break;
 	}
+	default:
+		if (port_filter)
+			return -1;
 	}
 	return 0;
 }
@@ -313,9 +321,11 @@ static inline int probe_parse_skb(struct sk_buff *skb, packet_t *pkt)
 	case ETH_P_IPV6:
 	case ETH_P_IP:
 		return probe_parse_ip(skb, pkt, l3 == ETH_P_IP);
+	default:
+		if (PARAM_ENABLED(l4_proto))
+			return -1;
+		return 0;
 	}
-
-	return 0;
 }
 
 static inline int direct_parse_skb(struct __sk_buff *skb, packet_t *pkt,
