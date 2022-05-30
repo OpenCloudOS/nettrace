@@ -101,6 +101,7 @@ err:
 static int parse_opts(int argc, char *argv[], struct droptrace *obj)
 {
 	bool stat_stop = false;
+	int proto_l = 0;
 	u16 proto;
 
 #define E(name) &(obj->rodata->enable_##name)
@@ -162,6 +163,14 @@ static int parse_opts(int argc, char *argv[], struct droptrace *obj)
 
 	if (parse_args(argc, argv, &prog_config, opts, ARRAY_SIZE(opts)))
 		goto err;
+
+	if (proto_l == 3) {
+		*R(l3_proto) = proto;
+		*E(l3_proto) = true;
+	} else if (proto_l == 4) {
+		*R(l4_proto) = proto;
+		*E(l4_proto) = true;
+	}
 
 	if (stat_stop) {
 		do_stat_stop();

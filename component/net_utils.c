@@ -77,7 +77,7 @@ static proto_item_t *proto_search(proto_item_t *protos, int size,
 	proto_item_t *item;
 	int i = 0;
 
-	for_each_protos(l3_protos, size, i, item) {
+	for_each_protos(protos, size, i, item) {
 		if (strcmp(item->name, name) == 0)
 			return item;
 	}

@@ -20,7 +20,7 @@ typedef struct {
 	char	sname;
 	void	*dest;
 	enum option_type type;
-	bool	*set;
+	void	*set;
 	char	*desc;
 	int	key;
 } option_item_t;

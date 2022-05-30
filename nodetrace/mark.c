@@ -27,6 +27,7 @@ static void print_bpf_output(void *ctx, int cpu, void *data, __u32 size)
 
 static int parse_opts(int argc, char *argv[], struct ntrace *obj)
 {
+	int proto_l;
 	u16 proto;
 
 #define E(name) &(obj->rodata->enable_##name)

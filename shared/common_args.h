@@ -52,6 +52,7 @@
 		.sname = 'p',					\
 		.dest = &proto,					\
 		.type = OPTION_PROTO,				\
+		.set = &proto_l,				\
 		.desc = "filter L3/L4 protocol, such as 'tcp', 'arp'",	\
 	},
 
