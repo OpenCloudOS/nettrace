@@ -65,6 +65,7 @@ int parse_args(int argc, char *argv[], arg_config_t *config,
 	do {						\
 		if (item->set)				\
 			*((type *)item->set) = val;	\
+		item->__is_set = true;			\
 	} while (0)
 
 	while ((cur_opt = getopt_long(argc, argv, sopts, long_opts,
@@ -140,6 +141,17 @@ found:
 			goto err;
 		}
 	}
+
+	for_each_opt(i, options, item, option_size) {
+		if (item->required && !item->__is_set) {
+			if (item->sname)
+				printf("-%c is necessary\n", item->sname);
+			else
+				printf("--%s is necessary\n", item->lname);
+			goto err;
+		}
+	}
+
 	free(long_opts);
 	return 0;
 err:

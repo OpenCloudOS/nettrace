@@ -22,7 +22,9 @@ typedef struct {
 	enum option_type type;
 	void	*set;
 	char	*desc;
+	bool	required;
 	int	key;
+	bool	__is_set;
 } option_item_t;
 
 typedef struct {
