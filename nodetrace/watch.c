@@ -41,6 +41,7 @@ int main(int argc, char *argv[])
 	option_item_t opts[] = {
 		{
 			.sname = 'i', .dest = &nic, .type = OPTION_STRING,
+			.required = true,
 			.desc = "target nic, such as 'eth0'",
 		},
 		{

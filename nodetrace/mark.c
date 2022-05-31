@@ -37,6 +37,7 @@ static int parse_opts(int argc, char *argv[], struct ntrace *obj)
 		{ .type = OPTION_BLANK },
 		{
 			.sname = 'i', .dest = &nic, .type = OPTION_STRING,
+			.required = true,
 			.desc = "target nic, such as 'eth0'",
 		},
 		{
