@@ -12,7 +12,7 @@ nettrace是一款基于eBPF的Linux系统下的网络故障定位工具集合，
 
 ### 1.2 droptrace
 
-基于eBPF的网络丢包监控工具，采用纯C语言开发，具有轻量化的特点，性能开销小，可用于生产环境上常态化部署使用。功能与dropwatch存在一定的相似，需要内核支持dropreason（丢包原因）特性，该特性在内核5.18版本中开始支持。点击[droptrace](docs/nettrace.md)可查看详细介绍。
+基于eBPF的网络丢包监控工具，采用纯C语言开发，具有轻量化的特点，性能开销小，可用于生产环境上常态化部署使用。功能与dropwatch存在一定的相似，需要内核支持dropreason（丢包原因）特性，该特性在内核5.18版本中开始支持。点击[droptrace](docs/droptrace.md)可查看详细介绍。
 
 ### 1.3 nodetrace
 
