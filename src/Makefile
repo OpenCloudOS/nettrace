@@ -10,11 +10,12 @@ install:
 	@ln -s /opt/nettrace/nettrace.py ${PREFIX}/usr/bin/nettrace
 
 pack:
-	@rm -rf ../nettrace.zip && zip -r ../nettrace.zip *.c *.py *.yaml
-	@echo '#!/usr/bin/env python3' | cat - ../nettrace.zip > nettrace
-	@chmod +x nettrace
-	@rm -rf ../nettrace.zip
-	@echo "`pwd`/nettrace is generated"
+	@rm -rf $(PREFIX)/nettrace.zip && zip -r $(PREFIX)/nettrace.zip \
+		*.c *.py *.yaml
+	@cd $(PREFIX) && \
+		echo '#!/usr/bin/env python3' | cat - nettrace.zip > \
+		nettrace && chmod +x nettrace && rm -rf nettrace.zip
+	@echo "$(PREFIX)/nettrace.zip is generated"
 
 all:
 

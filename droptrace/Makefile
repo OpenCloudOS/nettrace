@@ -18,5 +18,8 @@ all: drop_reason bpf
 install: all
 	@mkdir -p $(PREFIX)/usr/bin/ && cp droptrace $(PREFIX)/usr/bin/
 
+pack: all
+	@mkdir -p $(PREFIX) && cp droptrace $(PREFIX)
+
 clean:
 	rm -rf drop_reason.h droptrace vmlinux.h progs/*.skel.h progs/*.o

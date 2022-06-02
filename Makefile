@@ -33,9 +33,12 @@ install: $(targets)
 		cp $(SCRIPT)/bash-completion.sh ./nettrace;\
 		ln -s nettrace droptrace
 
-
-pack:
-	make -C src pack
+pack: $(targets)
+	@mkdir -p $(PREFIX)/nettrace-$(VERSION)
+	$(call targets-call)
+	@cd $(PREFIX) && ls -p | grep -v / | xargs -I % mv % \
+		nettrace-$(VERSION) && \
+		tar -cjf nettrace-$(VERSION).tar.bz2 nettrace-$(VERSION)
 
 rpm:
 	@make clean
