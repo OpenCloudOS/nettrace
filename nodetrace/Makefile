@@ -1,3 +1,4 @@
+ROOT ?= $(abspath ..)
 progs := mark watch
 bpf_progs := progs/ntrace
 
