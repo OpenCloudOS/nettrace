@@ -16,17 +16,6 @@ u32 snmp_reasons[SKB_DROP_REASON_MAX];
 int current_budget = 1024;
 u64 last_ts = 0;
 
-struct {
-	__uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
-	__uint(key_size, sizeof(int));
-	__uint(value_size, sizeof(u32));
-	__uint(max_entries, 64);
-} m_event SEC(".maps");
-
-#define EVENT_OUTPUT(ctx, data)					\
-	bpf_perf_event_output(ctx, &m_event, BPF_F_CURRENT_CPU,	\
-			      &(data), sizeof(data))
-
 static inline void do_snmp(u16 reason)
 {
 	if (reason >= SKB_DROP_REASON_MAX)

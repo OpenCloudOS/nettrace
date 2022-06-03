@@ -10,17 +10,6 @@
 #define MARK_TOS_VALUE	0xe0
 PARAM_DEFINE_BOOL(quiet, true);
 
-struct {
-	__uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
-	__uint(key_size, sizeof(int));
-	__uint(value_size, sizeof(u32));
-	__uint(max_entries, 1024);
-} m_event SEC(".maps");
-
-#define PERF_OUTPUT(ctx, data)					\
-	bpf_perf_event_output(ctx, &m_event, BPF_F_CURRENT_CPU,	\
-			      &(data), sizeof(data))
-
 static inline void do_mark(struct __sk_buff *skb, struct iphdr *ip)
 {
 	__u8 old_tos = ip->tos;
@@ -68,7 +57,7 @@ int ntrace_mark(struct __sk_buff *skb)
 
 	do_mark(skb, ip);
 	if (!PARAM_CHECK_BOOL(quiet))
-		PERF_OUTPUT(skb, event);
+		EVENT_OUTPUT(skb, event);
 
 	return TC_ACT_OK;
 out:
@@ -102,7 +91,7 @@ static inline void try_output_skb(struct __sk_buff *skb, __u8 location)
 	if (!is_marked(ip) || direct_parse_skb(skb, &event.pkt, false))
 		return;
 
-	PERF_OUTPUT(skb, event);
+	EVENT_OUTPUT(skb, event);
 }
 
 SEC("tc")

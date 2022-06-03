@@ -4,6 +4,17 @@
 #include "macro.h"
 #include "packet.h"
 
+struct {
+	__uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
+	__uint(key_size, sizeof(int));
+	__uint(value_size, sizeof(u32));
+	__uint(max_entries, 64);
+} m_event SEC(".maps");
+
+#define EVENT_OUTPUT(ctx, data)					\
+	bpf_perf_event_output(ctx, &m_event, BPF_F_CURRENT_CPU,	\
+			      &(data), sizeof(data))
+
 #define _(P)						\
 ({							\
 	typeof(P) tmp;					\
