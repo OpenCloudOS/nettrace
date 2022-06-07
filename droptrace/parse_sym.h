@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MulanPSL-2.0
+
 #include <asm-generic/int-ll64.h>
 
 #define MAX_SYM_LENGTH		128

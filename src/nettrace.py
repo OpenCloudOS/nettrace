@@ -1,4 +1,6 @@
 #!/usr/bin/python3
+# SPDX-License-Identifier: MulanPSL-2.0
+
 import argparse
 import socket
 import ctypes

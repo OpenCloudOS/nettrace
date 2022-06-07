@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MulanPSL-2.0
+
 #include "net_utils.h"
 #include "arg_parse.h"
 

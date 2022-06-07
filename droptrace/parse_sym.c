@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MulanPSL-2.0
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>

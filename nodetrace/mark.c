@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MulanPSL-2.0
+
 #include "common.h"
 #include "progs/ntrace.skel.h"
 
