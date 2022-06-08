@@ -4,6 +4,8 @@
 #define _H_ARG_PARSE
 #include <stdbool.h>
 
+#include "sys_utils.h"
+
 enum option_type {
 	OPTION_STRING,
 	OPTION_BOOL,
@@ -34,10 +36,6 @@ typedef struct {
 	char *name;
 	char *desc;
 } arg_config_t;
-
-#define sprintf_end(buf, fmt, args...)	\
-	sprintf(strlen(sopts) + sopts, fmt, ##args)
-#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 int parse_args(int argc, char *argv[], arg_config_t *config,
 	       option_item_t *options,

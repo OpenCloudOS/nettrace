@@ -25,11 +25,9 @@ int parse_args(int argc, char *argv[], arg_config_t *config,
 	option_item_t *item;
 	struct option *opt;
 
-	size = (option_size + 1) * sizeof(struct option);
-	opt = long_opts = malloc(size);
+	opt = long_opts = calloc(option_size + 1, sizeof(struct option));
 	if (!long_opts)
 		return -ENOMEM;
-	memset(long_opts, 0, size);
 
 	for_each_opt(i, options, item, option_size) {
 		int val = item->sname;
@@ -39,10 +37,6 @@ int parse_args(int argc, char *argv[], arg_config_t *config,
 			continue;
 		if (!has_s)
 			val = cur_key++;
-
-		opt->name = item->lname;
-		opt->flag = NULL;
-		opt->val = val;
 		item->key = val;
 
 		switch (item->type) {
@@ -59,6 +53,11 @@ int parse_args(int argc, char *argv[], arg_config_t *config,
 			opt->has_arg = required_argument;
 			break;
 		}
+		if (!item->lname)
+			continue;
+		opt->name = item->lname;
+		opt->flag = NULL;
+		opt->val = val;
 		opt++;
 	}
 
