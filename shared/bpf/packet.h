@@ -6,7 +6,7 @@ typedef struct {
 	u16	dport;
 } l4_min_t;
 
-typedef struct {
+typedef struct __attribute__((__packed__)) {
 	u64	ts;
 	union {
 		struct {
