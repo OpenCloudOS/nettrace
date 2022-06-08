@@ -65,11 +65,13 @@ typedef struct {
 #define TCP_H_LEN	(sizeof(struct tcphdr))
 #define UDP_H_LEN	(sizeof(struct udphdr))
 #define IP_H_LEN	(sizeof(struct iphdr))
+#define ICMP_H_LEN	(sizeof(struct icmphdr))
 
-#define ETH_TOTAL_H_LEN	(sizeof(struct ethhdr))
-#define IP_TOTAL_H_LEN	(ETH_TOTAL_H_LEN + IP_H_LEN)
-#define TCP_TOTAL_H_LEN	(IP_TOTAL_H_LEN + TCP_H_LEN)
-#define UDP_TOTAL_H_LEN	(IP_TOTAL_H_LEN + UDP_H_LEN)
+#define ETH_TOTAL_H_LEN		(sizeof(struct ethhdr))
+#define IP_TOTAL_H_LEN		(ETH_TOTAL_H_LEN + IP_H_LEN)
+#define TCP_TOTAL_H_LEN		(IP_TOTAL_H_LEN + TCP_H_LEN)
+#define UDP_TOTAL_H_LEN		(IP_TOTAL_H_LEN + UDP_H_LEN)
+#define ICMP_TOTAL_H_LEN	(IP_TOTAL_H_LEN + ICMP_H_LEN)
 
 #define IP_CSUM_OFFSET	(ETH_TOTAL_H_LEN + offsetof(struct iphdr, check))
 
@@ -81,6 +83,8 @@ typedef struct {
 	(SKB_DATA(skb) + TCP_TOTAL_H_LEN > SKB_END(skb))
 #define SKB_CHECK_UDP(skb)	\
 	(SKB_DATA(skb) + UDP_TOTAL_H_LEN > SKB_END(skb))
+#define SKB_CHECK_ICMP(skb)	\
+	(SKB_DATA(skb) + ICMP_TOTAL_H_LEN > SKB_END(skb))
 #define SKB_HDR_IP(skb)		\
 	(SKB_DATA(skb) + ETH_TOTAL_H_LEN)
 
@@ -299,9 +303,10 @@ static inline int probe_parse_ip(struct sk_buff *skb, packet_t *pkt, bool ipv4)
 		break;
 	}
 	case IPPROTO_ICMP: {
+		struct icmphdr *icmp = l4;
+
 		if (port_filter)
 			return -1;
-		struct icmphdr *icmp = l4;
 		pkt->l4.icmp.code = _(icmp->code);
 		pkt->l4.icmp.type = _(icmp->type);
 		pkt->l4.icmp.seq = _(icmp->un.echo.sequence);
@@ -378,6 +383,16 @@ static inline int direct_parse_skb(struct __sk_buff *skb, packet_t *pkt,
 fill_port:
 		pkt->l4.min = *l4_p;
 		break;
+	case IPPROTO_ICMP: {
+		struct icmphdr *icmp = (void *)l4_p;
+		if (SKB_CHECK_ICMP(skb))
+			goto err;
+
+		pkt->l4.icmp.code = icmp->code;
+		pkt->l4.icmp.type = icmp->type;
+		pkt->l4.icmp.seq = icmp->un.echo.sequence;
+		pkt->l4.icmp.id = icmp->un.echo.id;
+	}
 	default:
 		goto out;
 	}

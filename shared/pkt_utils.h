@@ -16,6 +16,7 @@
 
 #define BUF_FMT(fmt, args...) pos += sprintf(buf + pos, fmt, ##args);
 
+int ts_print_packet(char *buf, packet_t *pkt, char *minfo);
 int base_print_packet(char *buf, packet_t *pkt);
 
 #endif
