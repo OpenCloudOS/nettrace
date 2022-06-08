@@ -18,25 +18,6 @@
 
 #include "progs/bpf.h"
 
-static inline void perf_output(int map_fd, perf_buffer_sample_fn fn)
-{
-	struct perf_buffer_opts pb_opts = {
-		.sample_cb = fn
-	};
-	struct perf_buffer *pb;
-	int ret;
-
-	pb = perf_buffer__new(map_fd, 8, &pb_opts);
-	ret = libbpf_get_error(pb);
-	if (ret) {
-		printf("failed to setup perf_buffer: %d\n", ret);
-		return;
-	}
-
-	while ((ret = perf_buffer__poll(pb, 1000)) >= 0) {
-	}
-}
-
 static inline int tc_attach(int prog_fd, char *nic, char *pref,
 			    bool ingress)
 {
