@@ -73,6 +73,33 @@ static proto_item_t l4_protos[] = {
 	{ "raw",	255 },
 };
 
+char *l4_proto_names[] = {
+	[1]	= "ICMP",
+	[2]	= "IGMP",
+	[4]	= "IPIP",
+	[6]	= "TCP",
+	[8]	= "EGP",
+	[12]	= "PUP",
+	[17]	= "UDP",
+	[22]	= "IDP",
+	[29]	= "TP",
+	[33]	= "DCCP",
+	[41]	= "IPV6",
+	[46]	= "RSVP",
+	[47]	= "GRE",
+	[50]	= "ESP",
+	[51]	= "AH",
+	[92]	= "MTP",
+	[94]	= "BEETPH",
+	[98]	= "ENCAP",
+	[103]	= "PIM",
+	[108]	= "COMP",
+	[132]	= "SCTP",
+	[136]	= "UDPLITE",
+	[137]	= "MPLS",
+	[255]	= "RAW",
+};
+
 static proto_item_t *proto_search(proto_item_t *protos, int size,
 				  char *name)
 {

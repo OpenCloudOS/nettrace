@@ -51,4 +51,10 @@ static inline int ip2i(char *ip, __u32 *dest)
 
 int proto2i(char *proto, int *dest);
 
+extern char *l4_proto_names[];
+static inline char *i2l4(u8 num)
+{
+	return l4_proto_names[num];
+}
+
 #endif
