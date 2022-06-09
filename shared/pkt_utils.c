@@ -29,7 +29,7 @@ int ts_print_packet(char *buf, packet_t *pkt, char *minfo)
 		break;
 	}
 
-	BUF_FMT("ether protocol: %u\n", pkt->proto_l3);
+	BUF_FMT("ether protocol: %u", pkt->proto_l3);
 	goto out;
 
 print_ip:
