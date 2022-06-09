@@ -14,7 +14,8 @@
 #include <pkt_utils.h>
 
 #include "./progs/shared.h"
-#include "progs/droptrace.skel.h"
+#include "progs/probe.skel.h"
+#include "progs/trace.skel.h"
 #include "reasons.h"
 #include "parse_sym.h"
 
@@ -22,6 +23,8 @@
 #define ROOT_PIN_PATH		"/sys/fs/bpf/droptrace/"
 #define SNMP_PIN_PATH		ROOT_PIN_PATH"snmp"
 #define TRACE_PIN_PATH		ROOT_PIN_PATH"trace"
+
+typedef typeof(*((struct trace *)0)->rodata) bpf_args_t;
 
 u32 snmp_reasons[SKB_DROP_REASON_MAX];
 
@@ -99,14 +102,14 @@ err:
 	return -1;
 }
 
-static int parse_opts(int argc, char *argv[], struct droptrace *obj)
+static int parse_opts(int argc, char *argv[], bpf_args_t *args)
 {
 	bool stat_stop = false;
 	int proto_l = 0;
 	u16 proto;
 
-#define E(name) &(obj->rodata->enable_##name)
-#define R(name)	&(obj->rodata->arg_##name)
+#define E(name) &(args->enable_##name)
+#define R(name)	&(args->arg_##name)
 	option_item_t opts[] = {
 #include <common_args.h>
 		{
@@ -178,7 +181,7 @@ static int parse_opts(int argc, char *argv[], struct droptrace *obj)
 		goto exit;
 	}
 
-	obj->rodata->arg_snmp_mode = snmp_mode;
+	args->arg_snmp_mode = snmp_mode;
 	return 0;
 err:
 	return -1;
@@ -202,43 +205,58 @@ static void print_drop_stat(int fd)
 	}
 }
 
+#define SKEL_OPS(ops, ...) ({				\
+		trace ? trace__##ops (__VA_ARGS__) :	\
+			probe__##ops (__VA_ARGS__);	\
+	})
+#define SKEL_OBJ_FD(type, name)				\
+	bpf_##type##__fd(trace ? trace->type##s.name :	\
+		       probe->type##s.name)
+
 int main(int argc, char *argv[])
 {
-	struct droptrace *obj = NULL;
+	bpf_args_t bpf_args = {};
+	struct trace *trace;
+	struct probe *probe;
 	int map_fd;
+	void *obj;
 
-	if (!(obj = droptrace__open())) {
-		printf("failed to open program\n");
+	if (parse_opts(argc, argv, &bpf_args))
 		goto err;
-	}
-
-	if (parse_opts(argc, argv, obj))
-		goto err;
-
 	if (snmp_mode)
 		goto do_snmp;
 
 do_load:
-	if (droptrace__load(obj)) {
-		printf("failed to load program\n");
-		goto err;
-	}
+	libbpf_set_print(NULL);
+	trace = trace__open();
+	probe = probe__open();
+	*(bpf_args_t *)probe->rodata = bpf_args;
+	*(bpf_args_t *)trace->rodata = bpf_args;
 
-	if (droptrace__attach(obj)) {
-		printf("failed to attach kfree_skb event\n");
+	if (trace__load(trace)) {
+		trace__destroy(trace);
+		trace = NULL;
+		if (probe__load(probe)) {
+			printf("failed to load program\n");
+			goto err;
+		}
+	}
+	obj = (void *)trace ?: (void *)probe;
+
+	if (SKEL_OPS(attach, obj)) {
+		printf("failed to attach kfree_skb\n");
 		goto err;
 	}
 
 	if (snmp_mode)
 		goto do_snmp_pin;
 
-	do_drop_monitor(BPF_MAP_FD(m_event));
-out:
-	droptrace__destroy(obj);
+	do_drop_monitor(SKEL_OBJ_FD(map, m_event));
+	SKEL_OPS(destroy, obj);
 	return 0;
 
 err:
-	droptrace__destroy(obj);
+	SKEL_OPS(destroy, obj);
 	return -1;
 
 do_snmp_pin:
@@ -246,15 +264,17 @@ do_snmp_pin:
 		printf("failed to create bpf pin path\n");
 		goto err;
 	}
-	if (bpf_obj_pin(BPF_MAP_FD(bss), SNMP_PIN_PATH)) {
+	if (bpf_obj_pin(SKEL_OBJ_FD(map, bss), SNMP_PIN_PATH)) {
 		printf("failed to pin snmp map\n");
 		goto err;
 	}
-	if (bpf_obj_pin(BPF_LINK_FD(trace_kfree_skb), TRACE_PIN_PATH)) {
-		printf("failed to pin program\n");
+	if (bpf_obj_pin(SKEL_OBJ_FD(link, trace_kfree_skb), TRACE_PIN_PATH)) {
+		printf("failed to pin program (your kernel seems don't support "
+		       "bpf_link)\n");
 		unlink(SNMP_PIN_PATH);
 		goto err;
 	}
+	trace__destroy(obj);
 
 do_snmp:
 	if (access(SNMP_PIN_PATH, F_OK))
@@ -265,5 +285,5 @@ do_snmp:
 		return -1;
 	}
 	print_drop_stat(map_fd);
-	goto out;
+	return 0;
 }

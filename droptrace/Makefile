@@ -1,5 +1,5 @@
 ROOT ?= $(abspath ../)
-bpf_progs = progs/droptrace
+bpf_progs = progs/probe progs/trace
 progs = droptrace
 prog-droptrace = droptrace.c parse_sym.c $(COMMON_SHARED)
 

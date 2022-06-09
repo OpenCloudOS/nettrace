@@ -16,9 +16,17 @@ u32 snmp_reasons[SKB_DROP_REASON_MAX];
 int current_budget = 1024;
 u64 last_ts = 0;
 
-static inline void do_snmp(u16 reason)
+struct kfree_skb_args {
+	u64 pad;
+	void *skb;
+	void *location;
+	unsigned short protocol;
+	int reason;
+};
+
+static inline void do_snmp(int reason)
 {
-	if (reason >= SKB_DROP_REASON_MAX)
+	if (reason >= SKB_DROP_REASON_MAX || reason < 0)
 		return;
 	snmp_reasons[reason]++;
 }
@@ -38,33 +46,6 @@ static __always_inline bool is_limited(u64 ts)
 		return false;
 	}
 	return true;
-}
-
-SEC("tp_btf/kfree_skb")
-int BPF_PROG(trace_kfree_skb, struct sk_buff *skb, void *location,
-	     int reason)
-{
-	if (PARAM_CHECK_BOOL(snmp_mode)) {
-		do_snmp((__u16)reason);
-		goto out;
-	}
-
-	if (PARAM_CHECK_ENABLE(reason, reason))
-		goto out;
-
-	event_t event = { .reason = reason };
-	if (probe_parse_skb(skb, &event.pkt))
-		goto out;
-
-	event.pkt.ts = bpf_ktime_get_ns();
-	if (PARAM_ENABLED(limit) && is_limited(event.pkt.ts))
-		goto out;
-
-	event.location = (u64)location;
-	bpf_perf_event_output(ctx, &m_event, BPF_F_CURRENT_CPU,
-			      &event, sizeof(event));
-out:
-	return 0;
 }
 
 char _license[] SEC("license") = "GPL";
