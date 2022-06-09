@@ -67,24 +67,20 @@ static void print_drop_packet(void *ctx, int cpu, void *data, __u32 size)
 	printf("%s reason:%s %s\n", buf, reason_str, sym_desc);
 }
 
-static int do_drop_monitor(int map_fd)
+static void print_drop_stat(int fd)
 {
-	struct perf_buffer_opts pb_opts = {};
-	struct perf_buffer *pb;
-	struct droptrace *obj;
-	int ret;
+	int key = 0, i = 1, count;
 
-	pb_opts.sample_cb = print_drop_packet;
-	pb = perf_buffer__new(map_fd, 8, &pb_opts);
-	ret = libbpf_get_error(pb);
-	if (ret) {
-		printf("failed to setup perf_buffer: %d\n", ret);
-		return -1;
+	if (bpf_map_lookup_elem(fd, &key, snmp_reasons)) {
+		printf("failed to load data\n");
+		return;
 	}
 
-	while ((ret = perf_buffer__poll(pb, 1000)) >= 0) {
+	printf("packet statistics:\n");
+	for (; i < SKB_DROP_REASON_MAX; i++) {
+		count = snmp_reasons[i];
+		printf("  %s: %d\n", drop_reasons[i], count);
 	}
-	return 0;
 }
 
 static int do_stat_stop()
@@ -189,22 +185,6 @@ exit:
 	exit(0);
 }
 
-static void print_drop_stat(int fd)
-{
-	int key = 0, i = 1, count;
-
-	if (bpf_map_lookup_elem(fd, &key, snmp_reasons)) {
-		printf("failed to load data\n");
-		return;
-	}
-
-	printf("packet statistics:\n");
-	for (; i < SKB_DROP_REASON_MAX; i++) {
-		count = snmp_reasons[i];
-		printf("  %s: %d\n", drop_reasons[i], count);
-	}
-}
-
 #define SKEL_OPS(ops, ...) ({				\
 		trace ? trace__##ops (__VA_ARGS__) :	\
 			probe__##ops (__VA_ARGS__);	\
@@ -251,7 +231,7 @@ do_load:
 	if (snmp_mode)
 		goto do_snmp_pin;
 
-	do_drop_monitor(SKEL_OBJ_FD(map, m_event));
+	perf_output(SKEL_OBJ_FD(map, m_event), print_drop_packet);
 	SKEL_OPS(destroy, obj);
 	return 0;
 
