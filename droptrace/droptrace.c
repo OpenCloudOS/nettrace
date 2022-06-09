@@ -248,9 +248,10 @@ do_snmp_pin:
 		printf("failed to pin snmp map\n");
 		goto err;
 	}
-	if (bpf_obj_pin(SKEL_OBJ_FD(link, trace_kfree_skb), TRACE_PIN_PATH)) {
-		printf("failed to pin program (your kernel seems don't support "
-		       "bpf_link)\n");
+	if (bpf_obj_pin(SKEL_OBJ_FD(link, trace_kfree_skb),
+			TRACE_PIN_PATH)) {
+		printf("failed to pin program (your kernel seems don't "
+		       "support bpf_link)\n");
 		unlink(SNMP_PIN_PATH);
 		goto err;
 	}
