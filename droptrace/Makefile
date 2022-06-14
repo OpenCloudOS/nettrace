@@ -5,6 +5,12 @@ prog-droptrace = droptrace.c parse_sym.c $(COMMON_SHARED) drop_reason.h
 
 include ../common.mk
 
+progs/common.h:
+	cd progs && wget $(REMOTE_ROOT)/droptrace/$@
+
+$(foreach i,$(bpf_progs),$(i).c): progs/common.h
+	cd progs && wget $(REMOTE_ROOT)/droptrace/$@
+
 drop_reason.h: vmlinux.h
 	rm -rf $@
 	awk 'BEGIN{ print "#ifndef _H_SKB_DROP_REASON"; \

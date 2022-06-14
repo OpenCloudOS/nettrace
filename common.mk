@@ -8,6 +8,9 @@ SHARED = $(ROOT)/shared
 COMPONENT = $(ROOT)/component
 COMMON_SHARED = $(SHARED)/pkt_utils.c $(COMPONENT)/net_utils.c \
 		$(COMPONENT)/arg_parse.c
+REMOTE_ROOT := https://raw.githubusercontent.com/OpenCloudOS/OpenCloudOS-Kernel/kernel5.4/master/tools/bpf/nettrace/
+export REMOTE_ROOT
+
 
 vmlinux.h:
 	$(BPFTOOL) btf dump file $(VMLINUX) \

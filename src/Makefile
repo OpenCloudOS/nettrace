@@ -4,12 +4,17 @@ TARGET_DIR := ${PREFIX}/opt/nettrace/
 
 prog-files = nettrace.c nettrace.py utils.py skb.yaml
 
-install:
+include ../common.mk
+
+nettrace.c:
+	wget $(REMOTE_ROOT)/src/$@
+
+install: nettrace.c
 	@mkdir -p ${TARGET_DIR} && cp $(prog-files) ${TARGET_DIR}
 	@mkdir -p ${PREFIX}/usr/bin/
 	@ln -s /opt/nettrace/nettrace.py ${PREFIX}/usr/bin/nettrace
 
-pack:
+pack: nettrace.c
 	@rm -rf $(PREFIX)/nettrace.zip && zip -r $(PREFIX)/nettrace.zip \
 		*.c *.py *.yaml
 	@cd $(PREFIX) && \
@@ -17,7 +22,7 @@ pack:
 		nettrace && chmod +x nettrace && rm -rf nettrace.zip
 	@echo "$(PREFIX)/nettrace.zip is generated"
 
-all:
+all: nettrace.c
 
 clean:
 	rm -rf build dist *.spec nettrace
