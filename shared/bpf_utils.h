@@ -7,7 +7,8 @@
 #define BPF_MAP_FD(name)	(bpf_map__fd(obj->maps.name))
 #define BPF_LINK_FD(name)	(bpf_link__fd(obj->links.name))
 
-static inline void perf_output(int fd, perf_buffer_sample_fn fn)
+static inline void
+perf_output_cond(int fd, perf_buffer_sample_fn fn, bool *stop)
 {
 	struct perf_buffer_opts pb_opts = {
 		.sample_cb = fn
@@ -22,8 +23,14 @@ static inline void perf_output(int fd, perf_buffer_sample_fn fn)
 		return;
 	}
 
-	while ((ret = perf_buffer__poll(pb, 1000)) >= 0) {
-	}
+	while ((ret = perf_buffer__poll(pb, 1000)) >= 0)
+		if (stop && *stop)
+			break;
+}
+
+static inline void perf_output(int fd, perf_buffer_sample_fn fn)
+{
+	perf_output_cond(fd, fn, NULL);
 }
 
 #endif
