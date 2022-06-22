@@ -1,4 +1,6 @@
 #include <linux/icmp.h>
+#define _LINUX_IN_H
+#include <netinet/in.h>
 
 #include "pkt_utils.h"
 
@@ -78,7 +80,7 @@ print_ip:
 			BUF_FMT(" ping reply, ");
 			break;
 		}
-		BUF_FMT("seq: %u", pkt->l4.icmp.seq);
+		BUF_FMT("seq: %u", ntohs(pkt->l4.icmp.seq));
 		break;
 	default:
 		break;
