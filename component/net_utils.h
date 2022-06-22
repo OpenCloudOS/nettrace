@@ -4,7 +4,6 @@
 #define _H_NET_UTILS
 
 #include <unistd.h>
-#include <arpa/inet.h>
 #include <getopt.h>
 #include <signal.h>
 #include <stdbool.h>
