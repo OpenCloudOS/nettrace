@@ -1,8 +1,8 @@
 
-export VERSION=1.0.0
+export VERSION=1.1.0
 export RELEASE=1.tl3
 
-targets = droptrace nodetrace src
+targets = droptrace nodetrace src legacy
 targets-call = for i in $^; do make -C $$i $@; done
 
 ROOT := $(abspath .)

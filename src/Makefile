@@ -1,28 +1,36 @@
+ROOT ?= $(abspath ../)
+bpf_progs := progs/kprobe progs/tracing
+progs := nettrace
+prog-nettrace-origin = trace.c $(COMMON_SHARED) \
+		       trace_probe.c trace_tracing.c analysis.c \
+		       $(COMPONENT)/parse_sym.c trace_group.c \
+		       drop_reason.h
 
-ROOT = ../
-TARGET_DIR := ${PREFIX}/opt/nettrace/
-
-prog-files = nettrace.c nettrace.py utils.py skb.yaml
+prog-nettrace = $(prog-nettrace-origin) nettrace.c
 
 include ../common.mk
 
-nettrace.c:
-	wget $(REMOTE_ROOT)/src/$@
+progs/kprobe_trace.h:
+	python3 gen_trace.py probe > progs/kprobe_trace.h
 
-install: nettrace.c
-	@mkdir -p ${TARGET_DIR} && cp $(prog-files) ${TARGET_DIR}
+trace_group.c: trace.yaml
+	python3 gen_trace.py > trace_group.c
+
+progs/kprobe.c: progs/kprobe_trace.h
+
+nettrace.c: $(prog-nettrace-origin)
+
+all: $(progs)
+
+install: all
 	@mkdir -p ${PREFIX}/usr/bin/
-	@ln -s /opt/nettrace/nettrace.py ${PREFIX}/usr/bin/nettrace
+	@cp nettrace ${PREFIX}/usr/bin/
 
-pack: nettrace.c
-	@rm -rf $(PREFIX)/nettrace.zip && zip -r $(PREFIX)/nettrace.zip \
-		*.c *.py *.yaml
-	@cd $(PREFIX) && \
-		echo '#!/usr/bin/env python3' | cat - nettrace.zip > \
-		nettrace && chmod +x nettrace && rm -rf nettrace.zip
-	@echo "$(PREFIX)/nettrace.zip is generated"
-
-all: nettrace.c
+pack: all
+	@cp nettrace ${PREFIX}/
 
 clean:
-	rm -rf build dist *.spec nettrace
+	rm -rf $(progs) trace_group.c progs/kprobe_trace.h \
+		$(bpf_progs) progs/*.o progs/*.skel.h \
+		vmlinux.h drop_reason.h
+

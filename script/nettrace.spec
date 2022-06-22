@@ -42,6 +42,7 @@ PREFIX=$RPM_BUILD_ROOT
 %defattr (-,root,root,0755)
 /opt/nettrace/
 /usr/bin/nettrace
+/usr/bin/nettrace-legacy
 /usr/bin/droptrace
 /usr/bin/nodetrace-mark
 /usr/bin/nodetrace-watch
