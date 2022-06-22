@@ -26,12 +26,21 @@ do {					\
 #define pr_debug(fmt, args...)	pr_level(2, "DEBUG: "fmt, ##args)
 
 #define PFMT_EMPH	"\033[0;33m"
+#define PFMT_WARN	"\033[0;32m"
+#define PFMT_ERROR	"\033[0;31m"
 #define PFMT_END	"\033[0m"
+
+#define PFMT_EMPH_STR(str)	PFMT_EMPH str PFMT_END
+#define PFMT_WARN_STR(str)	PFMT_WARN str PFMT_END
+#define PFMT_ERROR_STR(str)	PFMT_ERROR str PFMT_END
 
 #define set_log_level(l)	log_level = l
 
 #define sprintf_end(buf, fmt, args...)	\
 	sprintf(strlen(buf) + buf, fmt, ##args)
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
+
+#define MIN(a, b) (a > b ? b : a)
+#define MAX(a, b) (a > b ? a : b)
 
 #endif
