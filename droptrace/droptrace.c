@@ -12,12 +12,12 @@
 #include <bpf_utils.h>
 #include <arg_parse.h>
 #include <pkt_utils.h>
+#include <parse_sym.h>
 
 #include "./progs/shared.h"
 #include "progs/probe.skel.h"
 #include "progs/trace.skel.h"
 #include "reasons.h"
-#include "parse_sym.h"
 
 #define MAX_OUTPUT_LENGTH	256
 #define ROOT_PIN_PATH		"/sys/fs/bpf/droptrace/"
