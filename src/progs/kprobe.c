@@ -147,7 +147,7 @@ DEFINE_TP(kfree_skb, skb, kfree_skb, 8)
 
 	e.location = (unsigned long)args->location;
 	if (PARAM_CHECK_BOOL(drop_reason))
-		e.reason = args->reason;
+		e.reason = _(args->reason);
 
 	return nettrace_trace(ctx, skb, &e.event, sizeof(e), func);
 }
