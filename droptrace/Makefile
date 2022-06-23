@@ -13,6 +13,10 @@ $(foreach i,$(bpf_progs),$(i).c): progs/common.h
 	cd progs && wget $(REMOTE_ROOT)/droptrace/$@
 
 droptrace.c: drop_reason.h
+	@if [ -z `grep SKB_DROP_REASON_MAX drop_reason.h` ];then	\
+		echo 'drop reason is not supported by current kernel';	\
+		exit -1;						\
+	fi
 
 all: $(progs)
 
