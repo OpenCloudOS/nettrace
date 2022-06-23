@@ -8,15 +8,17 @@
 #define BPF_LINK_FD(name)	(bpf_link__fd(obj->links.name))
 
 static inline void
-perf_output_cond(int fd, perf_buffer_sample_fn fn, bool *stop)
+perf_output_cond(int fd, perf_buffer_sample_fn cb, perf_buffer_lost_fn lost,
+		 bool *stop)
 {
 	struct perf_buffer_opts pb_opts = {
-		.sample_cb = fn
+		.sample_cb = cb,
+		.lost_cb = lost,
 	};
 	struct perf_buffer *pb;
 	int ret;
 
-	pb = perf_buffer__new(fd, 8, &pb_opts);
+	pb = perf_buffer__new(fd, 1024, &pb_opts);
 	ret = libbpf_get_error(pb);
 	if (ret) {
 		printf("failed to setup perf_buffer: %d\n", ret);
@@ -30,7 +32,7 @@ perf_output_cond(int fd, perf_buffer_sample_fn fn, bool *stop)
 
 static inline void perf_output(int fd, perf_buffer_sample_fn fn)
 {
-	perf_output_cond(fd, fn, NULL);
+	perf_output_cond(fd, fn, NULL, NULL);
 }
 
 #endif
