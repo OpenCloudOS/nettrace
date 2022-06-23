@@ -1,4 +1,4 @@
-BPFTOOL ?= bpftool
+BPFTOOL ?= $(ROOT)/script/bpftool
 VMLINUX ?= /sys/kernel/btf/vmlinux
 CFLAGS += -I./ -I$(ROOT)/shared/bpf/
 BPF_CFLAGS := $(CFLAGS)
