@@ -46,7 +46,7 @@ PREFIX=$RPM_BUILD_ROOT
 /usr/bin/droptrace
 /usr/bin/nodetrace-mark
 /usr/bin/nodetrace-watch
-/usr/share/man/man8/nettrace.8.gz
+/usr/share/man/man8/nettrace-legacy.8.gz
 /usr/share/man/man8/dropreason.8.gz
 /usr/share/bash-completion/completions/nettrace
 /usr/share/bash-completion/completions/droptrace
