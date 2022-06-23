@@ -27,7 +27,7 @@ static struct sym_result *lookup_sym_cache(__u64 pc)
 {
 	struct sym_result *head = result_list, *sym = NULL;
 	while (head) {
-		if (head->start >= pc && head->end < pc) {
+		if (pc >= head->start && pc < head->end) {
 			if (head->pc == pc)
 				return head;
 			sym = head;
