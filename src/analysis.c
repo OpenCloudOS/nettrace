@@ -404,7 +404,7 @@ DEFINE_ANALYZER_ENTRY(free, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_INETL_MASK)
 
 	rule_run(e, trace, 0);
 out:
-	return RESULT_CONSUME;
+	return RESULT_CONT;
 }
 
 #define FN(name) [SKB_DROP_REASON_##name] = #name,
@@ -448,7 +448,7 @@ DEFINE_ANALYZER_EXIT(clone, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_INETL_MASK)
 	fake_analy_ctx_t *fake;
 	analy_ctx_t *ctx;
 
-	if (!entry || !e->event.val || !trace_mode_intel())
+	if (!entry || !e->event.val)
 		goto out;
 
 	ctx = entry->ctx;
@@ -459,7 +459,8 @@ DEFINE_ANALYZER_EXIT(clone, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_INETL_MASK)
 	list_add_tail(&fake->list, &ctx->fakes);
 	analy_ctx_add(fake);
 	get_analy_ctx(ctx);
-	rule_run(entry, trace, 0);
+	if (trace_mode_intel())
+		rule_run(entry, trace, 0);
 out:
 	return RESULT_CONSUME;
 }
