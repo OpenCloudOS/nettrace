@@ -224,6 +224,13 @@ children:
     - tcp_rcv_established:1
     - tcp_rcv_state_process:1
     - tcp_queue_rcv:1
+    - name: __inet_lookup_listener:2
+      analyzer: ret
+      rules:
+      - exp: eq 0
+        level: warn
+        msg: tcp port is not listened
+        adv: check your target tcp port
 - name: udp
   desc: udp protocol layer (L4) of the network stack
   children:
