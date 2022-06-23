@@ -177,7 +177,7 @@ def gen_group(group, is_root=False):
 
 with open('trace.yaml', 'r', encoding='utf-8') as f:
     content = f.read()
-    root = yaml.load(content, yaml.FullLoader)
+    root = yaml.load(content, yaml.SafeLoader)
     parse_group(root)
     (all_define_str, all_init_str, all_probe_str, all_index_str) = gen_group(root, root)
 
