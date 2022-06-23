@@ -266,6 +266,9 @@ static int trace_bpf_open()
 	if (trace_ctx.obj)
 		return 0;
 
+	if (liberate_l())
+		pr_warn("failed to set rlimit\n");
+
 	return trace_ctx.ops->trace_open();
 }
 

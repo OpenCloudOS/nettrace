@@ -7,6 +7,7 @@ extern int log_level;
 
 int execf(char *output, char *fmt, ...);
 int exec(char *cmd, char *output);
+int liberate_l();
 
 static inline int simple_exec(char *cmd)
 {

@@ -9,6 +9,7 @@
 #include <malloc.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/resource.h>
 
 #include "sys_utils.h"
 
@@ -47,4 +48,10 @@ int execf(char *output, char *fmt, ...)
 	va_end(valist);
 
 	return exec(cmd, output);
+}
+
+int liberate_l()
+{
+	struct rlimit lim = {RLIM_INFINITY, RLIM_INFINITY};
+	return setrlimit(RLIMIT_MEMLOCK, &lim);
 }
