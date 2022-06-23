@@ -193,7 +193,7 @@ with open('trace.yaml', 'r', encoding='utf-8') as f:
 #include "analysis.h"
 
 {all_define_str}
-#define TRACE_MAX {global_status['trace_index']}
+
 trace_t *all_traces[TRACE_MAX];
 int trace_count = TRACE_MAX;
 LIST_HEAD(trace_list);
