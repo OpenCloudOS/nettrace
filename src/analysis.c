@@ -423,17 +423,20 @@ DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_INETL_MASK)
 		goto out;
 
 	rule_run(e, trace, 0);
-	if (event->reason < SKB_DROP_REASON_MAX)
-		reason = drop_reasons[event->reason];
 	sym = parse_sym(event->location);
+
+	if (event->reason < ARRAY_SIZE(drop_reasons))
+		reason = drop_reasons[event->reason];
 
 	info = malloc(1024);
 	info[0] = '\0';
 	sprintf(info, PFMT_EMPH_STR("    location")":\n\t%s",
 		sym ? sym->desc : "unknow");
-	if (trace_ctx.drop_reason)
+
+	if (trace_ctx.drop_reason) {
 		sprintf_end(info, PFMT_EMPH_STR("\n    drop reason")":\n\t%s",
 			    reason ?: "unknow");
+	}
 	entry_set_extinfo(e, info);
 out:
 	return RESULT_CONSUME;
