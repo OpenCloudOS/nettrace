@@ -14,17 +14,17 @@ static inline int simple_exec(char *cmd)
 	return exec(cmd, NULL);
 }
 
-#define pr_level(level, fmt, args...)	\
-do {					\
-	if (level <= log_level)		\
-		printf(fmt, ##args);	\
+#define pr_level(level, target, fmt, args...)	\
+do {						\
+	if (level <= log_level)			\
+		fprintf(target, fmt, ##args);	\
 } while (0)
 
-#define pr_info(fmt, args...)	pr_level(0, fmt, ##args)
-#define pr_verb(fmt, args...)	pr_level(1, fmt, ##args)
-#define pr_warn(fmt, args...)	pr_level(1, "\033[0;34mWARN: "fmt"\033[0m", ##args)
-#define pr_err(fmt, args...)	pr_level(0, "\033[0;31mERROR: "fmt"\033[0m", ##args)
-#define pr_debug(fmt, args...)	pr_level(2, "DEBUG: "fmt, ##args)
+#define pr_info(fmt, args...)	pr_level(0, stdout, fmt, ##args)
+#define pr_verb(fmt, args...)	pr_level(1, stdout, fmt, ##args)
+#define pr_warn(fmt, args...)	pr_level(1, stderr, "\033[0;34mWARN: "fmt"\033[0m", ##args)
+#define pr_err(fmt, args...)	pr_level(0, stderr, "\033[0;31mERROR: "fmt"\033[0m", ##args)
+#define pr_debug(fmt, args...)	pr_level(2, stdout, "DEBUG: "fmt, ##args)
 
 #define PFMT_EMPH	"\033[0;33m"
 #define PFMT_WARN	"\033[0;32m"
