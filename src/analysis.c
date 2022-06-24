@@ -116,6 +116,13 @@ static inline void analy_entry_free(analy_entry_t *entry)
 	if (entry->status & ANALY_ENTRY_MSG)
 		free(entry->msg);
 
+	if (entry->status & ANALY_ENTRY_ONCPU) {
+		trace_t *t = get_trace_from_analy_entry(entry);
+		list_del(&entry->cpu_list);
+		pr_err("entry %s is still on cpu %d\n", t->name,
+		       entry->cpu);
+	}
+
 	free(entry->event);
 	free(entry);
 }

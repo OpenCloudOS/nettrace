@@ -102,6 +102,7 @@ typedef struct analyzer {
 #define ANALY_ENTRY_RETURNED	(1 << 0)
 #define ANALY_ENTRY_EXTINFO	(1 << 1)
 #define ANALY_ENTRY_MSG		(1 << 2)
+#define ANALY_ENTRY_ONCPU	(1 << 3)
 
 #define ANALYZER(name) analyzer_##name
 #define DEFINE_ANALYZER_PART(name, type, mode_mask)			\
