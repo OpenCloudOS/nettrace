@@ -212,6 +212,7 @@ do_load:
 	probe = probe__open();
 	*(bpf_args_t *)probe->rodata = bpf_args;
 	*(bpf_args_t *)trace->rodata = bpf_args;
+	liberate_l();
 
 	if (trace__load(trace)) {
 		trace__destroy(trace);
