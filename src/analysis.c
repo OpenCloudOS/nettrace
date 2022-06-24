@@ -422,6 +422,7 @@ static inline void rule_run(analy_entry_t *entry, trace_t *trace, int ret)
 DEFINE_ANALYZER_ENTRY(free, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_INETL_MASK)
 {
 	put_fake_analy_ctx(e->fake_ctx);
+	hlist_del(&e->fake_ctx->hash);
 	if (!trace_mode_intel())
 		goto out;
 
@@ -442,6 +443,7 @@ DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_INETL_MASK)
 	char *info;
 
 	put_fake_analy_ctx(e->fake_ctx);
+	hlist_del(&e->fake_ctx->hash);
 	if (!trace_mode_intel())
 		goto out;
 

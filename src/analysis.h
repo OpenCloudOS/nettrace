@@ -163,10 +163,8 @@ static inline void get_fake_analy_ctx(fake_analy_ctx_t *ctx)
 static inline void put_fake_analy_ctx(fake_analy_ctx_t *ctx)
 {
 	ctx->refs--;
-	if (ctx->refs <= 0) {
+	if (ctx->refs <= 0)
 		put_analy_ctx(ctx->ctx);
-		hlist_del(&ctx->hash);
-	}
 }
 
 static inline bool event_is_ret(int size)
