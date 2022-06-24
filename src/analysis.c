@@ -10,13 +10,6 @@
 #include "analysis.h"
 #include "drop_reason.h"
 
-typedef struct fake_analy_ctx {
-	analy_ctx_t *ctx;
-	u64 key;
-	struct hlist_node hash;
-	struct list_head list;
-} fake_analy_ctx_t;
-
 #define CTX_HASH_LENGTH 1024
 static struct hlist_head ctx_hash[CTX_HASH_LENGTH] = {};
 fake_analy_ctx_t *analy_root = NULL;
@@ -51,29 +44,46 @@ static inline fake_analy_ctx_t *analy_ctx_find(u64 key)
 	return NULL;
 }
 
-static analy_ctx_t *get_or_init_analy_ctx(u64 key)
+static inline fake_analy_ctx_t *fake_ctx_alloc(u64 key, analy_ctx_t *ctx)
+{
+	fake_analy_ctx_t *fake = calloc(1, sizeof(fake_analy_ctx_t));
+
+	if (!fake)
+		return NULL;
+	fake->ctx = ctx;
+	fake->key = key;
+
+	list_add_tail(&fake->list, &ctx->fakes);
+	analy_ctx_add(fake);
+
+	get_fake_analy_ctx(fake);
+	pr_debug("fake ctx alloc: %llx\n", fake);
+	return fake;
+}
+
+static fake_analy_ctx_t *get_or_init_analy_ctx(u64 key)
 {
 	analy_ctx_t *analy_ctx;
 	fake_analy_ctx_t *fake;
 
 	fake = analy_ctx_find(key);
 	if (fake)
-		return fake->ctx;
+		return fake;
 
 	analy_ctx = calloc(1, sizeof(analy_ctx_t));
-	fake = calloc(1, sizeof(fake_analy_ctx_t));
-	if (!analy_ctx || !fake)
+	if (!analy_ctx)
 		return NULL;
-
-	analy_ctx->func_pending = 1;
-	fake->ctx = analy_ctx;
-	fake->key = key;
 
 	INIT_LIST_HEAD(&analy_ctx->entries);
 	INIT_LIST_HEAD(&analy_ctx->fakes);
-	list_add_tail(&fake->list, &analy_ctx->fakes);
-	analy_ctx_add(fake);
-	return analy_ctx;
+	fake = fake_ctx_alloc(key, analy_ctx);
+	if (!fake)
+		goto err;
+
+	return fake;
+err:
+	free(analy_ctx);
+	return NULL;
 }
 
 static analy_entry_t *analy_entry_alloc(void *data, u32 size)
@@ -112,11 +122,11 @@ static inline void analy_entry_free(analy_entry_t *entry)
 
 static void analy_ctx_free(analy_ctx_t *ctx)
 {
+	fake_analy_ctx_t *fake, *fake_n;
 	analy_entry_t *entry, *n;
-	fake_analy_ctx_t *fake;
 
-	list_for_each_entry(fake, &ctx->fakes, list) {
-		hlist_del(&fake->hash);
+	list_for_each_entry_safe(fake, fake_n, &ctx->fakes, list) {
+		list_del(&fake->list);
 		free(fake);
 	}
 
@@ -233,6 +243,7 @@ free_ctx:
 void tl_poll_handler(void *raw_ctx, int cpu, void *data, u32 size)
 {
 	static char buf[1024], tinfo[128];
+	fake_analy_ctx_t *fake;
 	analy_ctx_t *analy_ctx;
 	analy_entry_t *entry;
 	analyzer_t *analyzer;
@@ -252,21 +263,23 @@ void tl_poll_handler(void *raw_ctx, int cpu, void *data, u32 size)
 	entry->cpu = cpu;
 	pr_debug("create entry: %x\n", entry);
 
-	analy_ctx = get_or_init_analy_ctx(e->key);
-	if (!analy_ctx) {
+	fake = get_or_init_analy_ctx(e->key);
+	if (!fake) {
 		pr_err("analy context alloc failed\n");
 		return;
 	}
+	analy_ctx = fake->ctx;
 
 	trace = get_trace_from_analy_entry(entry);
 	if (!trace) {
 		pr_err("trace not found:%d\n", e->func);
 		free(entry);
-		put_analy_ctx(analy_ctx);
+		put_fake_analy_ctx(fake);
 		goto check_pending;
 	}
 
 	entry->ctx = analy_ctx;
+	entry->fake_ctx = fake;
 	if (analyzer->analy_entry) {
 		switch (analyzer->analy_entry(trace, entry)) {
 		case RESULT_CONSUME:
@@ -332,7 +345,7 @@ do_ret:;
 	}
 
 check_pending:
-	if (analy_ctx->func_pending <= 0) {
+	if (analy_ctx->refs <= 0) {
 		pr_debug("ctx(%x) finished with %s\n", analy_ctx,
 			 trace->name);
 		analy_ctx_handle(analy_ctx);
@@ -398,7 +411,7 @@ static inline void rule_run(analy_entry_t *entry, trace_t *trace, int ret)
 
 DEFINE_ANALYZER_ENTRY(free, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_INETL_MASK)
 {
-	put_analy_ctx(e->ctx);
+	put_fake_analy_ctx(e->fake_ctx);
 	if (!trace_mode_intel())
 		goto out;
 
@@ -418,7 +431,7 @@ DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_INETL_MASK)
 	char *reason = NULL;
 	char *info;
 
-	put_analy_ctx(e->ctx);
+	put_fake_analy_ctx(e->fake_ctx);
 	if (!trace_mode_intel())
 		goto out;
 
@@ -445,20 +458,11 @@ out:
 DEFINE_ANALYZER_EXIT(clone, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_INETL_MASK)
 {
 	analy_entry_t *entry = e->entry;
-	fake_analy_ctx_t *fake;
-	analy_ctx_t *ctx;
 
 	if (!entry || !e->event.val)
 		goto out;
 
-	ctx = entry->ctx;
-	fake = malloc(sizeof(*fake));
-	fake->key = e->event.val;
-	fake->ctx = ctx;
-
-	list_add_tail(&fake->list, &ctx->fakes);
-	analy_ctx_add(fake);
-	get_analy_ctx(ctx);
+	fake_ctx_alloc( e->event.val, entry->ctx);
 	if (trace_mode_intel())
 		rule_run(entry, trace, 0);
 out:

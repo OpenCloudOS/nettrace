@@ -48,14 +48,23 @@ typedef struct {
 	struct list_head entries;
 	struct list_head fakes;
 	u64 key;
-	u16 func_pending;
+	u16 refs;
 	u16 status;
 } analy_ctx_t;
+
+typedef struct fake_analy_ctx {
+	analy_ctx_t *ctx;
+	u64 key;
+	struct hlist_node hash;
+	struct list_head list;
+	u16 refs;
+} fake_analy_ctx_t;
 
 typedef struct {
 	/* packet that belongs to the same context */
 	struct list_head list;
 	analy_ctx_t *ctx;
+	fake_analy_ctx_t *fake_ctx;
 	event_t *event;
 	/* the first rule matched */
 	rule_t *rule;
@@ -134,12 +143,29 @@ static inline trace_t *get_trace_from_analy_exit(analy_exit_t *e)
 
 static inline void get_analy_ctx(analy_ctx_t *ctx)
 {
-	ctx->func_pending++;
+	ctx->refs++;
 }
 
 static inline void put_analy_ctx(analy_ctx_t *ctx)
 {
-	ctx->func_pending--;
+	ctx->refs--;
+}
+
+static inline void get_fake_analy_ctx(fake_analy_ctx_t *ctx)
+{
+	/* the case of new created fake_ctx */
+	if (!ctx->refs)
+		get_analy_ctx(ctx->ctx);
+	ctx->refs++;
+}
+
+static inline void put_fake_analy_ctx(fake_analy_ctx_t *ctx)
+{
+	ctx->refs--;
+	if (ctx->refs <= 0) {
+		put_analy_ctx(ctx->ctx);
+		hlist_del(&ctx->hash);
+	}
 }
 
 static inline bool event_is_ret(int size)
