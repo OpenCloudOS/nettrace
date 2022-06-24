@@ -18,6 +18,7 @@ const char *level_mark[] = {
 	[RULE_WARN]  = PFMT_WARN"WARNING"PFMT_END,
 	[RULE_ERROR] = PFMT_ERROR"ERROR"PFMT_END,
 };
+static u32 ctx_count = 0;
 
 static inline struct hlist_head *get_analy_ctx_head(u64 key)
 {
@@ -25,7 +26,7 @@ static inline struct hlist_head *get_analy_ctx_head(u64 key)
 	return &ctx_hash[index];
 }
 
-static inline void analy_ctx_add(fake_analy_ctx_t *fake)
+static inline void analy_fake_ctx_add(fake_analy_ctx_t *fake)
 {
 	struct hlist_head *head = get_analy_ctx_head(fake->key);
 	hlist_add_head(&fake->hash, head);
@@ -54,7 +55,7 @@ static inline fake_analy_ctx_t *fake_ctx_alloc(u64 key, analy_ctx_t *ctx)
 	fake->key = key;
 
 	list_add_tail(&fake->list, &ctx->fakes);
-	analy_ctx_add(fake);
+	analy_fake_ctx_add(fake);
 
 	get_fake_analy_ctx(fake);
 	pr_debug("fake ctx alloc: %llx\n", fake);
@@ -79,6 +80,7 @@ static fake_analy_ctx_t *get_or_init_analy_ctx(u64 key)
 	fake = fake_ctx_alloc(key, analy_ctx);
 	if (!fake)
 		goto err;
+	ctx_count++;
 
 	return fake;
 err:
@@ -142,6 +144,7 @@ static void analy_ctx_free(analy_ctx_t *ctx)
 		analy_entry_free(entry);
 	}
 
+	ctx_count--;
 	free(ctx);
 }
 
@@ -205,7 +208,7 @@ void analy_ctx_handle(analy_ctx_t *ctx)
 	keys[0] = ' ';
 	pr_info("*****************"PFMT_EMPH"%s "PFMT_END"***************\n",
 		keys);
-	list_for_each_entry_safe(entry, n, &ctx->entries, list)
+	list_for_each_entry(entry, &ctx->entries, list)
 		analy_entry_handle(entry);
 
 	if (trace_mode_intel())
@@ -214,7 +217,7 @@ void analy_ctx_handle(analy_ctx_t *ctx)
 	else
 		goto out;
 
-	list_for_each_entry_safe(entry, n, &ctx->entries, list) {
+	list_for_each_entry(entry, &ctx->entries, list) {
 		if (!entry->rule || entry->rule->level == RULE_INFO)
 			continue;
 
@@ -469,7 +472,7 @@ DEFINE_ANALYZER_EXIT(clone, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_INETL_MASK)
 	if (!entry || !e->event.val)
 		goto out;
 
-	fake_ctx_alloc( e->event.val, entry->ctx);
+	fake_ctx_alloc(e->event.val, entry->ctx);
 	if (trace_mode_intel())
 		rule_run(entry, trace, 0);
 out:
