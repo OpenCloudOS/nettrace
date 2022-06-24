@@ -47,7 +47,6 @@ typedef struct {
 typedef struct {
 	struct list_head entries;
 	struct list_head fakes;
-	u64 key;
 	u16 refs;
 	u16 status;
 } analy_ctx_t;
@@ -110,7 +109,7 @@ typedef struct analyzer {
 						analy_##type##_t *e);	\
 	analyzer_t ANALYZER(name) = {					\
 		.analy_##type =analyzer_##name##_##type,		\
-		.mode = mode_mask,						\
+		.mode = mode_mask,					\
 	};								\
 	analyzer_result_t analyzer_##name##_##type(trace_t *trace,	\
 						   analy_##type##_t *e)
