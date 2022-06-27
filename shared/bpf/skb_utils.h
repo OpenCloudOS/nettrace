@@ -241,9 +241,9 @@ static inline int probe_parse_ip(struct sk_buff *skb, packet_t *pkt, bool ipv4)
 
 #define CHECK_ATTR(attr)				\
 	(PARAM_CHECK_ENABLE(s##attr, s##attr) ||	\
-	 PARAM_CHECK_ENABLE(attr, s##attr) ||		\
 	 PARAM_CHECK_ENABLE(d##attr, d##attr) ||	\
-	 PARAM_CHECK_ENABLE(attr, d##attr))
+	 (PARAM_CHECK_ENABLE(attr, d##attr) &&		\
+	  PARAM_CHECK_ENABLE(attr, s##attr)))
 
 	if (!ipv4) {
 		struct ipv6hdr *ipv6 = l3;
