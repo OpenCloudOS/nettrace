@@ -191,8 +191,6 @@ children:
     desc: ip layer of packet out
     visual: true
     children:
-    - __ip_local_out:2
-    - ip_send_skb:1
     - ip_output:2
     - ip_finish_output:2
     - ip_finish_output_gso:2
