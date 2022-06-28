@@ -62,6 +62,13 @@ typedef struct {
 	u32 reason;
 } kfree_skb_t;
 
+typedef struct {
+	void *data;
+	u16 mac_header;
+	u16 network_header;
+	u16 trans_header;
+} parse_ctx_t;
+
 #define TCP_H_LEN	(sizeof(struct tcphdr))
 #define UDP_H_LEN	(sizeof(struct udphdr))
 #define IP_H_LEN	(sizeof(struct iphdr))
@@ -115,139 +122,36 @@ static inline void *load_l4_hdr(struct __sk_buff *skb, struct iphdr *ip,
 	return l4;
 }
 
-static inline void *get_l2(struct sk_buff *skb)
+static inline bool skb_l2_check(u16 header)
 {
-	u16 mh = _(skb->mac_header);
-	if (mh != (u16)~0U && mh)
-		return _(skb->head) + mh;
-	else
-		return NULL;
+	return !header || header == (u16)~0U;
 }
 
-static inline void *get_l3(struct sk_buff *skb)
+static inline bool skb_l4_check(u16 l4, u16 l3)
 {
-	if (_(skb->network_header) > _(skb->mac_header))
-		return _(skb->head) + _(skb->network_header);
-	else if (get_l2(skb))
-		return get_l2(skb) + ETH_HLEN;
-	else
-		return NULL;
+	return l4 == 0xFFFF || l4 <= l3;
 }
-
-static inline void *get_l3_send(struct sk_buff *skb)
-{
-	if (_(skb->network_header))
-		return _(skb->head) + _(skb->network_header);
-	else
-		return NULL;
-}
-
-static inline bool skb_l4_was_set(const struct sk_buff *skb)
-{
-	return _(skb->transport_header) != 0xFFFF &&
-	       _(skb->transport_header) > _(skb->network_header);
-}
-
-static inline void *get_l4(struct sk_buff *skb)
-{
-	if (skb_l4_was_set(skb))
-		return _(skb->head) + _(skb->transport_header);
-	void *ip = get_l3(skb);
-	if (!ip)
-		return NULL;
-	return ip + get_ip_header_len(_(((u8 *)ip)[0]));
-}
-
-#ifdef FEATURE_DIRECT_ACCESS
-static inline int probe_parse_ip(struct sk_buff *skb, event_t *event, bool ipv4)
-{
-	void *l3 = get_l3(skb);
 
 #define CHECK_ATTR(attr)				\
-	(PARAM_CHECK_ENABLE(s##attr, s##attr) ||	\
-	 PARAM_CHECK_ENABLE(attr, s##attr) ||		\
-	 PARAM_CHECK_ENABLE(d##attr, d##attr) ||	\
-	 PARAM_CHECK_ENABLE(attr, d##attr))
+	((PARAM_CHECK_ENABLE(attr, d##attr) &&		\
+	  PARAM_CHECK_ENABLE(attr, s##attr)) ||		\
+	 PARAM_CHECK_ENABLE(s##attr, s##attr) ||	\
+	 PARAM_CHECK_ENABLE(d##attr, d##attr))
 
-	if (!ipv4) {
-		struct ipv6hdr *ipv6 = l3;
-		event->proto_l4 = _(ipv6->nexthdr);
-		bpf_probe_read_kernel(event->l3.ipv6.saddr,
-				      sizeof(ipv6->saddr),
-				      &ipv6->saddr);
-		bpf_probe_read_kernel(event->l3.ipv6.daddr,
-				      sizeof(ipv6->daddr),
-				      &ipv6->daddr);
-	} else {
-		struct iphdr *ip = l3;
-		u32 saddr = _(ip->saddr);
-		u32 daddr = _(ip->daddr);
-
-		if (CHECK_ATTR(addr))
-			return -1;
-
-		event->proto_l4	= _(ip->protocol);
-		event->l3.ipv4.saddr = saddr;
-		event->l3.ipv4.daddr = daddr;
-	}
-
-	if (PARAM_CHECK_ENABLE(l4_proto, event->proto_l4))
-		return -1;
-
-	void *l4 = get_l4(skb);
-	switch (event->proto_l4) {
-	case IPPROTO_TCP: {
-		struct tcphdr *tcp = l4;
-		u16 sport = _(tcp->source);
-		u16 dport = _(tcp->dest);
-
-		if (CHECK_ATTR(port))
-			return -1;
-
-		event->l4.tcp.sport = sport;
-		event->l4.tcp.dport = dport;
-		event->l4.tcp.flags = _(((u8 *)tcp)[13]);
-		event->l4.tcp.seq = _(tcp->seq);
-		event->l4.tcp.ack = _(tcp->ack_seq);
-		break;
-	}
-	case IPPROTO_UDP: {
-		struct udphdr *udp = l4;
-		u16 sport = _(udp->source);
-		u16 dport = _(udp->dest);
-	
-		if (CHECK_ATTR(port))
-			return -1;
-
-		event->l4.udp.sport = sport;
-		event->l4.udp.dport = dport;
-		break;
-	}
-	case IPPROTO_ICMP: {
-		struct icmphdr *icmp = l4;
-		event->l4.icmp.code = _(icmp->code);
-		event->l4.icmp.type = _(icmp->type);
-		event->l4.icmp.seq = _(icmp->un.echo.sequence);
-		event->l4.icmp.id = _(icmp->un.echo.id);
-		break;
-	}
-	}
-	return 0;
-}
-#else
-static inline int probe_parse_ip(struct sk_buff *skb, packet_t *pkt, bool ipv4)
+static inline int
+probe_parse_ip(void *ip, parse_ctx_t *ctx, packet_t *pkt)
 {
-	void *l3 = get_l3(skb);
+	void *l4 = NULL;
 
-#define CHECK_ATTR(attr)				\
-	(PARAM_CHECK_ENABLE(s##attr, s##attr) ||	\
-	 PARAM_CHECK_ENABLE(d##attr, d##attr) ||	\
-	 (PARAM_CHECK_ENABLE(attr, d##attr) &&		\
-	  PARAM_CHECK_ENABLE(attr, s##attr)))
+	if (!skb_l4_check(ctx->trans_header, ctx->network_header))
+		l4 = ctx->data + ctx->trans_header;
 
-	if (!ipv4) {
-		struct ipv6hdr *ipv6 = l3;
+	if (pkt->proto_l3 == ETH_P_IPV6) {
+		struct ipv6hdr *ipv6 = ip;
+
 		pkt->proto_l4 = _(ipv6->nexthdr);
+		l4 = l4 ?: ip + sizeof(*ipv6);
+
 		bpf_probe_read_kernel(pkt->l3.ipv6.saddr,
 				      sizeof(ipv6->saddr),
 				      &ipv6->saddr);
@@ -255,14 +159,16 @@ static inline int probe_parse_ip(struct sk_buff *skb, packet_t *pkt, bool ipv4)
 				      sizeof(ipv6->daddr),
 				      &ipv6->daddr);
 	} else {
-		struct iphdr *ip = l3;
-		u32 saddr = _(ip->saddr);
-		u32 daddr = _(ip->daddr);
+		struct iphdr *ipv4 = ip;
+		u32 saddr = _(ipv4->saddr);
+		u32 daddr = _(ipv4->daddr);
 
 		if (CHECK_ATTR(addr))
 			return -1;
 
-		pkt->proto_l4	= _(ip->protocol);
+		l4 = l4 ?: ip + get_ip_header_len(_(((u8 *)ip)[0]));
+
+		pkt->proto_l4 = _(ipv4->protocol);
 		pkt->l3.ipv4.saddr = saddr;
 		pkt->l3.ipv4.daddr = daddr;
 	}
@@ -272,7 +178,6 @@ static inline int probe_parse_ip(struct sk_buff *skb, packet_t *pkt, bool ipv4)
 
 	bool port_filter = PARAM_ENABLED(sport) || PARAM_ENABLED(dport) ||
 			   PARAM_ENABLED(port);
-	void *l4 = get_l4(skb);
 
 	switch (pkt->proto_l4) {
 	case IPPROTO_TCP: {
@@ -319,24 +224,45 @@ static inline int probe_parse_ip(struct sk_buff *skb, packet_t *pkt, bool ipv4)
 	}
 	return 0;
 }
-#endif
 
 static inline int probe_parse_skb(struct sk_buff *skb, packet_t *pkt)
 {
-	struct ethhdr *eth = get_l2(skb);
+	parse_ctx_t ctx;
+	u16 l3_proto;
+	void *l3;
 
-	if (!eth)
+	ctx.network_header = _(skb->network_header);
+	ctx.mac_header = _(skb->mac_header);
+	ctx.data = _(skb->head);
+
+	if (skb_l2_check(ctx.mac_header)) {
+		/*
+		 * try to parse skb for send path, which means that
+		 * ether header doesn't exist in skb.
+		 */
+		l3_proto = bpf_ntohs(_(skb->protocol));
+		if (!l3_proto)
+			return -1;
+		if (!ctx.network_header)
+			return -1;
+		l3 = ctx.data + ctx.network_header;
+	} else {
+		struct ethhdr *eth = ctx.data + ctx.mac_header;
+
+		l3 = (void *)eth + ETH_HLEN;
+		l3_proto = bpf_ntohs(_(eth->h_proto));
+	}
+
+	if (PARAM_CHECK_ENABLE(l3_proto, l3_proto))
 		return -1;
 
-	u16 l3 = bpf_ntohs(_(eth->h_proto));
-	if (PARAM_CHECK_ENABLE(l3_proto, l3))
-		return -1;
+	ctx.trans_header = _(skb->transport_header);
+	pkt->proto_l3 = l3_proto;
 
-	pkt->proto_l3 = l3;
-	switch (l3) {
+	switch (l3_proto) {
 	case ETH_P_IPV6:
 	case ETH_P_IP:
-		return probe_parse_ip(skb, pkt, l3 == ETH_P_IP);
+		return probe_parse_ip(l3, &ctx, pkt);
 	default:
 		if (PARAM_ENABLED(l4_proto))
 			return -1;
