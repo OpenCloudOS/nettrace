@@ -36,6 +36,7 @@ typedef struct {
 } args_t;
 
 PARAM_DEFINE_BOOL(drop_reason, false);
+PARAM_DEFINE_BOOL(detail, false);
 
 static inline void get_ret(int func)
 {
@@ -54,8 +55,8 @@ static inline int put_ret(int func)
 	return 0;
 }
 
-static inline int nettrace_trace(void *regs, struct sk_buff *skb,
-				 event_t *e, int size, int func)
+static inline int handle_entry(void *regs, struct sk_buff *skb, event_t *e,
+			       int size, int func)
 {
 	packet_t *pkt = &e->pkt;
 
@@ -65,13 +66,43 @@ static inline int nettrace_trace(void *regs, struct sk_buff *skb,
 	pkt->ts = bpf_ktime_get_ns();
 	e->key = (u64)(void *)skb;
 
+	if (!PARAM_CHECK_BOOL(detail))
+		goto out;
+
+	struct net_device *dev = _(skb->dev);
+	detail_event_t *detail = (void *)e;
+
+	bpf_get_current_comm(detail->task, sizeof(detail->task));
+	detail->pid = bpf_get_current_pid_tgid();
+	if (dev) {
+		bpf_probe_read_str(detail->ifname, sizeof(detail->ifname) - 1,
+				   dev->name);
+		detail->ifindex = _(dev->ifindex);
+	} else {
+		detail->ifindex = _(skb->skb_iif);
+	}
+
+out:
 	bpf_perf_event_output(regs, &m_event, BPF_F_CURRENT_CPU,
 			      e, size);
 	get_ret(func);
 	return 0;
 }
 
-static inline int nettrace_ret(struct pt_regs *regs, int func)
+static inline int default_handle_entry(struct pt_regs *ctx,
+					 struct sk_buff *skb,
+					 int func)
+{
+	if (PARAM_CHECK_BOOL(detail)) {
+		detail_event_t e = { .func = func };
+		return handle_entry(ctx, skb, (void *)&e, sizeof(e), func);
+	} else {
+		event_t e = { .func = func };
+		return handle_entry(ctx, skb, &e, sizeof(e), func);
+	}
+}
+
+static inline int handle_exit(struct pt_regs *regs, int func)
 {
 	retevent_t event = {
 		.ts = bpf_ktime_get_ns(),
@@ -87,12 +118,13 @@ static inline int nettrace_ret(struct pt_regs *regs, int func)
 }
 
 #define DEFINE_KPROBE_RAW(name, skb_init)			\
-	static inline int fake__##name(struct pt_regs *ctx, struct sk_buff *skb,	\
-				      int func);		\
+	static inline int fake__##name(struct pt_regs *ctx,	\
+				       struct sk_buff *skb,	\
+				       int func);		\
 	SEC("kretprobe/"#name)					\
 	int BPF_KPROBE(ret__trace_##name)			\
 	{							\
-		return nettrace_ret(ctx, INDEX_##name);		\
+		return handle_exit(ctx, INDEX_##name);		\
 	}							\
 	SEC("kprobe/"#name)					\
 	int BPF_KPROBE(__trace_##name)				\
@@ -100,17 +132,16 @@ static inline int nettrace_ret(struct pt_regs *regs, int func)
 		struct sk_buff *skb = (void *)skb_init;		\
 		return fake__##name(ctx, skb, INDEX_##name);	\
 	}							\
-	static inline int fake__##name(struct pt_regs *ctx, struct sk_buff *skb,	\
-				      int func)
+	static inline int fake__##name(struct pt_regs *ctx,	\
+				       struct sk_buff *skb,	\
+				       int func)
 #define DEFINE_KPROBE(name, skb_index)				\
 	DEFINE_KPROBE_RAW(name, PT_REGS_PARM##skb_index(ctx))
 
 #define KPROBE_DEFAULT(name, skb_index)				\
 	DEFINE_KPROBE(name, skb_index)				\
 	{							\
-		event_t e = { .func = func };			\
-		return nettrace_trace(ctx, skb, &e,		\
-				      sizeof(event_t), func);	\
+		return default_handle_entry(ctx, skb, func);	\
 	}
 
 #define DEFINE_TP(name, cata, tp, offset)			\
@@ -126,9 +157,7 @@ static inline int nettrace_ret(struct pt_regs *regs, int func)
 #define TP_DEFAULT(name, cata, tp, offset)			\
 	DEFINE_TP(name, cata, tp, offset)			\
 	{							\
-		event_t e = { .func = func };			\
-		return nettrace_trace(ctx, skb, &e,		\
-				      sizeof(event_t), func);	\
+		return default_handle_entry(ctx, skb, func);	\
 	}
 _DEFINE_PROBE(KPROBE_DEFAULT, TP_DEFAULT)
 
@@ -149,14 +178,13 @@ DEFINE_TP(kfree_skb, skb, kfree_skb, 8)
 	if (PARAM_CHECK_BOOL(drop_reason))
 		e.reason = _(args->reason);
 
-	return nettrace_trace(ctx, skb, &e.event, sizeof(e), func);
+	return handle_entry(ctx, skb, &e.event, sizeof(e), func);
 }
 
 DEFINE_KPROBE_RAW(__netif_receive_skb_core_pskb,
 	      _(*(void **)(PT_REGS_PARM1(ctx))))
 {
-	event_t e = { .func = func };
-	return nettrace_trace(ctx, skb, &e, sizeof(e), func);
+	return default_handle_entry(ctx, skb, func);
 }
 
 DEFINE_KPROBE(ipt_do_table, 1)
@@ -169,7 +197,7 @@ DEFINE_KPROBE(ipt_do_table, 1)
 	};
 
 	bpf_probe_read(e.table, sizeof(e.table) - 1, table->name);
-	return nettrace_trace(ctx, skb, &e.event, sizeof(e), func);
+	return handle_entry(ctx, skb, &e.event, sizeof(e), func);
 }
 
 DEFINE_KPROBE(nf_hook_slow, 1)
@@ -181,7 +209,7 @@ DEFINE_KPROBE(nf_hook_slow, 1)
 		.pf = _(state->pf),
 	};
 
-	return nettrace_trace(ctx, skb, &e.event, sizeof(e), func);
+	return handle_entry(ctx, skb, &e.event, sizeof(e), func);
 }
 
 char _license[] SEC("license") = "GPL";

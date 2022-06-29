@@ -1,6 +1,8 @@
 #include <linux/netfilter.h>
 #include <linux/netfilter_arp.h>
 #include <linux/netfilter_bridge.h>
+#undef __USE_MISC
+#include <net/if.h>
 
 #include <pkt_utils.h>
 #include <stdlib.h>
@@ -136,15 +138,34 @@ static inline void analy_entry_free(analy_entry_t *entry)
 
 static void analy_entry_handle(analy_entry_t *entry)
 {
-	static char buf[1024], tinfo[128];
 	packet_t *pkt = &entry->event->pkt;
+	static char buf[1024], tinfo[128];
 	rule_t *rule;
 	trace_t *t;
 
-	pr_debug("output entry(%x)\n", entry);
 	t = get_trace_from_analy_entry(entry);
-	sprintf(tinfo, "[%-20s]", t->name);
+	pr_debug("output entry(%x)\n", entry);
+	if (trace_ctx.detail) {
+		detail_event_t *detail = (void *)entry->event;
+		static char ifbuf[IF_NAMESIZE];
+		char *ifname = detail->ifname;
+
+		if (ifname[0] == '\0') {
+			ifname = if_indextoname(detail->ifindex, ifbuf);
+			ifname = ifname ?: "";
+		}
+
+		sprintf(tinfo, "[%-20s][cpu:%-3u][%-5s][pid:%-7u][%-12s]",
+			t->name, entry->cpu, ifname, detail->pid,
+			detail->task);
+	} else {
+		sprintf(tinfo, "[%-20s]", t->name);
+	}
+
 	ts_print_packet(buf, pkt, tinfo);
+
+	if (trace_ctx.mode == TRACE_MODE_BASIC)
+		goto out;
 
 	if ((entry->status & ANALY_ENTRY_RETURNED) && trace_ctx.args.ret)
 		sprintf_end(buf, PFMT_EMPH_STR(" *return: %d*"),
@@ -369,14 +390,12 @@ check_pending:
 
 void basic_poll_handler(void *ctx, int cpu, void *data, u32 size)
 {
-	static char buf[1024], tinfo[128];
-	event_t *e = data;
-	trace_t *t = get_trace(e->func);
-	packet_t *pkt = &e->pkt;
+	analy_entry_t entry = {
+		.event = data,
+		.cpu = cpu
+	};
 
-	sprintf(tinfo, "[%-20s]", t->name);
-	ts_print_packet(buf, pkt, tinfo);
-	pr_info("%s\n", buf);
+	analy_entry_handle(&entry);
 }
 
 static inline void rule_run(analy_entry_t *entry, trace_t *trace, int ret)

@@ -90,7 +90,10 @@ typedef struct {
 	bpf_args_t	bpf_args;
 	trace_mode_t	mode;
 	bool		stop;
+	/* if drop reason feature is supported */
 	bool		drop_reason;
+	/* enable detail output */
+	bool		detail;
 	struct bpf_object *obj;
 } trace_context_t;
 

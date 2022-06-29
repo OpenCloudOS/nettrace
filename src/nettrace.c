@@ -12,8 +12,8 @@ arg_config_t config = {
 
 static void do_parse_args(int argc, char *argv[])
 {
-	bool show_log = false, debug = false;
 	trace_args_t *trace_args = &trace_ctx.args;
+	bool show_log = false, debug = false;
 	int proto_l = 0;
 	u16 proto;
 
@@ -39,7 +39,12 @@ static void do_parse_args(int argc, char *argv[])
 		{
 			.lname = "ret", .dest = &trace_args->ret,
 			.type = OPTION_BOOL,
-			.desc = "showf function return value",
+			.desc = "show function return value",
+		},
+		{
+			.lname = "detail", .dest = R(detail),
+			.type = OPTION_BOOL,
+			.desc = "show extern packet info, such as pid, ifname, etc",
 		},
 		{
 			.lname = "timeline", .dest = &trace_args->timeline,

@@ -239,6 +239,8 @@ static int trace_prepare_args()
 		trace_ctx.drop_reason = true;
 	}
 
+	trace_ctx.detail = trace_ctx.bpf_args.arg_detail;
+
 	return 0;
 err:
 	return -1;

@@ -6,3 +6,6 @@ vmlinux.h
 *.skel.h
 *.o
 .*
+GPATH
+GTAGS
+GRTAGS
