@@ -538,13 +538,13 @@ const char *hook_names[][8] = {
 };
 const char **inet_hook_names = hook_names[NFPROTO_IPV4];
 const char *pf_names[] = {
-	[NFPROTO_INET]		= "INET",
-	[NFPROTO_IPV4]		= "iptables",
-	[NFPROTO_ARP]		= "arptable",
-	[NFPROTO_NETDEV]	= "NETDEV",
-	[NFPROTO_BRIDGE]	= "ebtable",
-	[NFPROTO_IPV6]		= "IPV6",
-	[NFPROTO_DECNET]	= "DECNET",
+	[NFPROTO_INET]		= "inet",
+	[NFPROTO_IPV4]		= "ipv4",
+	[NFPROTO_ARP]		= "arp",
+	[NFPROTO_NETDEV]	= "netdev",
+	[NFPROTO_BRIDGE]	= "bridge",
+	[NFPROTO_IPV6]		= "ipv6",
+	[NFPROTO_DECNET]	= "decnet",
 };
 DEFINE_ANALYZER_EXIT(nf, TRACE_MODE_INETL_MASK)
 {
@@ -555,7 +555,7 @@ DEFINE_ANALYZER_EXIT(nf, TRACE_MODE_INETL_MASK)
 	int i = 0;
 
 	msg[0] = '\0';
-	sprintf(msg, "%s in HOOK: %s", pf_names[event->pf],
+	sprintf(msg, "%s in chain: %s", pf_names[event->pf],
 		hook_names[event->pf][event->hook]);
 	entry_set_msg(entry, msg);
 	rule_run(entry, trace, e->event.val);

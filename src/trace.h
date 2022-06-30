@@ -50,6 +50,7 @@ typedef struct trace {
 	u32	status;
 	trace_group_t *parent;
 	struct analyzer *analyzer;
+	bool	def;
 } trace_t;
 
 typedef typeof(*((struct kprobe *)0)->rodata) bpf_args_t;

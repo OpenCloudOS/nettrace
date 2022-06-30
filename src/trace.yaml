@@ -26,7 +26,6 @@ children:
       - exp: eq 4
         level: error
         msg: packet is dropped by GRO
-    - do_xdp_generic:1
     - name: enqueue_to_backlog:0
       analyzer: ret
       rules:
@@ -46,9 +45,12 @@ children:
       - exp: eq 4
         level: info
         msg: packet is redirected by XDP program
-    - xdp_do_generic_redirect:1
-    - generic_xdp_tx:1
-    - sch_handle_ingress:0
+    - name: xdp_do_generic_redirect:1
+      analyzer: ret
+      rules:
+      - <<: *rule_ret_err
+        msg: XDP failed to redirect skb
+        adv: check if the target ifindex exist
     - name: __netif_receive_skb_core:0
       if: kernelVersion < 504
     - name: __netif_receive_skb_core_pskb
@@ -65,11 +67,11 @@ children:
     visual: true
     children:
     - tcf_classify:0
-    - sch_handle_egress:0
     - cls_bpf_classify:0
     - tcf_bpf_act:0
   - name: ipvaln
     desc: ipvlan network interface
+    default: false
     visual: true
     children:
     - ipvlan_queue_xmit:0
@@ -79,6 +81,7 @@ children:
     - ipvlan_process_v4_outbound:0
   - name: bridge
     desc: bridge network interface
+    default: false
     visual: true
     children:
     - name: br_nf_pre_routing:1
@@ -167,6 +170,7 @@ children:
         adv: check your netfilter rule
   - name: conntrack
     desc: connection track (used by nat mostly)
+    default: false
     visual: true
     children:
     - ipv4_confirm:1
@@ -188,14 +192,6 @@ children:
           enable 'nf_conntrack_tcp_be_liberal' with the command
           'echo 1 > /proc/sys/net/netfilter/nf_conntrack_tcp_be_liberal'
     - __nf_ct_refresh_acct:2
-  - name: nat
-    desc: NAT (net address translation)
-    visual: true
-    children:
-    - iptable_nat_ipv4_in:1
-    - nf_nat_ipv4_fn:1
-    - iptable_nat_ipv4_fn:1
-    - iptable_nat_do_chain:1
 - name: ip
   desc: ip protocol layer (L3) of the network stack
   children:
@@ -229,7 +225,11 @@ children:
         adv: |
           check you ip route config or disable rp_filter with command
           'echo 0 > /proc/sys/net/ipv4/conf/all/rp_filter'
-    - ip_route_input_slow:0
+    - name: ip_route_input_slow:0
+      rules:
+      - <<: *rule_ret_err
+        msg: failed to route packet in input path
+        adv: check packet address and your route
 - name: tcp
   desc: tcp protocol layer (L4) of the network stack
   children:

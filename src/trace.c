@@ -183,8 +183,12 @@ static int trace_prepare_args()
 	trace_t *trace;
 	char *tmp, *cur;
 
-	if (!traces)
-		traces = root_group.name;
+	if (!traces) {
+		trace_for_each(trace)
+			if (trace->def)
+				trace_set_enable(trace);
+		goto skip_trace;
+	}
 
 	if (strcmp(traces, "?") == 0) {
 		trace_show(&root_group);
@@ -204,6 +208,7 @@ static int trace_prepare_args()
 	}
 	free(tmp);
 
+skip_trace:
 	trace_ctx.mode = TRACE_MODE_BASIC;
 	if (args->timeline) {
 		trace_ctx.mode = TRACE_MODE_TIMELINE;

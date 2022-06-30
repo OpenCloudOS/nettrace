@@ -154,10 +154,17 @@ def gen_group(group, is_root=False):
             if_str = f'\n\t.if_str = "{child.get("if")}",' if 'if' in child else ''
             reg_str = f'\n\t.regex = "{child["regex"]}",' if 'regex' in child else ''
             msg_str = f'\n\t.msg = "{child["msg"]}",' if 'msg' in child else ''
+            default = True
+            if 'default' in child:
+                default = child['default']
+            elif 'default' in group:
+                default = group['default']
+            default = 'true' if default else 'false'
+            default = f'\n\t.def = {default},'
             target = child.get('target') or child['name']
             define_str += f'''trace_t {name} = {{
 \t.name = "{target}",
-\t.desc = "{child.get('desc')}",{skb_str}{if_str}
+\t.desc = "{child.get('desc')}",{skb_str}{if_str}{default}
 \t.type = {trace_type},{reg_str}{analyzer}{msg_str}
 \t.index = INDEX_{name},
 \t.prog = "__trace_{name}",
