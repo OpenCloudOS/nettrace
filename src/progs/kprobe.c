@@ -18,6 +18,13 @@ struct {
 	__uint(max_entries, TRACE_MAX);
 } m_ret SEC(".maps");
 
+struct {
+	__uint(type, BPF_MAP_TYPE_LRU_HASH);
+	__uint(max_entries, 102400);
+	__uint(key_size, sizeof(u64));
+	__uint(value_size, sizeof(u8));
+} m_lookup SEC(".maps");
+
 enum args_status {
 	ARGS_END_OFFSET,
 	ARGS_STACK_OFFSET,
@@ -59,16 +66,22 @@ static inline int handle_entry(void *regs, struct sk_buff *skb, event_t *e,
 			       int size, int func)
 {
 	packet_t *pkt = &e->pkt;
+	bool *matched;
 
-	if (!skb || probe_parse_skb(skb, pkt))
-		return 0;
-
-	pkt->ts = bpf_ktime_get_ns();
-	e->key = (u64)(void *)skb;
+	matched = bpf_map_lookup_elem(&m_lookup, &skb);
+	if (matched && *matched) {
+		probe_parse_skb_cond(skb, pkt, false);
+	} else if (!probe_parse_skb(skb, pkt)) {
+		bool _matched = true;
+		bpf_map_update_elem(&m_lookup, &skb, &_matched, 0);
+	} else {
+		return -1;
+	}
 
 	if (!PARAM_CHECK_BOOL(detail))
 		goto out;
 
+	/* store more (detail) information about net or task. */
 	struct net_device *dev = _(skb->dev);
 	detail_event_t *detail = (void *)e;
 
@@ -83,23 +96,37 @@ static inline int handle_entry(void *regs, struct sk_buff *skb, event_t *e,
 	}
 
 out:
-	bpf_perf_event_output(regs, &m_event, BPF_F_CURRENT_CPU,
-			      e, size);
+	pkt->ts = bpf_ktime_get_ns();
+	e->key = (u64)(void *)skb;
+
+	if (size)
+		bpf_perf_event_output(regs, &m_event, BPF_F_CURRENT_CPU,
+				      e, size);
 	get_ret(func);
 	return 0;
 }
 
+static inline void handle_destroy(struct sk_buff *skb)
+{
+	bpf_map_delete_elem(&m_lookup, &skb);
+}
+
 static inline int default_handle_entry(struct pt_regs *ctx,
-					 struct sk_buff *skb,
-					 int func)
+				       struct sk_buff *skb,
+				       int func)
 {
 	if (PARAM_CHECK_BOOL(detail)) {
 		detail_event_t e = { .func = func };
-		return handle_entry(ctx, skb, (void *)&e, sizeof(e), func);
+		handle_entry(ctx, skb, (void *)&e, sizeof(e), func);
 	} else {
 		event_t e = { .func = func };
-		return handle_entry(ctx, skb, &e, sizeof(e), func);
+		handle_entry(ctx, skb, &e, sizeof(e), func);
 	}
+
+	if (func == INDEX_consume_skb || func == INDEX___kfree_skb)
+		handle_destroy(skb);
+
+	return 0;
 }
 
 static inline int handle_exit(struct pt_regs *regs, int func)
@@ -112,6 +139,11 @@ static inline int handle_exit(struct pt_regs *regs, int func)
 
 	if (put_ret(func))
 		return 0;
+
+	if (func == INDEX_skb_clone) {
+		bool matched = true;
+		bpf_map_update_elem(&m_lookup, &event.val, &matched, 0);
+	}
 
 	EVENT_OUTPUT(regs, event);
 	return 0;
@@ -178,11 +210,13 @@ DEFINE_TP(kfree_skb, skb, kfree_skb, 8)
 	if (PARAM_CHECK_BOOL(drop_reason))
 		e.reason = _(args->reason);
 
-	return handle_entry(ctx, skb, &e.event, sizeof(e), func);
+	handle_entry(ctx, skb, &e.event, sizeof(e), func);
+	handle_destroy(skb);
+	return 0;
 }
 
 DEFINE_KPROBE_RAW(__netif_receive_skb_core_pskb,
-	      _(*(void **)(PT_REGS_PARM1(ctx))))
+		  _(*(void **)(PT_REGS_PARM1(ctx))))
 {
 	return default_handle_entry(ctx, skb, func);
 }
