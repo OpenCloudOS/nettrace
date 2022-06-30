@@ -16,3 +16,5 @@
 #ifndef NULL
 #define NULL (void *)0
 #endif
+
+#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))

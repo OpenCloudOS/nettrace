@@ -27,16 +27,6 @@ static void do_parse_args(int argc, char *argv[])
 			.desc = "enable trace group or trace",
 		},
 		{
-			.sname = 'v', .dest = &show_log,
-			.type = OPTION_BOOL,
-			.desc = "show log information",
-		},
-		{
-			.lname = "debug", .dest = &debug,
-			.type = OPTION_BOOL,
-			.desc = "show debug information",
-		},
-		{
 			.lname = "ret", .dest = &trace_args->ret,
 			.type = OPTION_BOOL,
 			.desc = "show function return value",
@@ -65,6 +55,22 @@ static void do_parse_args(int argc, char *argv[])
 			.lname = "intel-keep", .dest = &trace_args->intel_keep,
 			.type = OPTION_BOOL,
 			.desc = "don't quit when abnormal packet found",
+		},
+		{
+			.lname = "hooks", .dest = R(hooks),
+			.type = OPTION_BOOL,
+			.desc = "print netfilter hooks if dropping by netfilter",
+		},
+		{ .type = OPTION_BLANK },
+		{
+			.sname = 'v', .dest = &show_log,
+			.type = OPTION_BOOL,
+			.desc = "show log information",
+		},
+		{
+			.lname = "debug", .dest = &debug,
+			.type = OPTION_BOOL,
+			.desc = "show debug information",
 		},
 		{
 			.lname = "help",

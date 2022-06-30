@@ -549,8 +549,10 @@ const char *pf_names[] = {
 DEFINE_ANALYZER_EXIT(nf, TRACE_MODE_INETL_MASK)
 {
 	analy_entry_t *entry = e->entry;
-	nf_event_t *event = (void *)entry->event;
-	char *msg = malloc(1024);
+	nf_hooks_event_t *event = (void *)entry->event;
+	char *msg = malloc(1024), *extinfo;
+	struct sym_result *sym;
+	int i = 0;
 
 	msg[0] = '\0';
 	sprintf(msg, "%s in HOOK: %s", pf_names[event->pf],
@@ -558,6 +560,25 @@ DEFINE_ANALYZER_EXIT(nf, TRACE_MODE_INETL_MASK)
 	entry_set_msg(entry, msg);
 	rule_run(entry, trace, e->event.val);
 
+	if (!BPF_ARG(hooks) || !entry->status)
+		goto out;
+
+	extinfo = malloc(1024);
+	sprintf(extinfo, "\n    following hook functions are blamed:\n");
+	for (; i < ARRAY_SIZE(event->hooks); i++) {
+		u64 hook = event->hooks[i];
+
+		if (!hook)
+			break;
+		sym = parse_sym_exact(hook);
+		if (sym)
+			sprintf_end(extinfo, "\t%s\n", sym->name);
+		else
+			sprintf_end(extinfo, "\t%llx\n", hook);
+	}
+	entry_set_extinfo(entry, extinfo);
+
+out:
 	return RESULT_CONT;
 }
 
@@ -566,10 +587,15 @@ DEFINE_ANALYZER_EXIT(iptable, TRACE_MODE_INETL_MASK)
 	analy_entry_t *entry = e->entry;
 	nf_event_t *event = (void *)entry->event;
 	char *msg = malloc(1024);
+	const char *chain;
 
 	msg[0] = '\0';
+	if (event->chain[0] != '\0')
+		chain = event->chain;
+	else
+		chain = inet_hook_names[event->hook];
 	sprintf(msg, "iptables table:%s, chain:%s", event->table,
-		inet_hook_names[event->hook]);
+		chain);
 	entry_set_msg(entry, msg);
 	rule_run(entry, trace, e->event.val);
 

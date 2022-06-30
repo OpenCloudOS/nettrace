@@ -2,10 +2,10 @@
 name: all
 desc: trace the whole kernel network stack
 rules:
-- rule: &rule_ret_err
+  rule_ret_err: &rule_ret_err
     exp: ne 0
     level: error
-- rules: &rules_nf
+  rules_nf: &rules_nf
     - exp: eq 0
       level: error
       msg: packet is dropped
@@ -134,7 +134,30 @@ children:
     children:
     - name: ipt_do_table
       analyzer: iptable
-      rules: *rules_nf
+      rules:
+      - exp: eq 0
+        level: error
+        msg: packet is dropped by iptables/iptables-legacy
+        adv: check your iptables rule
+      - exp: eq 1
+        level: info
+        msg: packet is accepted
+    - name: nft_do_chain
+      analyzer: iptable
+      rules:
+      - exp: eq 0
+        level: error
+        msg: packet is dropped by iptables/iptables-nft
+        adv: check your iptables rule
+      - exp: eq 1
+        level: info
+        msg: packet is accepted
+    - name: nf_nat_manip_pkt:0
+      analyzer: ret
+      rules:
+      - exp: any
+        msg: NAT happens (packet address will change)
+        level: warn
     - name: nf_hook_slow
       analyzer: nf
       rules:

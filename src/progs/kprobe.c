@@ -44,6 +44,7 @@ typedef struct {
 
 PARAM_DEFINE_BOOL(drop_reason, false);
 PARAM_DEFINE_BOOL(detail, false);
+PARAM_DEFINE_BOOL(hooks, false);
 
 static inline void get_ret(int func)
 {
@@ -236,14 +237,66 @@ DEFINE_KPROBE(ipt_do_table, 1)
 
 DEFINE_KPROBE(nf_hook_slow, 1)
 {
-	struct nf_hook_state *state = (void *)PT_REGS_PARM2(ctx);
-	nf_event_t e = { 
-		.event = { .func = func, },
-		.hook = _(state->hook),
-		.pf = _(state->pf),
-	};
+	nf_event_t e = { .event = { .func = func, } };
+	struct nf_hook_entries *entries;
+	struct nf_hook_state *state;
+	int num;
+	u32 i;
 
-	return handle_entry(ctx, skb, &e.event, sizeof(e), func);
+	state = (void *)PT_REGS_PARM2(ctx);
+	if (PARAM_CHECK_BOOL(hooks))
+		goto on_hooks;
+
+	if (handle_entry(ctx, skb, &e.event, 0, func))
+		return 0;
+
+	e.hook = _(state->hook);
+	e.pf = _(state->pf);
+	EVENT_OUTPUT(ctx, e);
+	return 0;
+
+on_hooks:;
+	entries = (void *)PT_REGS_PARM3(ctx);
+	nf_hooks_event_t hooks_event = { .event = { .func = func, } };
+
+	if (handle_entry(ctx, skb, &hooks_event.event, 0, func))
+		return 0;
+
+	hooks_event.hook = _(state->hook);
+	hooks_event.pf = _(state->pf);
+	num = _(entries->num_hook_entries);
+
+#pragma unroll
+	for (i = 0; i < ARRAY_SIZE(hooks_event.hooks) && i < num; i++)
+		hooks_event.hooks[i] = (u64)_(entries->hooks[i].hook);
+
+	EVENT_OUTPUT(ctx, hooks_event);
+	return 0;
+}
+
+DEFINE_KPROBE_RAW(nft_do_chain, NULL)
+{
+	struct nft_pktinfo *pkt = (void *)PT_REGS_PARM1(ctx);
+	nf_event_t e = { .event = { .func = func, } };
+	struct nf_hook_state *state;
+	struct nft_chain *chain;
+	struct nft_table *table;
+
+	skb = (struct sk_buff *)_(pkt->skb);
+	if (handle_entry(ctx, skb, &e.event, 0, func))
+		return 0;
+
+	state = _(pkt->xt.state);
+	chain = (void *)PT_REGS_PARM2(ctx);
+	table = _(chain->table);
+	e.hook = _(state->hook);
+	e.pf = _(state->pf);
+
+	bpf_probe_read_kernel_str(e.chain, sizeof(e.chain), _(chain->name));
+	bpf_probe_read_kernel_str(e.table, sizeof(e.table), _(table->name));
+
+	EVENT_OUTPUT(ctx, e);
+	return 0;
 }
 
 char _license[] SEC("license") = "GPL";

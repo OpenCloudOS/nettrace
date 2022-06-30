@@ -100,6 +100,8 @@ typedef struct {
 #define TRACE_HAS_ANALYZER(trace, name) IS_ANALYZER(trace->analyzer, name)
 #define TRACE_ANALYZER_ENABLED(name) trace_analyzer_enabled(&(ANALYZER(name)))
 
+#define BPF_ARG(name) (trace_ctx.bpf_args.arg_##name)
+
 extern trace_ops_t probe_ops;
 extern trace_context_t trace_ctx;
 
