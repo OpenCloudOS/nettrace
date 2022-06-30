@@ -14,4 +14,5 @@ struct sym_result {
 	struct sym_result *next;
 };
 
+struct sym_result *parse_sym_exact(__u64 pc);
 struct sym_result *parse_sym(__u64 pc);

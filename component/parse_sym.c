@@ -23,14 +23,19 @@ static void add_sym_cache(struct sym_result *result)
 	result_list = result;
 }
 
-static struct sym_result *lookup_sym_cache(__u64 pc)
+static struct sym_result *lookup_sym_cache(__u64 pc, bool exact)
 {
 	struct sym_result *head = result_list, *sym = NULL;
 	while (head) {
-		if (pc >= head->start && pc < head->end) {
-			if (head->pc == pc)
+		if (!exact) {
+			if (pc >= head->start && pc < head->end) {
+				if (head->pc == pc)
+					return head;
+				sym = head;
+			}
+		} else {
+			if (head->start == pc)
 				return head;
-			sym = head;
 		}
 		head = head->next;
 	}
@@ -46,7 +51,7 @@ static struct sym_result *lookup_sym_cache(__u64 pc)
 	return head;
 }
 
-static struct sym_result *lookup_sym_proc(__u64 pc)
+static struct sym_result *lookup_sym_proc(__u64 pc, bool exact)
 {
 	char _cname[MAX_SYM_LENGTH], _pname[MAX_SYM_LENGTH],
 	     *pname = _pname, *cname = _cname, *tmp;
@@ -66,10 +71,18 @@ static struct sym_result *lookup_sym_proc(__u64 pc)
 		if (fscanf(f, "%llx %*s %s [ %*[^]] ]", &cpc, cname) < 0)
 			break;
 
-		if (pc < ppc || pc >= cpc) {
-			SWAP(cname, pname);
-			ppc = cpc;
-			continue;
+		if (exact) {
+			if (ppc != pc) {
+				SWAP(cname, pname);
+				ppc = cpc;
+				continue;
+			}
+		} else {
+			if (pc < ppc || pc >= cpc) {
+				SWAP(cname, pname);
+				ppc = cpc;
+				continue;
+			}
 		}
 
 		strcpy(result->name, pname);
@@ -98,5 +111,12 @@ struct sym_result *parse_sym(__u64 pc)
 {
 	if (!pc)
 		return NULL;
-	return lookup_sym_cache(pc) ?: lookup_sym_proc(pc);
+	return lookup_sym_cache(pc, false) ?: lookup_sym_proc(pc, false);
+}
+
+struct sym_result *parse_sym_exact(__u64 pc)
+{
+	if (!pc)
+		return NULL;
+	return lookup_sym_cache(pc, true) ?: lookup_sym_proc(pc, true);
 }
