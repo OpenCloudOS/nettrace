@@ -13,7 +13,7 @@ HOST_CFLAGS	:= \
 		-Wno-deprecated-declarations \
 		-I$(ROOT)/shared/ -I$(ROOT)/component
 
-REMOTE_ROOT := https://raw.githubusercontent.com/OpenCloudOS/OpenCloudOS-Kernel/kernel5.4/master/tools/bpf/nettrace/
+REMOTE_ROOT	:= https://raw.githubusercontent.com/xmmgithub/nettrace-eBPF/master/
 export REMOTE_ROOT
 
 include $(ROOT)/script/arch.mk
