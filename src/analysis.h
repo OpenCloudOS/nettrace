@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MulanPSL-2.0
+
 #ifndef _H_ANALYSIS
 #define _H_ANALYSIS
 

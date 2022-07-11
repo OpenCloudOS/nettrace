@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MulanPSL-2.0
+
 #ifndef _LIST_H
 #define _LIST_H
 

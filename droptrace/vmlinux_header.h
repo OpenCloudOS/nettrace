@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MulanPSL-2.0
+
 #define KBUILD_MODNAME ""
 #include <linux/skbuff.h>
 #include <net/netfilter/nf_tables.h>

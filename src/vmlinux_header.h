@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MulanPSL-2.0
+
 #include <linux/skbuff.h>
 #include <net/netfilter/nf_tables.h>
 #include <uapi/linux/ip.h>
