@@ -50,19 +50,22 @@ ifeq ($(if $(KERNEL),$(wildcard $(KERNEL)),"pass"),)
 $(error kernel path not exist)
 endif
 
-mode := $(if $(wildcard $(VMLINUX)),$(if $(KERNEL),kernel,vmlinux),kernel)
+# preferred to compile from kernel headers, then BTF
+mode := $(if $(wildcard $(HEADERS)),kernel,vmlinux)
 ifeq ($(mode),kernel)
-	vmlinux_cmd := ln -s vmlinux_header.h vmlinux.h
-	BPF_CFLAGS += $(KERNEL_CFLAGS)
+	vmlinux_cmd	:= ln -s vmlinux_header.h vmlinux.h
+	BPF_CFLAGS	+= $(KERNEL_CFLAGS)
+	DROP_REASON	:= $(HEADERS)/include/net/dropreason.h
 else
-	vmlinux_cmd := $(BPFTOOL) btf dump file $(VMLINUX) \
+	vmlinux_cmd	:= $(BPFTOOL) btf dump file $(VMLINUX) \
 			format c > vmlinux.h
+	DROP_REASON	:= vmlinux.h
 endif
 
 vmlinux.h:
 	$(call vmlinux_cmd)
 
-drop_reason.h: vmlinux.h
+drop_reason.h: $(DROP_REASON)
 	rm -rf $@
 	@awk 'BEGIN{ print "#ifndef _H_SKB_DROP_REASON"; \
 		print "#define _H_SKB_DROP_REASON\n";\
@@ -74,6 +77,7 @@ drop_reason.h: vmlinux.h
 	/^\tSKB_DROP_REASON_/ {\
 		if (dr) {\
 			sub(/SKB_DROP_REASON_/, "", $$1);\
+			sub(/,/, "", $$1);\
 			printf "\tFN(%s)\t\\\n", $$1;\
 		}\
 	}\
