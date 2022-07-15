@@ -458,6 +458,9 @@ out:
 }
 
 #define FN(name) [SKB_DROP_REASON_##name] = #name,
+#ifndef __DEFINE_SKB_REASON
+#define __DEFINE_SKB_REASON(fn)
+#endif
 static char *drop_reasons[] = {
 	__DEFINE_SKB_REASON(FN)
 };

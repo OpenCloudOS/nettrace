@@ -3,8 +3,7 @@ bpf_progs := progs/kprobe progs/tracing
 progs := nettrace
 prog-nettrace-origin = trace.c $(COMMON_SHARED) \
 		       trace_probe.c trace_tracing.c analysis.c \
-		       $(COMPONENT)/parse_sym.c trace_group.c \
-		       drop_reason.h
+		       $(COMPONENT)/parse_sym.c trace_group.c
 
 prog-nettrace = $(prog-nettrace-origin) nettrace.c
 
@@ -19,6 +18,8 @@ trace_group.c: trace.yaml
 progs/kprobe.c: progs/kprobe_trace.h
 
 nettrace.c: $(prog-nettrace-origin)
+	@make drop_reason.h
+	@if [ ! -f 'drop_reason.h' ]; then touch drop_reason.h; fi
 
 all: $(progs)
 
