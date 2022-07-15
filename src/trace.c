@@ -246,6 +246,7 @@ skip_trace:
 		trace_ctx.drop_reason = true;
 	}
 
+	trace_ctx.bpf_args.arg_trace_mode = trace_ctx.mode;
 	trace_ctx.detail = trace_ctx.bpf_args.arg_detail;
 
 	return 0;

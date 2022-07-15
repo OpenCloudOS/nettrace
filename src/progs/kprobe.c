@@ -43,6 +43,7 @@ typedef struct {
 	u16	status;
 } args_t;
 
+PARAM_DEFINE(u32, trace_mode, TRACE_MODE_BASIC);
 PARAM_DEFINE_BOOL(drop_reason, false);
 PARAM_DEFINE_BOOL(detail, false);
 PARAM_DEFINE_BOOL(hooks, false);
@@ -70,6 +71,12 @@ static inline int handle_entry(void *regs, struct sk_buff *skb, event_t *e,
 	packet_t *pkt = &e->pkt;
 	bool *matched;
 
+	if (arg_trace_mode == TRACE_MODE_BASIC) {
+		if (!probe_parse_skb(skb, pkt))
+			goto skip_life;
+		return -1;
+	}
+
 	matched = bpf_map_lookup_elem(&m_lookup, &skb);
 	if (matched && *matched) {
 		probe_parse_skb_cond(skb, pkt, false);
@@ -80,6 +87,7 @@ static inline int handle_entry(void *regs, struct sk_buff *skb, event_t *e,
 		return -1;
 	}
 
+skip_life:
 	if (!PARAM_CHECK_BOOL(detail))
 		goto out;
 
@@ -110,7 +118,8 @@ out:
 
 static inline void handle_destroy(struct sk_buff *skb)
 {
-	bpf_map_delete_elem(&m_lookup, &skb);
+	if (arg_trace_mode != TRACE_MODE_BASIC)
+		bpf_map_delete_elem(&m_lookup, &skb);
 }
 
 static inline int default_handle_entry(struct pt_regs *ctx,

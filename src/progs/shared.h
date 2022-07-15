@@ -59,4 +59,10 @@ typedef struct __attribute__((__packed__)) {
 	u16 func;
 } retevent_t;
 
+typedef enum trace_mode {
+	TRACE_MODE_BASIC,
+	TRACE_MODE_TIMELINE,
+	TRACE_MODE_INETL,
+} trace_mode_t;
+
 #endif
