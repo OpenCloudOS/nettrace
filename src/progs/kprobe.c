@@ -276,10 +276,13 @@ on_hooks:;
 	hooks_event.pf = _(state->pf);
 	num = _(entries->num_hook_entries);
 
-#pragma unroll
-	for (i = 0; i < ARRAY_SIZE(hooks_event.hooks) && i < num; i++)
+#pragma clang loop unroll(full)
+	for (i = 0; i < ARRAY_SIZE(hooks_event.hooks); i++) {
+		if (i < num) goto out;
 		hooks_event.hooks[i] = (u64)_(entries->hooks[i].hook);
+	}
 
+out:
 	EVENT_OUTPUT(ctx, hooks_event);
 	return 0;
 }
