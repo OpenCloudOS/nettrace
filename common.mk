@@ -56,6 +56,7 @@ ifeq ($(mode),kernel)
 	vmlinux_cmd	:= ln -s vmlinux_header.h vmlinux.h
 	BPF_CFLAGS	+= $(KERNEL_CFLAGS)
 	DROP_REASON	:= $(HEADERS)/include/net/dropreason.h
+	DROP_REASON	:= $(if $(wildcard $(DROP_REASON)),$(DROP_REASON),)
 else
 	vmlinux_cmd	:= $(BPFTOOL) btf dump file $(VMLINUX) \
 			format c > vmlinux.h
@@ -67,6 +68,7 @@ vmlinux.h:
 
 drop_reason.h: $(DROP_REASON)
 	rm -rf $@
+ifneq ($(DROP_REASON),)
 	@awk 'BEGIN{ print "#ifndef _H_SKB_DROP_REASON"; \
 		print "#define _H_SKB_DROP_REASON\n";\
 		system("sed -e \"/enum skb_drop_reason {/,/}/!d\" $< >> $@");\
@@ -83,6 +85,10 @@ drop_reason.h: $(DROP_REASON)
 	}\
 	END{ print "\n#endif" }' $< >> $@
 	@echo generated drop_reason.h
+else
+	touch $@
+	@echo drop reason not supported, skips
+endif
 
 progs/%.o: progs/%.c vmlinux.h
 	clang -O2 -c -g -S -Wall -Wno-pointer-sign -Wno-unused-value	\
