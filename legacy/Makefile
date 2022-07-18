@@ -7,7 +7,7 @@ prog-files = nettrace.c nettrace.py utils.py skb.yaml
 include ../common.mk
 
 nettrace.c:
-	wget $(REMOTE_ROOT)/src/$@
+	wget $(REMOTE_ROOT)/legacy/$@
 
 install: nettrace.c
 	@mkdir -p ${TARGET_DIR} && cp $(prog-files) ${TARGET_DIR}
