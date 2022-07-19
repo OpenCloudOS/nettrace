@@ -38,9 +38,9 @@ static void do_parse_args(int argc, char *argv[])
 			.desc = "show extern packet info, such as pid, ifname, etc",
 		},
 		{
-			.lname = "timeline", .dest = &trace_args->timeline,
+			.lname = "basic", .dest = &trace_args->basic,
 			.type = OPTION_BOOL,
-			.desc = "enable 'timeline' mode",
+			.desc = "use 'basic' trace mode, don't trace skb's life",
 		},
 		{
 			.lname = "intel", .dest = &trace_args->intel,

@@ -10,7 +10,7 @@
 #include "analysis.h"
 
 trace_context_t trace_ctx = {
-	.mode = TRACE_MODE_BASIC,
+	.mode = TRACE_MODE_TIMELINE,
 };
 
 static void _print_trace_group(trace_group_t *group, int level)
@@ -211,19 +211,28 @@ static int trace_prepare_args()
 	free(tmp);
 
 skip_trace:
-	trace_ctx.mode = TRACE_MODE_BASIC;
-	if (args->timeline) {
-		trace_ctx.mode = TRACE_MODE_TIMELINE;
-		if (!trace_has_end())
-			trace_group_enable("life");
+	if (args->basic)
+		trace_ctx.mode = TRACE_MODE_BASIC;
+
+	if (args->intel)
+		trace_ctx.mode = TRACE_MODE_INETL;
+
+	switch (trace_ctx.mode) {
+	case TRACE_MODE_INETL:
+		trace_all_set_ret();
+	case TRACE_MODE_TIMELINE:
+		/* enable skb clone trace */
 		trace_for_each(trace)
 			if (TRACE_HAS_ANALYZER(trace, clone))
 				trace_set_ret(trace);
-	}
-
-	if (args->intel) {
-		trace_ctx.mode = TRACE_MODE_INETL;
-		trace_all_set_ret();
+		/* enable skb free/drop trace */
+		if (!trace_has_end())
+			trace_group_enable("life");
+		break;
+	case TRACE_MODE_BASIC:
+		break;
+	default:
+		goto err;
 	}
 
 	if (args->ret) {

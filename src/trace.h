@@ -63,6 +63,7 @@ typedef struct trace_args {
 	bool intel;
 	bool intel_quiet;
 	bool intel_keep;
+	bool basic;
 	char *traces;
 } trace_args_t;
 
