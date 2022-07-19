@@ -251,7 +251,6 @@ DEFINE_KPROBE(nf_hook_slow, 1)
 	struct nf_hook_entries *entries;
 	struct nf_hook_state *state;
 	int num;
-	u32 i;
 
 	state = (void *)PT_REGS_PARM2(ctx);
 	if (PARAM_CHECK_BOOL(hooks))
@@ -276,12 +275,27 @@ on_hooks:;
 	hooks_event.pf = _(state->pf);
 	num = _(entries->num_hook_entries);
 
-#pragma clang loop unroll(full)
-	for (i = 0; i < ARRAY_SIZE(hooks_event.hooks); i++) {
-		if (i < num) goto out;
-		hooks_event.hooks[i] = (u64)_(entries->hooks[i].hook);
-	}
+#define COPY_HOOK(i) do {					\
+	if (i >= num)						\
+			goto out;				\
+	hooks_event.hooks[i] = (u64)_(entries->hooks[i].hook);	\
+} while (0)
 
+	COPY_HOOK(0);
+	COPY_HOOK(1);
+	COPY_HOOK(2);
+	COPY_HOOK(3);
+	COPY_HOOK(4);
+	COPY_HOOK(5);
+	COPY_HOOK(6);
+	COPY_HOOK(7);
+
+	/* following code can't unroll, don't know way......:
+	 * 
+	 * #pragma clang loop unroll(full)
+	 * 	for (i = 0; i < 8; i++)
+	 * 		COPY_HOOK(i);
+	 */
 out:
 	EVENT_OUTPUT(ctx, hooks_event);
 	return 0;
