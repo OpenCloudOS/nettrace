@@ -4,6 +4,8 @@
 #include <malloc.h>
 #include <string.h>
 #include <stdlib.h>
+#define _LINUX_IN_H
+#include <netinet/in.h>
 
 #include "arg_parse.h"
 #include "net_utils.h"
@@ -96,6 +98,7 @@ found:
 			S_SET(bool, true);
 			break;
 		}
+		case OPTION_U16BE:
 		case OPTION_U16: {
 			int val = atoi(optarg);
 			if (val <=0 || val > 65535) {
@@ -103,6 +106,8 @@ found:
 				       optarg);
 				goto err;
 			}
+			if (item->type == OPTION_U16BE)
+				val = htons(val);
 			S_DST(u16, val);
 			S_SET(bool, true);
 			break;

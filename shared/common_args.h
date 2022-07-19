@@ -27,7 +27,7 @@
 		.lname = "sport",				\
 		.sname = 'S',					\
 		.dest = R(sport),				\
-		.type = OPTION_U16,				\
+		.type = OPTION_U16BE,				\
 		.set = E(sport),				\
 		.desc = "filter source TCP/UDP port",		\
 	},							\
@@ -35,7 +35,7 @@
 		.lname = "dport",				\
 		.sname = 'D',					\
 		.dest = R(dport),				\
-		.type = OPTION_U16,				\
+		.type = OPTION_U16BE,				\
 		.set = E(dport),				\
 		.desc = "filter dest TCP/UDP port",		\
 	},							\
@@ -43,7 +43,7 @@
 		.lname = "port",				\
 		.sname = 'P',					\
 		.dest = R(port),				\
-		.type = OPTION_U16,				\
+		.type = OPTION_U16BE,				\
 		.set = E(port),					\
 		.desc = "filter source or dest TCP/UDP port",	\
 	},							\
