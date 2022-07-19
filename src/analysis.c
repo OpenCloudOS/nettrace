@@ -157,9 +157,9 @@ static void analy_entry_handle(analy_entry_t *entry)
 			ifname = ifname ?: "";
 		}
 
-		sprintf(tinfo, "[%-20s][cpu:%-3u][%-5s][pid:%-7u][%-12s]",
-			t->name, entry->cpu, ifname, detail->pid,
-			detail->task);
+		sprintf(tinfo, "[%llx][%-20s][cpu:%-3u][%-5s][pid:%-7u][%-12s]",
+			detail->key, t->name, entry->cpu, ifname,
+			detail->pid, detail->task);
 	} else {
 		sprintf(tinfo, "[%-20s]", t->name);
 	}
