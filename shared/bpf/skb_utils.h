@@ -236,10 +236,6 @@ static inline int probe_parse_skb_cond(struct sk_buff *skb, packet_t *pkt,
 	ctx.mac_header = _(skb->mac_header);
 	ctx.data = _(skb->head);
 
-	if (!filter)
-		bpf_printk("mh:%d,nh:%d,th:%d\n", ctx.mac_header,
-			   ctx.network_header, ctx.trans_header);
-
 	if (skb_l2_check(ctx.mac_header)) {
 		/*
 		 * try to parse skb for send path, which means that
@@ -251,7 +247,14 @@ static inline int probe_parse_skb_cond(struct sk_buff *skb, packet_t *pkt,
 		if (!ctx.network_header)
 			return -1;
 		l3 = ctx.data + ctx.network_header;
+	} else if (ctx.mac_header == ctx.network_header) {
+		/* to tun device, mac header is the same to network header.
+		 * For this case, we assume that this is a IP packet.
+		 */
+		l3 = ctx.data + ctx.network_header;
+		l3_proto = ETH_P_IP;
 	} else {
+		/* mac header is set properly, we can use it directly. */
 		struct ethhdr *eth = ctx.data + ctx.mac_header;
 
 		l3 = (void *)eth + ETH_HLEN;
