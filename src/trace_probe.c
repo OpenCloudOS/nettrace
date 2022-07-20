@@ -178,14 +178,16 @@ static analyzer_result_t probe_analy_entry(trace_t *trace, analy_entry_t *e)
 
 	if (!trace_is_ret(trace)) {
 		pr_debug("tp found for %s(%llx), ctx:%x:%d\n", trace->name,
-			 e->event->key, e->ctx, e->ctx->refs);
+			 (u64)e->event->key, (u32)(u64)e->ctx,
+			 e->ctx->refs);
 		goto out;
 	}
 	list = &cpus[e->cpu];
 	list_add(&e->cpu_list, list);
 	get_fake_analy_ctx(e->fake_ctx);
 	pr_debug("mounted entry %s(%llx) on cpu %d, ctx:%x:%d\n", trace->name,
-		 e->event->key, e->cpu, e->ctx, e->ctx->refs);
+		 (u64)e->event->key, e->cpu, (u32)(u64)e->ctx,
+		 e->ctx->refs);
 	e->status |= ANALY_ENTRY_ONCPU;
 out:
 	return RESULT_CONT;

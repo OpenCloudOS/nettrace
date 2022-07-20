@@ -13,7 +13,7 @@ int ts_print_packet(char *buf, packet_t *pkt, char *minfo)
 
 	ts = pkt->ts;
 	if (ts)
-		BUF_FMT("[%lu.%06lu] ", ts / 1000000000,
+		BUF_FMT("[%llu.%06llu] ", ts / 1000000000,
 			ts % 1000000000 / 1000);
 	if (minfo)
 		BUF_FMT("%s ", minfo);
