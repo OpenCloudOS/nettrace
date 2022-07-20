@@ -1,5 +1,5 @@
 
-export VERSION=1.1.0
+export VERSION=1.2.0
 export RELEASE=1.tl3
 
 targets = droptrace nodetrace src legacy
