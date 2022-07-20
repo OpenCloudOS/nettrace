@@ -7,7 +7,7 @@
 
 arg_config_t config = {
 	.name = "nettrace",
-	.summary = "a tool to trace skb in kernel",
+	.summary = "a tool to trace skb in kernel and diagnose network problem",
 	.desc = "",
 };
 
