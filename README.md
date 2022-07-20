@@ -98,6 +98,10 @@ make KERNEL=/home/ubuntu/kernel all
 make VMLINUX=/home/ubuntu/kernel/vmlinux all
 ```
 
+#### 2.3.3 打包
+
+使用命令`make rpm`可制作rpm包；使用命令`make pack`可制作二进制包（二进制程序打包到压缩包中，默认存放路径为output文件夹）。
+
 ## 三、使用方法
 
 `droptrace`主要用来进行系统丢包事件的监控，点击[这里](droptrace/README.md)可查看droptrace的用户文档，这里不再赘述，重点介绍nettrace的相关功能。nettrace是用来跟踪内核报文和诊断网络故障的，在进行报文跟踪时可以使用一定的过滤条件来跟踪特定的报文。其基本命令行参数为：
