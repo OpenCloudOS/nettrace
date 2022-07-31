@@ -1,5 +1,5 @@
 #define KBUILD_MODNAME ""
-#include <vmlinux.h>
+#include <kheaders.h>
 #include <bpf_helpers.h>
 #include <bpf_endian.h>
 #include <bpf_tracing.h>
@@ -47,6 +47,7 @@ PARAM_DEFINE(u32, trace_mode, TRACE_MODE_BASIC);
 PARAM_DEFINE_BOOL(drop_reason, false);
 PARAM_DEFINE_BOOL(detail, false);
 PARAM_DEFINE_BOOL(hooks, false);
+PARAM_DEFINE_UINT(u32, pid);
 
 static inline void get_ret(int func)
 {
@@ -70,6 +71,7 @@ static inline int handle_entry(void *regs, struct sk_buff *skb, event_t *e,
 {
 	packet_t *pkt = &e->pkt;
 	bool *matched;
+	u32 pid;
 
 	if (arg_trace_mode == TRACE_MODE_BASIC) {
 		if (!probe_parse_skb(skb, pkt))
@@ -77,10 +79,12 @@ static inline int handle_entry(void *regs, struct sk_buff *skb, event_t *e,
 		return -1;
 	}
 
+	pid = (u32)bpf_get_current_pid_tgid();
 	matched = bpf_map_lookup_elem(&m_lookup, &skb);
 	if (matched && *matched) {
 		probe_parse_skb_cond(skb, pkt, false);
-	} else if (!probe_parse_skb(skb, pkt)) {
+	} else if (!PARAM_CHECK_ENABLE(pid, pid) &&
+		   !probe_parse_skb(skb, pkt)) {
 		bool _matched = true;
 		bpf_map_update_elem(&m_lookup, &skb, &_matched, 0);
 	} else {
@@ -96,7 +100,7 @@ skip_life:
 	detail_event_t *detail = (void *)e;
 
 	bpf_get_current_comm(detail->task, sizeof(detail->task));
-	detail->pid = bpf_get_current_pid_tgid();
+	detail->pid = pid;
 	if (dev) {
 		bpf_probe_read_str(detail->ifname, sizeof(detail->ifname) - 1,
 				   dev->name);

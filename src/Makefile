@@ -32,5 +32,5 @@ pack: all
 clean:
 	rm -rf $(progs) trace_group.c progs/kprobe_trace.h \
 		$(bpf_progs) progs/*.o progs/*.skel.h \
-		vmlinux.h drop_reason.h
+		vmlinux.h drop_reason.h kheaders.h
 

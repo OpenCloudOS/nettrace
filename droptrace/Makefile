@@ -27,4 +27,5 @@ pack: all
 	@mkdir -p $(PREFIX) && cp droptrace $(PREFIX)
 
 clean:
-	rm -rf drop_reason.h droptrace vmlinux.h progs/*.skel.h progs/*.o
+	rm -rf drop_reason.h droptrace vmlinux.h progs/*.skel.h		\
+		progs/*.o kheaders.h

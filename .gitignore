@@ -9,3 +9,4 @@ vmlinux.h
 GPATH
 GTAGS
 GRTAGS
+kheaders.h

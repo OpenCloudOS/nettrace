@@ -22,4 +22,4 @@ pack: all
 		cp watch $(PREFIX)/nodetrace-watch
 
 clean:
-	rm -rf progs/*.skel.h progs/*.o vmlinux.h watch mark
+	rm -rf progs/*.skel.h progs/*.o vmlinux.h watch mark kheaders.h

@@ -1,5 +1,4 @@
 BPFTOOL		?= $(ROOT)/script/bpftool
-VMLINUX		?= /sys/kernel/btf/vmlinux
 LIBBPF		?= /usr/include/bpf
 
 COMPONENT	:= $(ROOT)/component
@@ -20,29 +19,29 @@ include $(ROOT)/script/arch.mk
 
 HEADERS		:= $(if $(KERNEL),$(KERNEL),/lib/modules/$(shell uname -r)/build/)
 NOSTDINC_FLAGS	+= -nostdinc -isystem $(shell $(CC) -print-file-name=include)
-MODE		:= VMLINUX
+BTF		:= $(if $(VMLINUX),$(VMLINUX),/sys/kernel/btf/vmlinux)
 
-USERINCLUDE    := \
+USERINCLUDE	:= \
 		-I$(HEADERS)/arch/$(SRCARCH)/include/uapi \
 		-I$(HEADERS)/arch/$(SRCARCH)/include/generated/uapi \
 		-I$(HEADERS)/include/uapi \
 		-I$(HEADERS)/include/generated/uapi \
 		-include $(HEADERS)/include/linux/kconfig.h
 
-LINUXINCLUDE    := \
+LINUXINCLUDE	:= \
 		-I$(HEADERS)/arch/$(SRCARCH)/include \
 		-I$(HEADERS)/arch/$(SRCARCH)/include/generated \
 		-I$(HEADERS)/include \
 		$(USERINCLUDE)
 
-KERNEL_CFLAGS += $(NOSTDINC_FLAGS) $(LINUXINCLUDE) \
+KERNEL_CFLAGS	+= $(NOSTDINC_FLAGS) $(LINUXINCLUDE) \
 		-D__KERNEL__ -D__ASM_SYSREG_H -Wno-unused-value -Wno-pointer-sign \
 		-Wno-compare-distinct-pointer-types \
 		-Wno-gnu-variable-sized-type-not-at-end \
 		-Wno-address-of-packed-member -Wno-tautological-compare \
 		-Wno-unknown-warning-option -Wno-frame-address
 
-ifeq ("$(wildcard $(HEADERS))$(wildcard $(VMLINUX))",)
+ifeq ("$(wildcard $(HEADERS))$(wildcard $(BTF))",)
 $(error BTF is not found in your system, please install kernel headers)
 endif
 
@@ -50,21 +49,38 @@ ifeq ($(if $(KERNEL),$(wildcard $(KERNEL)),"pass"),)
 $(error kernel path not exist)
 endif
 
+ifeq ($(if $(VMLINUX),$(wildcard $(VMLINUX)),"pass"),)
+$(error vmlinux path not exist)
+endif
+
+# preferred to generate drop reason from 
+ifeq ("$(KERNEL)$(VMLINUX)","")
+	DROP_REASON	:= $(HEADERS)/include/net/dropreason.h
+ifeq ($(wildcard $(DROP_REASON)),)
+	DROP_REASON	:= $(if $(wildcard $(BTF)),vmlinux.h,)
+endif
+endif
+
 # preferred to compile from kernel headers, then BTF
-mode := $(if $(wildcard $(HEADERS)),kernel,vmlinux)
-ifeq ($(mode),kernel)
-	vmlinux_cmd	:= ln -s vmlinux_header.h vmlinux.h
-	BPF_CFLAGS	+= $(KERNEL_CFLAGS)
+mode := $(if $(VMLINUX),'btf',$(if $(wildcard $(HEADERS)),'kernel','btf'))
+ifeq ($(mode),'btf')
+	DROP_REASON	?= vmlinux.h
+	kheaders_cmd	:= ln -s vmlinux.h kheaders.h
+	kheaders_dep	:= vmlinux.h
+else
+ifndef DROP_REASON
 	DROP_REASON	:= $(HEADERS)/include/net/dropreason.h
 	DROP_REASON	:= $(if $(wildcard $(DROP_REASON)),$(DROP_REASON),)
-else
-	vmlinux_cmd	:= $(BPFTOOL) btf dump file $(VMLINUX) \
-			format c > vmlinux.h
-	DROP_REASON	:= vmlinux.h
+endif
+	kheaders_cmd	:= ln -s vmlinux_header.h kheaders.h
+	BPF_CFLAGS	+= $(KERNEL_CFLAGS)
 endif
 
 vmlinux.h:
-	$(call vmlinux_cmd)
+	$(BPFTOOL) btf dump file $(BTF) format c > vmlinux.h
+
+kheaders.h: $(kheaders_dep)
+	$(call kheaders_cmd)
 
 drop_reason.h: $(DROP_REASON)
 	rm -rf $@
@@ -90,7 +106,7 @@ else
 	@echo drop reason not supported, skips
 endif
 
-progs/%.o: progs/%.c vmlinux.h
+progs/%.o: progs/%.c kheaders.h
 	clang -O2 -c -g -S -Wall -Wno-pointer-sign -Wno-unused-value	\
 	-Wno-incompatible-pointer-types-discards-qualifiers		\
 	-fno-asynchronous-unwind-tables					\
