@@ -1,6 +1,4 @@
-BPFTOOL		?= $(ROOT)/script/bpftool
 LIBBPF		?= /usr/include/bpf
-
 COMPONENT	:= $(ROOT)/component
 COMMON_SHARED	:= $(ROOT)/shared/pkt_utils.c $(COMPONENT)/net_utils.c \
 		   $(COMPONENT)/arg_parse.c $(COMPONENT)/sys_utils.c
@@ -20,6 +18,7 @@ include $(ROOT)/script/arch.mk
 HEADERS		:= $(if $(KERNEL),$(KERNEL),/lib/modules/$(shell uname -r)/build/)
 NOSTDINC_FLAGS	+= -nostdinc -isystem $(shell $(CC) -print-file-name=include)
 BTF		:= $(if $(VMLINUX),$(VMLINUX),/sys/kernel/btf/vmlinux)
+export HEADERS
 
 USERINCLUDE	:= \
 		-I$(HEADERS)/arch/$(SRCARCH)/include/uapi \
@@ -41,6 +40,8 @@ KERNEL_CFLAGS	+= $(NOSTDINC_FLAGS) $(LINUXINCLUDE) \
 		-Wno-address-of-packed-member -Wno-tautological-compare \
 		-Wno-unknown-warning-option -Wno-frame-address
 
+cmd_exist	= $(if $(wildcard $(1)),$(2),$(3))
+cmd_or_exist	= $(call cmd_exist,$(1),$(1),$(2))
 ifeq ("$(wildcard $(HEADERS))$(wildcard $(BTF))",)
 $(error BTF is not found in your system, please install kernel headers)
 endif
@@ -55,25 +56,30 @@ endif
 
 # preferred to generate drop reason from 
 ifeq ("$(KERNEL)$(VMLINUX)","")
-	DROP_REASON	:= $(HEADERS)/include/net/dropreason.h
-ifeq ($(wildcard $(DROP_REASON)),)
-	DROP_REASON	:= $(if $(wildcard $(BTF)),vmlinux.h,)
-endif
+	DROP_REASON	:= $(call cmd_or_exist,$(HEADERS)/include/net/dropreason.h,\
+			   $(call cmd_exist,$(BTF),vmlinux.h,))
 endif
 
 # preferred to compile from kernel headers, then BTF
-mode := $(if $(VMLINUX),'btf',$(if $(wildcard $(HEADERS)),'kernel','btf'))
+mode := $(if $(VMLINUX),'btf',$(call cmd_exist,$(HEADERS),'kernel','btf'))
 ifeq ($(mode),'btf')
 	DROP_REASON	?= vmlinux.h
 	kheaders_cmd	:= ln -s vmlinux.h kheaders.h
 	kheaders_dep	:= vmlinux.h
 else
 ifndef DROP_REASON
-	DROP_REASON	:= $(HEADERS)/include/net/dropreason.h
-	DROP_REASON	:= $(if $(wildcard $(DROP_REASON)),$(DROP_REASON),)
+	DROP_REASON	:= $(call cmd_or_exist,$(HEADERS)/include/net/dropreason.h,)
 endif
 	kheaders_cmd	:= ln -s vmlinux_header.h kheaders.h
 	BPF_CFLAGS	+= $(KERNEL_CFLAGS)
+endif
+
+ifndef BPFTOOL
+ifneq ("$(shell bpftool gen help 2>&1 | grep skeleton)","")
+	BPFTOOL		:= bpftool
+else
+	BPFTOOL		:= $(ROOT)/script/bpftool
+endif
 endif
 
 vmlinux.h:
