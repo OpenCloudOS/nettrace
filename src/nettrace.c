@@ -23,6 +23,11 @@ static void do_parse_args(int argc, char *argv[])
 	option_item_t opts[] = {
 #include <common_args.h>
 		{
+			.lname = "pid", .type = OPTION_U32,
+			.dest = R(pid), .set = E(pid),
+			.desc = "filter by current process id(pid)",
+		},
+		{
 			.lname = "trace", .sname = 't',
 			.dest = &trace_args->traces,
 			.desc = "enable trace group or trace",

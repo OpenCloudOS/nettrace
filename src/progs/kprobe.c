@@ -73,13 +73,13 @@ static inline int handle_entry(void *regs, struct sk_buff *skb, event_t *e,
 	bool *matched;
 	u32 pid;
 
+	pid = (u32)bpf_get_current_pid_tgid();
 	if (arg_trace_mode == TRACE_MODE_BASIC) {
 		if (!probe_parse_skb(skb, pkt))
 			goto skip_life;
 		return -1;
 	}
 
-	pid = (u32)bpf_get_current_pid_tgid();
 	matched = bpf_map_lookup_elem(&m_lookup, &skb);
 	if (matched && *matched) {
 		probe_parse_skb_cond(skb, pkt, false);
