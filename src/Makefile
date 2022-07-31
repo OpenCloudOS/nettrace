@@ -10,6 +10,11 @@ prog-nettrace = $(prog-nettrace-origin) nettrace.c
 
 include ../common.mk
 
+NFT_HEADER	:= $(HEADERS)/include/net/netfilter/nf_tables.h
+ifeq ($(shell grep xt_action_param $(NFT_HEADER)),)
+	BPF_CFLAGS += -DNFT_HIGH_VERSION
+endif
+
 progs/kprobe_trace.h:
 	python3 gen_trace.py probe > progs/kprobe_trace.h
 

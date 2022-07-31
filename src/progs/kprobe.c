@@ -317,7 +317,11 @@ DEFINE_KPROBE_RAW(nft_do_chain, NULL)
 	if (handle_entry(ctx, skb, &e.event, 0, func))
 		return 0;
 
+#ifndef NFT_HIGH_VERSION
 	state = _(pkt->xt.state);
+#else
+	state = _(pkt->state);
+#endif
 	chain = (void *)PT_REGS_PARM2(ctx);
 	table = _(chain->table);
 	e.hook = _(state->hook);
