@@ -49,7 +49,7 @@ PARAM_DEFINE_BOOL(detail, false);
 PARAM_DEFINE_BOOL(hooks, false);
 PARAM_DEFINE_UINT(u32, pid);
 
-bool arg_ready = true;
+bool arg_ready = false;
 
 static inline void get_ret(int func)
 {
