@@ -37,14 +37,14 @@ def parse_group(group):
 
 
 def gen_group_init(group, name):
-    return f'''trace_group_t {name} = {{
-	.name = "{group['name']}",
-	.desc = "{group.get('desc')}",
+    return '''trace_group_t {name} = {{
+	.name = "{}",
+	.desc = "{}",
 	.children = LIST_HEAD_INIT({name}.children),
 	.traces = LIST_HEAD_INIT({name}.traces),
 	.list = LIST_HEAD_INIT({name}.list),
 }};
-'''
+'''.format(group['name'], group.get('desc'), name=name,)
 
 
 global_status = {}
@@ -65,14 +65,15 @@ rule_types = {
     'any': 'RULE_RETURN_ANY',
 }
 
+
 def gen_name(name, is_trace=False):
     if is_trace:
         name = name.replace('-', '_')
     else:
-        name = f'__group_{name}'.replace('-', '_')
+        name = ('__group_' + name).replace('-', '_')
     if name in global_names:
         global_names[name] += 1
-        return f'{name}_{global_names[name]}'
+        return '{}_{}'.format(name, global_names[name])
     global_names[name] = 0
     return name
 
@@ -98,7 +99,7 @@ def gen_group(group, is_root=False):
             name = gen_name(child["name"])
             child['define_name'] = name
             define_str += gen_group_init(child, name)
-            init_str += f'\tlist_add_tail(&{name}.list, &{p_name}.children);\n'
+            init_str += '\tlist_add_tail(&{}.list, &{}.children);\n'.format(name, p_name)
             (_define_str, _init_str, _probe_str, _index_str) = gen_group(child)
             define_str += _define_str
             init_str += _init_str
@@ -108,75 +109,86 @@ def gen_group(group, is_root=False):
             name = gen_name(child["name"], True)
             child['define_name'] = name
             skb_str = ''
-            index_str += f'#define INDEX_{name} {global_status["trace_index"]}\n'
+            index_str += '#define INDEX_{} {}\n'.format(
+                name, global_status["trace_index"])
             if 'tp' in child:
                 trace_type = 'TRACE_TP'
                 tp = child['tp'].split(':')
-                skb_str = f'\n\t.tp = "{child["tp"]}",'
+                skb_str = '\n\t.tp = "{}",'.format(child["tp"])
                 if 'skb' in child:
-                    probe_str += f'\tFN_tp({name}, {tp[0]}, {tp[1]}, 8)\t\\\n'
+                    probe_str += '\tFN_tp({}, {}, {}, 8)\t\\\n'.format(name,
+                                                                       tp[0], tp[1])
             else:
                 trace_type = 'TRACE_FUNCTION'
                 if 'skb' in child:
-                    skb_str = f'\n\t.skb = {child["skb"]},'
-                    probe_str += f'\tFN({name}, {int(child["skb"]) + 1})\t\\\n'
+                    skb_str = '\n\t.skb = {},'.format(child["skb"])
+                    probe_str += '\tFN({}, {})\t\\\n'.format(name,
+                                                             int(child["skb"]) + 1)
             if 'analyzer' in child:
-                analyzer = f'\n\t.analyzer = &ANALYZER({child["analyzer"]}),'
+                analyzer = '\n\t.analyzer = &ANALYZER({}),'.format(
+                    child["analyzer"])
             else:
                 analyzer = ''
             rule_str = ''
             if 'rules' in child:
                 rules = child['rules']
-                for index,rule in enumerate(rules):
+                for index, rule in enumerate(rules):
                     level = rule['level']
-                    rule_tmp = f'\t.level = {rule_levels[level]},\n'
+                    rule_tmp = '\t.level = {},\n'.format(rule_levels[level])
                     exps = rule['exp'].split(' ')
                     rule_type = rule_types[exps[0]]
                     if exps[0] == 'range':
                         ranges = exps[1].split('-')
-                        rule_tmp += f'\t.range = {{ .min = {ranges[0]}, .max = {ranges[1]}}},\n'
+                        rule_tmp += '\t.range = {{ .min = {}, .max = {}}},\n'.format(
+                            ranges[0], ranges[1])
                     elif exps[0] != 'any':
-                        rule_tmp += f'\t.expected = {exps[1]},\n'
-                    rule_tmp += f'\t.type = {rule_type},\n'
+                        rule_tmp += '\t.expected = {},\n'.format(exps[1])
+                    rule_tmp += '\t.type = {},\n'.format(rule_type)
                     if 'adv' in rule:
                         rule_adv = rule["adv"].replace('\n', '\\n')
-                        rule_tmp += f'\t.adv = "{rule_adv}",\n'
-                    msg = f'PFMT_EMPH"{rule["msg"]}"PFMT_END'
+                        rule_tmp += '\t.adv = "{}",\n'.format(rule_adv)
+                    msg = 'PFMT_EMPH"{}"PFMT_END'.format(rule["msg"])
                     if level == 'warn':
-                        msg = f'PFMT_WARN"{rule["msg"]}"PFMT_END'
+                        msg = 'PFMT_WARN"{}"PFMT_END'.format(rule["msg"])
                     elif level == 'error':
-                        msg = f'PFMT_ERROR"{rule["msg"]}"PFMT_END'
-                    rule_tmp += f'\t.msg = {msg},\n'
-                    rule_name = f'rule_{name}_{index}'
-                    rule_str += f'rule_t {rule_name} = {{{rule_tmp}}};\n'
-                    init_str += f'\tlist_add_tail(&{rule_name}.list, &{name}.rules);\n'
+                        msg = 'PFMT_ERROR"{}"PFMT_END'.format(rule["msg"])
+                    rule_tmp += '\t.msg = {},\n'.format(msg)
+                    rule_name = 'rule_{}_{}'.format(name, index)
+                    rule_str += 'rule_t {} = {{{}}};\n'.format(
+                        rule_name, rule_tmp)
+                    init_str += '\tlist_add_tail(&{}.list, &{}.rules);\n'.format(
+                        rule_name, name)
 
-            if_str = f'\n\t.if_str = "{child.get("if")}",' if 'if' in child else ''
-            reg_str = f'\n\t.regex = "{child["regex"]}",' if 'regex' in child else ''
-            msg_str = f'\n\t.msg = "{child["msg"]}",' if 'msg' in child else ''
+            if_str = '\n\t.if_str = "{}",'.format(
+                child.get("if")) if 'if' in child else ''
+            reg_str = '\n\t.regex = "",'.format(
+                {child["regex"]}) if 'regex' in child else ''
+            msg_str = '\n\t.msg = "{}",'.format(
+                child["msg"]) if 'msg' in child else ''
             default = True
             if 'default' in child:
                 default = child['default']
             elif 'default' in group:
                 default = group['default']
             default = 'true' if default else 'false'
-            default = f'\n\t.def = {default},'
+            default = '\n\t.def = {},'.format(default)
             target = child.get('target') or child['name']
-            define_str += f'''trace_t {name} = {{
-\t.name = "{target}",
-\t.desc = "{child.get('desc')}",{skb_str}{if_str}{default}
-\t.type = {trace_type},{reg_str}{analyzer}{msg_str}
+            define_str += '''trace_t {name} = {{
+\t.name = "{}",
+\t.desc = "{}",{}{}{}
+\t.type = {},{}{}{}
 \t.index = INDEX_{name},
 \t.prog = "__trace_{name}",
-\t.parent = &{p_name},
+\t.parent = &{},
 \t.rules =  LIST_HEAD_INIT({name}.rules),
 }};
-{rule_str}
-'''
-            init_str += f'''\tlist_add_tail(&{name}.list, &{p_name}.traces);
+{}
+'''.format(target, child.get('desc'), skb_str, if_str, default, trace_type,
+                reg_str, analyzer, msg_str, p_name, rule_str,name=name)
+            init_str += '''\tlist_add_tail(&{name}.list, &{}.traces);
 \tall_traces[INDEX_{name}] = &{name};
 \tlist_add_tail(&{name}.sibling, &trace_list);
-'''
+'''.format(p_name, name=name)
             global_status['trace_index'] += 1
 
     return (define_str, init_str, probe_str, index_str)
@@ -186,20 +198,21 @@ with open('trace.yaml', 'r', encoding='utf-8') as f:
     content = f.read()
     root = yaml.load(content, yaml.SafeLoader)
     parse_group(root)
-    (all_define_str, all_init_str, all_probe_str, all_index_str) = gen_group(root, root)
+    (all_define_str, all_init_str, all_probe_str,
+     all_index_str) = gen_group(root, root)
 
     if len(sys.argv) > 1 and sys.argv[1] == 'probe':
-        print(f'''{all_index_str}
-#define TRACE_MAX {global_status['trace_index']}
+        print('''{}
+#define TRACE_MAX {}
 #define _DEFINE_PROBE(FN, FN_tp)\t\t\\
-{all_probe_str}
-''')
+{}
+'''.format(all_index_str,global_status['trace_index'],all_probe_str))
     else:
-        print(f'''#include "trace.h"
+        print('''#include "trace.h"
 #include "progs/kprobe_trace.h"
 #include "analysis.h"
 
-{all_define_str}
+{}
 
 trace_t *all_traces[TRACE_MAX];
 int trace_count = TRACE_MAX;
@@ -207,6 +220,6 @@ LIST_HEAD(trace_list);
 
 void init_trace_group()
 {{
-{all_init_str}
+{}
 }}
-''')
+'''.format(all_define_str,all_init_str))
