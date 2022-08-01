@@ -75,6 +75,7 @@ typedef struct {
 	void (*trace_poll)(void *ctx, int cpu, void *data, u32 size);
 	int (*trace_anal)(event_t *e);
 	void (*trace_close)();
+	void (*trace_ready)();
 	struct analyzer *analyzer;
 } trace_ops_t;
 

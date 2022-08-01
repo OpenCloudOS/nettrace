@@ -306,6 +306,10 @@ int trace_bpf_load()
 			goto err;
 		}
 	}
+
+	if (trace_ctx.ops->trace_ready)
+		trace_ctx.ops->trace_ready();
+
 	return 0;
 err:
 	return -1;

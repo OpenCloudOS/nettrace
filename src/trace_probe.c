@@ -193,6 +193,11 @@ out:
 	return RESULT_CONT;
 }
 
+static void probe_trace_ready()
+{
+	skel->data->arg_ready = true;
+}
+
 analyzer_t probe_analyzer =  {
 	.analy_entry = probe_analy_entry,
 	.analy_exit = probe_analy_exit,
@@ -202,5 +207,6 @@ trace_ops_t probe_ops = {
 	.trace_load = probe_trace_load,
 	.trace_open = probe_trace_open,
 	.trace_close = probe_trace_close,
+	.trace_ready = probe_trace_ready,
 	.analyzer = &probe_analyzer,
 };

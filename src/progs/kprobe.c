@@ -49,6 +49,8 @@ PARAM_DEFINE_BOOL(detail, false);
 PARAM_DEFINE_BOOL(hooks, false);
 PARAM_DEFINE_UINT(u32, pid);
 
+bool arg_ready = true;
+
 static inline void get_ret(int func)
 {
 	int *ref = bpf_map_lookup_elem(&m_ret, &func);
@@ -72,6 +74,9 @@ static inline int handle_entry(void *regs, struct sk_buff *skb, event_t *e,
 	packet_t *pkt = &e->pkt;
 	bool *matched;
 	u32 pid;
+
+	if (!PARAM_CHECK_BOOL(ready))
+		return -1;
 
 	pid = (u32)bpf_get_current_pid_tgid();
 	if (arg_trace_mode == TRACE_MODE_BASIC) {
@@ -152,7 +157,7 @@ static inline int handle_exit(struct pt_regs *regs, int func)
 		.val = PT_REGS_RC(regs),
 	};
 
-	if (put_ret(func))
+	if (!PARAM_CHECK_BOOL(ready) || put_ret(func))
 		return 0;
 
 	if (func == INDEX_skb_clone) {
