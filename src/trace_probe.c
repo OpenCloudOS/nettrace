@@ -195,7 +195,7 @@ out:
 
 static void probe_trace_ready()
 {
-	skel->data->arg_ready = true;
+	skel->bss->arg_ready = true;
 }
 
 analyzer_t probe_analyzer =  {
