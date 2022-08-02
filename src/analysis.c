@@ -565,7 +565,7 @@ DEFINE_ANALYZER_EXIT(nf, TRACE_MODE_INETL_MASK)
 	entry_set_msg(entry, msg);
 	rule_run(entry, trace, e->event.val);
 
-	if (!BPF_ARG(hooks) || !entry->status)
+	if (!BPF_ARG_GET(hooks) || !entry->status)
 		goto out;
 
 	extinfo = malloc(1024);

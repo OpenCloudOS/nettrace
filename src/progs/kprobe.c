@@ -33,6 +33,10 @@ enum args_status {
 	ARGS_RET_ONLY_OFFSET,
 };
 
+#ifndef MAP_CONFIG
+struct bpf_args _bpf_args;
+#endif
+
 #define ARGS_END	(1 << ARGS_END_OFFSET)
 #define ARGS_STACK	(1 << ARGS_STACK_OFFSET)
 #define ARGS_RET	(1 << ARGS_RET_OFFSET)
@@ -43,15 +47,7 @@ typedef struct {
 	u16	status;
 } args_t;
 
-PARAM_DEFINE(u32, trace_mode, TRACE_MODE_BASIC);
-PARAM_DEFINE_BOOL(drop_reason, false);
-PARAM_DEFINE_BOOL(detail, false);
-PARAM_DEFINE_BOOL(hooks, false);
-PARAM_DEFINE_UINT(u32, pid);
-
-bool arg_ready = false;
-
-static inline void get_ret(int func)
+static try_inline void get_ret(int func)
 {
 	int *ref = bpf_map_lookup_elem(&m_ret, &func);
 	if (!ref)
@@ -59,7 +55,7 @@ static inline void get_ret(int func)
 	(*ref)++;
 }
 
-static inline int put_ret(int func)
+static try_inline int put_ret(int func)
 {
 	int *ref = bpf_map_lookup_elem(&m_ret, &func);
 	if (!ref || *ref <= 0)
@@ -68,18 +64,19 @@ static inline int put_ret(int func)
 	return 0;
 }
 
-static inline int handle_entry(void *regs, struct sk_buff *skb, event_t *e,
+static try_inline int handle_entry(void *regs, struct sk_buff *skb, event_t *e,
 			       int size, int func)
 {
 	packet_t *pkt = &e->pkt;
 	bool *matched;
+	ARGS_INIT();
 	u32 pid;
 
-	if (!PARAM_CHECK_BOOL(ready))
+	if (!ARGS_GET(ready))
 		return -1;
 
 	pid = (u32)bpf_get_current_pid_tgid();
-	if (arg_trace_mode == TRACE_MODE_BASIC) {
+	if (ARGS_GET(trace_mode) == TRACE_MODE_BASIC) {
 		if (!probe_parse_skb(skb, pkt))
 			goto skip_life;
 		return -1;
@@ -87,9 +84,8 @@ static inline int handle_entry(void *regs, struct sk_buff *skb, event_t *e,
 
 	matched = bpf_map_lookup_elem(&m_lookup, &skb);
 	if (matched && *matched) {
-		probe_parse_skb_cond(skb, pkt, false);
-	} else if (!PARAM_CHECK_ENABLE(pid, pid) &&
-		   !probe_parse_skb(skb, pkt)) {
+		probe_parse_skb_no_filter(skb, pkt);
+	} else if (!ARGS_CHECK(pid, pid) && !probe_parse_skb(skb, pkt)) {
 		bool _matched = true;
 		bpf_map_update_elem(&m_lookup, &skb, &_matched, 0);
 	} else {
@@ -97,7 +93,7 @@ static inline int handle_entry(void *regs, struct sk_buff *skb, event_t *e,
 	}
 
 skip_life:
-	if (!PARAM_CHECK_BOOL(detail))
+	if (!ARGS_GET(detail))
 		goto out;
 
 	/* store more (detail) information about net or task. */
@@ -125,17 +121,18 @@ out:
 	return 0;
 }
 
-static inline void handle_destroy(struct sk_buff *skb)
+static try_inline int handle_destroy(struct sk_buff *skb)
 {
-	if (arg_trace_mode != TRACE_MODE_BASIC)
+	if (ARGS_GET_CONFIG(trace_mode) != TRACE_MODE_BASIC)
 		bpf_map_delete_elem(&m_lookup, &skb);
+	return 0;
 }
 
-static inline int default_handle_entry(struct pt_regs *ctx,
+static try_inline int default_handle_entry(struct pt_regs *ctx,
 				       struct sk_buff *skb,
 				       int func)
 {
-	if (PARAM_CHECK_BOOL(detail)) {
+	if (ARGS_GET_CONFIG(detail)) {
 		detail_event_t e = { .func = func };
 		handle_entry(ctx, skb, (void *)&e, sizeof(e), func);
 	} else {
@@ -149,7 +146,7 @@ static inline int default_handle_entry(struct pt_regs *ctx,
 	return 0;
 }
 
-static inline int handle_exit(struct pt_regs *regs, int func)
+static try_inline int handle_exit(struct pt_regs *regs, int func)
 {
 	retevent_t event = {
 		.ts = bpf_ktime_get_ns(),
@@ -157,7 +154,7 @@ static inline int handle_exit(struct pt_regs *regs, int func)
 		.val = PT_REGS_RC(regs),
 	};
 
-	if (!PARAM_CHECK_BOOL(ready) || put_ret(func))
+	if (!ARGS_GET_CONFIG(ready) || put_ret(func))
 		return 0;
 
 	if (func == INDEX_skb_clone) {
@@ -170,7 +167,7 @@ static inline int handle_exit(struct pt_regs *regs, int func)
 }
 
 #define DEFINE_KPROBE_RAW(name, skb_init)			\
-	static inline int fake__##name(struct pt_regs *ctx,	\
+	static try_inline int fake__##name(struct pt_regs *ctx,	\
 				       struct sk_buff *skb,	\
 				       int func);		\
 	SEC("kretprobe/"#name)					\
@@ -184,7 +181,7 @@ static inline int handle_exit(struct pt_regs *regs, int func)
 		struct sk_buff *skb = (void *)skb_init;		\
 		return fake__##name(ctx, skb, INDEX_##name);	\
 	}							\
-	static inline int fake__##name(struct pt_regs *ctx,	\
+	static try_inline int fake__##name(struct pt_regs *ctx,	\
 				       struct sk_buff *skb,	\
 				       int func)
 #define DEFINE_KPROBE(name, skb_index)				\
@@ -197,14 +194,14 @@ static inline int handle_exit(struct pt_regs *regs, int func)
 	}
 
 #define DEFINE_TP(name, cata, tp, offset)			\
-	static inline int fake_##name(void *ctx, struct sk_buff *skb,	\
+	static try_inline int fake_##name(void *ctx, struct sk_buff *skb,	\
 				      int func);		\
 	SEC("tp/"#cata"/"#tp)					\
 	int __trace_##name(void *ctx) {				\
 		struct sk_buff *skb = *(void **)(ctx + offset);	\
 		return fake_##name(ctx, skb, INDEX_##name);	\
 	}							\
-	static inline int fake_##name(void *ctx, struct sk_buff *skb,	\
+	static try_inline int fake_##name(void *ctx, struct sk_buff *skb,	\
 				  int func)
 #define TP_DEFAULT(name, cata, tp, offset)			\
 	DEFINE_TP(name, cata, tp, offset)			\
@@ -227,7 +224,7 @@ DEFINE_TP(kfree_skb, skb, kfree_skb, 8)
 	struct kfree_skb_args *args = ctx;
 
 	e.location = (unsigned long)args->location;
-	if (PARAM_CHECK_BOOL(drop_reason))
+	if (ARGS_GET_CONFIG(drop_reason))
 		e.reason = _(args->reason);
 
 	handle_entry(ctx, skb, &e.event, sizeof(e), func);
@@ -262,7 +259,7 @@ DEFINE_KPROBE(nf_hook_slow, 1)
 	int num;
 
 	state = (void *)PT_REGS_PARM2(ctx);
-	if (PARAM_CHECK_BOOL(hooks))
+	if (ARGS_GET_CONFIG(hooks))
 		goto on_hooks;
 
 	if (handle_entry(ctx, skb, &e.event, 0, func))

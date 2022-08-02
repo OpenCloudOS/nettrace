@@ -251,12 +251,12 @@ skip_trace:
 	}
 
 	if (trace_drop_reason_support()) {
-		trace_ctx.bpf_args.arg_drop_reason = true;
+		trace_ctx.bpf_args.drop_reason = true;
 		trace_ctx.drop_reason = true;
 	}
 
-	trace_ctx.bpf_args.arg_trace_mode = trace_ctx.mode;
-	trace_ctx.detail = trace_ctx.bpf_args.arg_detail;
+	trace_ctx.bpf_args.trace_mode = trace_ctx.mode;
+	trace_ctx.detail = trace_ctx.bpf_args.detail;
 
 	return 0;
 err:

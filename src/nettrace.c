@@ -14,17 +14,18 @@ arg_config_t config = {
 static void do_parse_args(int argc, char *argv[])
 {
 	trace_args_t *trace_args = &trace_ctx.args;
+	bpf_args_t *bpf_args = &trace_ctx.bpf_args;
 	bool show_log = false, debug = false;
 	int proto_l = 0;
 	u16 proto;
 
-#define E(name) &(trace_ctx.bpf_args.enable_##name)
-#define R(name)	&(trace_ctx.bpf_args.arg_##name)
+#define E(name) &(bpf_args->pkt.enable_##name)
+#define R(name)	&(bpf_args->pkt.name)
 	option_item_t opts[] = {
 #include <common_args.h>
 		{
 			.lname = "pid", .type = OPTION_U32,
-			.dest = R(pid), .set = E(pid),
+			.dest = &bpf_args->pid, .set = &bpf_args->enable_pid,
 			.desc = "filter by current process id(pid)",
 		},
 		{
@@ -38,7 +39,7 @@ static void do_parse_args(int argc, char *argv[])
 			.desc = "show function return value",
 		},
 		{
-			.lname = "detail", .dest = R(detail),
+			.lname = "detail", .dest = &bpf_args->detail,
 			.type = OPTION_BOOL,
 			.desc = "show extern packet info, such as pid, ifname, etc",
 		},
@@ -63,7 +64,7 @@ static void do_parse_args(int argc, char *argv[])
 			.desc = "don't quit when abnormal packet found",
 		},
 		{
-			.lname = "hooks", .dest = R(hooks),
+			.lname = "hooks", .dest = &bpf_args->hooks,
 			.type = OPTION_BOOL,
 			.desc = "print netfilter hooks if dropping by netfilter",
 		},

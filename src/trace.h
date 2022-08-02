@@ -55,8 +55,6 @@ typedef struct trace {
 	bool	def;
 } trace_t;
 
-typedef typeof(*((struct kprobe *)0)->rodata) bpf_args_t;
-
 typedef struct trace_args {
 	bool timeline;
 	bool ret;
@@ -99,7 +97,7 @@ typedef struct {
 #define TRACE_HAS_ANALYZER(trace, name) IS_ANALYZER(trace->analyzer, name)
 #define TRACE_ANALYZER_ENABLED(name) trace_analyzer_enabled(&(ANALYZER(name)))
 
-#define BPF_ARG(name) (trace_ctx.bpf_args.arg_##name)
+#define BPF_ARG_GET(name) (trace_ctx.bpf_args.name)
 
 extern trace_ops_t probe_ops;
 extern trace_context_t trace_ctx;

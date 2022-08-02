@@ -8,6 +8,10 @@ prog-nettrace-origin = trace.c $(COMMON_SHARED) \
 
 prog-nettrace = $(prog-nettrace-origin) nettrace.c
 
+ifdef COMPAT
+CFLAGS += -DMAP_CONFIG
+endif
+
 include ../common.mk
 
 NFT_HEADER	:= $(HEADERS)/include/net/netfilter/nf_tables.h

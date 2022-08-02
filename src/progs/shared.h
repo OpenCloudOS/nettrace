@@ -65,4 +65,16 @@ typedef enum trace_mode {
 	TRACE_MODE_INETL,
 } trace_mode_t;
 
+typedef struct bpf_args {
+	pkt_args_t pkt;
+	u32  trace_mode;
+	u32  pid;
+	bool enable_trace_mode;
+	bool enable_pid;
+	bool drop_reason;
+	bool detail;
+	bool hooks;
+	bool ready;
+} bpf_args_t;
+
 #endif

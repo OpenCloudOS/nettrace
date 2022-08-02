@@ -1,5 +1,7 @@
 #include <net_utils.h>
+#include <bpf_utils.h>
 
+#include "progs/shared.h"
 #include "progs/kprobe.skel.h"
 #include "trace.h"
 #include "analysis.h"
@@ -94,7 +96,6 @@ err:
 static struct kprobe *skel;
 static int probe_trace_open()
 {
-	bpf_args_t *args = &trace_ctx.bpf_args;
 	int i = 0;
 
 	skel = kprobe__open();
@@ -103,12 +104,13 @@ static int probe_trace_open()
 		goto err;
 	}
 
-	*(bpf_args_t *)(void *)skel->rodata = *args;
-	trace_ctx.obj = skel->obj;
 	if (kprobe__load(skel)) {
 		pr_err("failed to load kprobe-based eBPF\n");
 		goto err;
 	}
+
+	bpf_set_config(skel, bss, trace_ctx.bpf_args);
+	trace_ctx.obj = skel->obj;
 
 	for (; i < ARRAY_SIZE(cpus); i++)
 		INIT_LIST_HEAD(&cpus[i]);
@@ -189,13 +191,14 @@ static analyzer_result_t probe_analy_entry(trace_t *trace, analy_entry_t *e)
 		 (u64)e->event->key, e->cpu, (u32)(u64)e->ctx,
 		 e->ctx->refs);
 	e->status |= ANALY_ENTRY_ONCPU;
+	
 out:
 	return RESULT_CONT;
 }
 
 static void probe_trace_ready()
 {
-	skel->bss->arg_ready = true;
+	bpf_set_config_field(skel, bss, ready, true);
 }
 
 analyzer_t probe_analyzer =  {

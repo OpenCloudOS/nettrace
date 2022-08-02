@@ -56,4 +56,25 @@ typedef struct __attribute__((__packed__)) {
 #define TCP_FLAGS_RST	(1 << 2)
 #define TCP_FLAGS_SYN	(1 << 1)
 
+typedef struct {
+	u32	saddr;
+	bool	enable_saddr;
+	u32	daddr;
+	bool	enable_daddr;
+	u32	addr;
+	bool	enable_addr;
+	u16	sport;
+	bool	enable_sport;
+	u16	dport;
+	bool	enable_dport;
+	u16	port;
+	bool	enable_port;
+	u16	l3_proto;
+	bool	enable_l3_proto;
+	u8	l4_proto;
+	bool	enable_l4_proto;
+} pkt_args_t;
+
+#define CONFIG_MAP_SIZE	1024
+
 #endif

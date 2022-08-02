@@ -22,37 +22,38 @@ struct {
 	tmp;						\
 })
 
-#ifndef CONFIG_NO_FILTER
-#define PARAM_DEFINE(type, name, default)	\
-	const volatile type arg_##name = default
-#define PARAM_DEFINE_ENABLE(type, name)		\
-	PARAM_DEFINE(type, name, 0);		\
-	const volatile bool enable_##name = false
-#define PARAM_DEFINE_UINT(type, name)		\
-	PARAM_DEFINE_ENABLE(type, name)
-#define PARAM_DEFINE_BOOL(name, default)	\
-	PARAM_DEFINE(bool, name, default)
-#define PARAM_ENABLED(name)			\
-	(enable_##name)
-#define PARAM_CHECK_ENABLE(name, val)		\
-	(PARAM_ENABLED(name) && arg_##name != (val))
-#define PARAM_CHECK_BOOL(name)			\
-	(arg_##name)
+struct bpf_args;
+#ifdef MAP_CONFIG
+struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY);
+	__uint(key_size, sizeof(int));
+	__uint(value_size, CONFIG_MAP_SIZE);
+	__uint(max_entries, 1);
+} m_config SEC(".maps");
 
-PARAM_DEFINE_UINT(u32, saddr);
-PARAM_DEFINE_UINT(u32, daddr);
-PARAM_DEFINE_UINT(u32, addr);
-PARAM_DEFINE_UINT(u16, sport);
-PARAM_DEFINE_UINT(u16, dport);
-PARAM_DEFINE_UINT(u16, port);
-PARAM_DEFINE_UINT(u16, l3_proto);
-PARAM_DEFINE_UINT(u8,  l4_proto);
+#define CONFIG() ({						\
+	int _key = 0;						\
+	void * _v = bpf_map_lookup_elem(&m_config, &_key);	\
+	if (!_v)						\
+		return 0; /* this can't happen */		\
+	(struct bpf_args*)_v;					\
+})
+
+#define try_inline __attribute__((always_inline))
 #else
-#define PARAM_CHECK_ENABLE(name, val)		\
-	(1)
-#define PARAM_CHECK_BOOL(name)			\
-	(1)
+extern struct bpf_args _bpf_args;
+#define CONFIG() &_bpf_args
+#define try_inline inline
 #endif
+
+#define ARGS_INIT()		bpf_args_t *bpf_args = CONFIG();
+#define ARGS_PKT()		(&bpf_args->pkt)
+
+#define ARGS_ENABLED(name)	bpf_args->enable_##name
+#define ARGS_GET(name)		bpf_args->name
+#define ARGS_GET_CONFIG(name)	((struct bpf_args *)CONFIG())->name
+#define ARGS_CHECK(name, val)	\
+	(ARGS_ENABLED(name) && bpf_args->name != (val))
 
 typedef struct {
 	u64 pad;
@@ -64,6 +65,10 @@ typedef struct {
 
 typedef struct {
 	void *data;
+	struct sk_buff *skb;
+	pkt_args_t *args;
+	packet_t *pkt;
+	bool filter;
 	u16 mac_header;
 	u16 network_header;
 	u16 trans_header;
@@ -98,13 +103,13 @@ typedef struct {
 #define IS_PSEUDO 0x10
 
 
-static __always_inline u8 get_ip_header_len(u8 h)
+static try_inline u8 get_ip_header_len(u8 h)
 {
 	u8 len = (h & 0xF0) * 4;
 	return len > IP_H_LEN ? len: IP_H_LEN;
 }
 
-static inline void *load_l4_hdr(struct __sk_buff *skb, struct iphdr *ip,
+static try_inline void *load_l4_hdr(struct __sk_buff *skb, struct iphdr *ip,
 			        void *dst, __u32 len)
 {
 	__u32 offset, iplen;
@@ -122,25 +127,27 @@ static inline void *load_l4_hdr(struct __sk_buff *skb, struct iphdr *ip,
 	return l4;
 }
 
-static inline bool skb_l2_check(u16 header)
+static try_inline bool skb_l2_check(u16 header)
 {
 	return !header || header == (u16)~0U;
 }
 
-static inline bool skb_l4_check(u16 l4, u16 l3)
+static try_inline bool skb_l4_check(u16 l4, u16 l3)
 {
 	return l4 == 0xFFFF || l4 <= l3;
 }
 
-#define CHECK_ATTR(attr)				\
-	((PARAM_CHECK_ENABLE(attr, d##attr) &&		\
-	  PARAM_CHECK_ENABLE(attr, s##attr)) ||		\
-	 PARAM_CHECK_ENABLE(s##attr, s##attr) ||	\
-	 PARAM_CHECK_ENABLE(d##attr, d##attr))
+#define CHECK_ATTR(attr)			\
+	((ARGS_CHECK(attr, d##attr) &&		\
+	  ARGS_CHECK(attr, s##attr)) ||		\
+	 ARGS_CHECK(s##attr, s##attr) ||	\
+	 ARGS_CHECK(d##attr, d##attr))
 
-static inline int
-probe_parse_ip(void *ip, parse_ctx_t *ctx, packet_t *pkt, bool filter)
+static try_inline int probe_parse_ip(void *ip, parse_ctx_t *ctx)
 {
+	pkt_args_t *bpf_args = ctx->args;
+	bool filter = ctx->filter;
+	packet_t *pkt = ctx->pkt;
 	void *l4 = NULL;
 
 	if (!skb_l4_check(ctx->trans_header, ctx->network_header))
@@ -173,11 +180,11 @@ probe_parse_ip(void *ip, parse_ctx_t *ctx, packet_t *pkt, bool filter)
 		pkt->l3.ipv4.daddr = daddr;
 	}
 
-	if (filter && PARAM_CHECK_ENABLE(l4_proto, pkt->proto_l4))
+	if (filter && ARGS_CHECK(l4_proto, pkt->proto_l4))
 		return -1;
 
-	bool port_filter = PARAM_ENABLED(sport) || PARAM_ENABLED(dport) ||
-			   PARAM_ENABLED(port);
+	bool port_filter = ARGS_ENABLED(sport) || ARGS_ENABLED(dport) ||
+			   ARGS_ENABLED(port);
 
 	switch (pkt->proto_l4) {
 	case IPPROTO_TCP: {
@@ -225,18 +232,20 @@ probe_parse_ip(void *ip, parse_ctx_t *ctx, packet_t *pkt, bool filter)
 	return 0;
 }
 
-static inline int probe_parse_skb_cond(struct sk_buff *skb, packet_t *pkt,
-				       bool filter)
+static try_inline int probe_parse_skb_cond(parse_ctx_t *ctx)
 {
-	parse_ctx_t ctx;
+	pkt_args_t *bpf_args = ctx->args;
+	struct sk_buff *skb = ctx->skb;
+	bool filter = ctx->filter;
+	packet_t *pkt = ctx->pkt;
 	u16 l3_proto;
 	void *l3;
 
-	ctx.network_header = _(skb->network_header);
-	ctx.mac_header = _(skb->mac_header);
-	ctx.data = _(skb->head);
+	ctx->network_header = _(skb->network_header);
+	ctx->mac_header = _(skb->mac_header);
+	ctx->data = _(skb->head);
 
-	if (skb_l2_check(ctx.mac_header)) {
+	if (skb_l2_check(ctx->mac_header)) {
 		/*
 		 * try to parse skb for send path, which means that
 		 * ether header doesn't exist in skb.
@@ -244,47 +253,65 @@ static inline int probe_parse_skb_cond(struct sk_buff *skb, packet_t *pkt,
 		l3_proto = bpf_ntohs(_(skb->protocol));
 		if (!l3_proto)
 			return -1;
-		if (!ctx.network_header)
+		if (!ctx->network_header)
 			return -1;
-		l3 = ctx.data + ctx.network_header;
-	} else if (ctx.mac_header == ctx.network_header) {
+		l3 = ctx->data + ctx->network_header;
+	} else if (ctx->mac_header == ctx->network_header) {
 		/* to tun device, mac header is the same to network header.
 		 * For this case, we assume that this is a IP packet.
 		 */
-		l3 = ctx.data + ctx.network_header;
+		l3 = ctx->data + ctx->network_header;
 		l3_proto = ETH_P_IP;
 	} else {
 		/* mac header is set properly, we can use it directly. */
-		struct ethhdr *eth = ctx.data + ctx.mac_header;
+		struct ethhdr *eth = ctx->data + ctx->mac_header;
 
 		l3 = (void *)eth + ETH_HLEN;
 		l3_proto = bpf_ntohs(_(eth->h_proto));
 	}
 
-	if (filter && PARAM_CHECK_ENABLE(l3_proto, l3_proto))
+	if (filter && ARGS_CHECK(l3_proto, l3_proto))
 		return -1;
 
-	ctx.trans_header = _(skb->transport_header);
+	ctx->trans_header = _(skb->transport_header);
 	pkt->proto_l3 = l3_proto;
 
 	switch (l3_proto) {
 	case ETH_P_IPV6:
 	case ETH_P_IP:
-		return probe_parse_ip(l3, &ctx, pkt, filter);
+		return probe_parse_ip(l3, ctx);
 	default:
-		if (filter && PARAM_ENABLED(l4_proto))
+		if (filter && ARGS_ENABLED(l4_proto))
 			return -1;
 		return 0;
 	}
 }
 
-static inline int probe_parse_skb(struct sk_buff *skb, packet_t *pkt)
+static try_inline int probe_parse_skb(struct sk_buff *skb, packet_t *pkt)
 {
-	return probe_parse_skb_cond(skb, pkt, true);
+	parse_ctx_t ctx = {
+		.args = (void *)CONFIG(),
+		.filter = true,
+		.skb = skb,
+		.pkt = pkt,
+	};
+	return probe_parse_skb_cond(&ctx);
 }
 
-static inline int direct_parse_skb(struct __sk_buff *skb, packet_t *pkt,
-				bool filter)
+static try_inline int probe_parse_skb_no_filter(struct sk_buff *skb,
+					    packet_t *pkt)
+{
+	parse_ctx_t ctx = {
+		.args = (void *)CONFIG(),
+		.filter = false,
+		.skb = skb,
+		.pkt = pkt,
+	};
+	return probe_parse_skb_cond(&ctx);
+}
+
+static try_inline int direct_parse_skb(struct __sk_buff *skb, packet_t *pkt,
+				   pkt_args_t *bpf_args)
 {
 	struct ethhdr *eth = SKB_DATA(skb);
 	struct iphdr *ip = (void *)(eth + 1);
@@ -292,16 +319,16 @@ static inline int direct_parse_skb(struct __sk_buff *skb, packet_t *pkt,
 	if ((void *)ip > SKB_END(skb))
 		goto err;
 
-	if (filter && (PARAM_CHECK_ENABLE(l3_proto, eth->h_proto)))
+	if (bpf_args && (ARGS_CHECK(l3_proto, eth->h_proto)))
 		goto err;
 
 	pkt->proto_l3 = bpf_ntohs(eth->h_proto);
 	if (SKB_CHECK_IP(skb))
 		goto err;
 
-	if (filter && (PARAM_CHECK_ENABLE(l4_proto, ip->protocol) ||
-		       PARAM_CHECK_ENABLE(saddr, ip->saddr) ||
-		       PARAM_CHECK_ENABLE(daddr, ip->daddr)))
+	if (bpf_args && (ARGS_CHECK(l4_proto, ip->protocol) ||
+		       ARGS_CHECK(saddr, ip->saddr) ||
+		       ARGS_CHECK(daddr, ip->daddr)))
 		goto err;
 
 	l4_min_t *l4_p = (void *)(ip + 1);
@@ -336,8 +363,8 @@ fill_port:
 		goto out;
 	}
 
-	if (filter && (PARAM_CHECK_ENABLE(sport, l4_p->sport) ||
-		       PARAM_CHECK_ENABLE(dport, l4_p->dport)))
+	if (bpf_args && (ARGS_CHECK(sport, l4_p->sport) ||
+		       ARGS_CHECK(dport, l4_p->dport)))
 		return 1;
 
 	pkt->l3.ipv4.saddr = ip->saddr;
