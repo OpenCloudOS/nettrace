@@ -14,17 +14,15 @@
 #include <pkt_utils.h>
 #include <parse_sym.h>
 
+#include "reasons.h"
 #include "./progs/shared.h"
 #include "progs/probe.skel.h"
 #include "progs/trace.skel.h"
-#include "reasons.h"
 
 #define MAX_OUTPUT_LENGTH	256
 #define ROOT_PIN_PATH		"/sys/fs/bpf/droptrace/"
 #define SNMP_PIN_PATH		ROOT_PIN_PATH"snmp"
 #define TRACE_PIN_PATH		ROOT_PIN_PATH"trace"
-
-typedef typeof(*((struct trace *)0)->rodata) bpf_args_t;
 
 u32 snmp_reasons[SKB_DROP_REASON_MAX];
 
@@ -104,16 +102,16 @@ static int parse_opts(int argc, char *argv[], bpf_args_t *args)
 	int proto_l = 0;
 	u16 proto;
 
-#define E(name) &(args->enable_##name)
-#define R(name)	&(args->arg_##name)
+#define E(name) &(args->pkt.enable_##name)
+#define R(name)	&(args->pkt.name)
 	option_item_t opts[] = {
 #include <common_args.h>
 		{
 			.lname = "reason",
 			.sname = 'r',
-			.dest = R(reason),
+			.dest = &args->reason,
 			.type = OPTION_U16,
-			.set = E(reason),
+			.set = &args->enable_reason,
 			.desc = "filter drop reason",
 		},
 		{ .type = OPTION_BLANK },
@@ -139,17 +137,17 @@ static int parse_opts(int argc, char *argv[], bpf_args_t *args)
 		{
 			.lname = "limit",
 			.sname = 'l',
-			.dest = R(limit),
+			.dest = &args->limit,
 			.type = OPTION_U32,
-			.set = E(limit),
+			.set = &args->enable_limit,
 			.desc = "set the max output pcaket per second, default"
 				"unlimited",
 		},
 		{
 			.lname = "limit-budget",
-			.dest = R(limit_bucket),
+			.dest = &args->limit_bucket,
 			.type = OPTION_U32,
-			.set = E(limit_bucket),
+			.set = &args->enable_limit_bucket,
 			.desc = "set the budget depth of the token used to limit"
 				"output rate",
 		},
@@ -165,11 +163,11 @@ static int parse_opts(int argc, char *argv[], bpf_args_t *args)
 		goto err;
 
 	if (proto_l == 3) {
-		*R(l3_proto) = proto;
-		*E(l3_proto) = true;
+		args->pkt.enable_l3_proto = true;
+		args->pkt.l3_proto = proto;
 	} else if (proto_l == 4) {
-		*R(l4_proto) = proto;
-		*E(l4_proto) = true;
+		args->pkt.enable_l4_proto = true;
+		args->pkt.l4_proto = proto;
 	}
 
 	if (stat_stop) {
@@ -177,7 +175,7 @@ static int parse_opts(int argc, char *argv[], bpf_args_t *args)
 		goto exit;
 	}
 
-	args->arg_snmp_mode = snmp_mode;
+	args->snmp_mode = snmp_mode;
 	return 0;
 err:
 	return -1;
@@ -210,8 +208,8 @@ do_load:
 	libbpf_set_print(NULL);
 	trace = trace__open();
 	probe = probe__open();
-	*(bpf_args_t *)probe->rodata = bpf_args;
-	*(bpf_args_t *)trace->rodata = bpf_args;
+	bpf_set_config(probe, data, bpf_args);
+	bpf_set_config(trace, data, bpf_args);
 	liberate_l();
 
 	if (trace__load(trace)) {
@@ -245,7 +243,7 @@ do_snmp_pin:
 		printf("failed to create bpf pin path\n");
 		goto err;
 	}
-	if (bpf_obj_pin(SKEL_OBJ_FD(map, bss), SNMP_PIN_PATH)) {
+	if (bpf_obj_pin(SKEL_OBJ_FD(map, data), SNMP_PIN_PATH)) {
 		printf("failed to pin snmp map\n");
 		goto err;
 	}
