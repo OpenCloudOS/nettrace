@@ -13,6 +13,14 @@
 struct list_head cpus[MAX_CPU_COUNT];
 trace_ops_t probe_ops;
 
+static int bpf_kprobe_attach(struct bpf_program *prog, char *name, bool ret)
+{
+	if (file_exist("/sys/bus/event_source/devices/kprobe/type"))
+		return libbpf_get_error(bpf_program__attach_kprobe(prog,
+				ret, name));
+	return compat_bpf_attach_kprobe(bpf_program__fd(prog), name, ret);
+}
+
 static int probe_trace_load(trace_t *trace)
 {
 	char tmp[128], *regex, _regex[128],
@@ -54,8 +62,7 @@ retry:
 	}
 
 	pr_debug("attaching %s to %s\n", trace->prog, target);
-	err = libbpf_get_error(bpf_program__attach_kprobe(prog, false,
-							  target));
+	err = bpf_kprobe_attach(prog, target, false);
 	if (err && !regex) {
 		sprintf(_regex, "^%s\\.", trace->name);
 		regex = _regex;
@@ -78,9 +85,7 @@ on_fail:
 				kret_name);
 			return 0;
 		}
-		err = libbpf_get_error(bpf_program__attach_kprobe(prog,
-								  true,
-								  target));
+		err = bpf_kprobe_attach(prog, target, true);
 		if (err)
 			pr_warn("failed to attach kretprobe program: %s\n",
 				tmp);

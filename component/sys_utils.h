@@ -4,6 +4,8 @@
 #define _H_SYS_UTILS
 
 #include <stdlib.h>
+#include <unistd.h>
+#include <stdbool.h>
 
 extern int log_level;
 
@@ -14,6 +16,11 @@ int liberate_l();
 static inline int simple_exec(char *cmd)
 {
 	return exec(cmd, NULL);
+}
+
+static inline bool file_exist(char *path)
+{
+	return access(path, F_OK) == 0;
 }
 
 #define pr_level(level, target, fmt, args...)	\
