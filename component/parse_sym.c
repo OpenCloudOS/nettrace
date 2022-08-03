@@ -89,7 +89,7 @@ static struct sym_result *lookup_sym_proc(__u64 pc, bool exact)
 		result->start = ppc;
 		result->end = cpc;
 		result->pc = pc;
-		sprintf(result->desc, "%s+0x%x", result->name,
+		sprintf(result->desc, "%s+0x%llx", result->name,
 			pc - result->start);
 		add_sym_cache(result);
 		goto ok;

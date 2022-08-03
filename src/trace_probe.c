@@ -196,7 +196,7 @@ static analyzer_result_t probe_analy_entry(trace_t *trace, analy_entry_t *e)
 		 (u64)e->event->key, e->cpu, PTR2X(e->ctx),
 		 e->ctx->refs);
 	e->status |= ANALY_ENTRY_ONCPU;
-	
+
 out:
 	return RESULT_CONT;
 }

@@ -107,7 +107,7 @@ static analy_entry_t *analy_entry_alloc(void *data, u32 size)
 		return NULL;
 
 	if (size > MAX_EVENT_SIZE + 8) {
-		pr_err("trace data is too big! size: %lu, max: %d\n",
+		pr_err("trace data is too big! size: %u, max: %lu\n",
 		       size, MAX_EVENT_SIZE);
 		return NULL;
 	}
@@ -299,7 +299,7 @@ void tl_poll_handler(void *raw_ctx, int cpu, void *data, u32 size)
 	}
 	e = entry->event;
 	entry->cpu = cpu;
-	pr_debug("create entry: %llxx\n", PTR2X(entry));
+	pr_debug("create entry: %llx\n", PTR2X(entry));
 
 	fake = analy_fake_ctx_fetch(e->key);
 	if (!fake) {
