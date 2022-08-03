@@ -106,7 +106,7 @@ static inline int compat_bpf_attach_kprobe(int fd, char *name, bool ret)
 	}
 	sprintf(buf, "/sys/kernel/debug/tracing/events/kprobes/%s/id",
 		target);
-exist:
+exist:;
 	int efd = open(buf, O_RDONLY, 0);
 	if (efd < 0) {
 		printf("failed to open event %s\n", name);
