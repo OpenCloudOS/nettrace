@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MulanPSL-2.0
 
 #include "common.h"
+#include "progs/shared.h"
 #include "progs/ntrace.skel.h"
 
 static char tc_pref[16];
@@ -27,13 +28,13 @@ static void print_bpf_output(void *ctx, int cpu, void *data, __u32 size)
 	printf("%s\n", buf);
 }
 
-static int parse_opts(int argc, char *argv[], struct ntrace *obj)
+static int parse_opts(int argc, char *argv[], bpf_args_t *args)
 {
 	int proto_l;
 	u16 proto;
 
-#define E(name) &(obj->rodata->enable_##name)
-#define R(name)	&(obj->rodata->arg_##name)
+#define E(name) &(args->pkt.enable_##name)
+#define R(name)	&(args->pkt.name)
 	option_item_t opts[] = {
 #include <common_args.h>
 		{ .type = OPTION_BLANK },
@@ -43,7 +44,7 @@ static int parse_opts(int argc, char *argv[], struct ntrace *obj)
 			.desc = "target nic, such as 'eth0'",
 		},
 		{
-			.sname = 'o', .dest = R(quiet),
+			.sname = 'o', .dest = &args->quiet,
 			.type = OPTION_BOOL_REV,
 			.desc = "output packet info that marked",
 		},
@@ -67,19 +68,21 @@ err:
 int main(int argc, char *argv[])
 {
 	struct perf_buffer_opts pb_opts = {};
+	bpf_args_t bpf_args = {};
 	struct perf_buffer *pb;
 	struct bpf_link *link;
 	struct ntrace *obj;
 	char cmd[256];
 	int ret, opt;
 
+	if (parse_opts(argc, argv, &bpf_args))
+		goto err;
+
 	if (!(obj = ntrace__open())) {
 		printf("failed to open eBPF program\n");
 		goto err;
 	}
-
-	if (parse_opts(argc, argv, obj))
-		goto err;
+ 	obj->data->_bpf_args = bpf_args;
 
 	if (ntrace__load(obj)) {
 		printf("failed to load program\n");

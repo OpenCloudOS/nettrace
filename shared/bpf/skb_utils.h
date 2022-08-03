@@ -311,7 +311,7 @@ static try_inline int probe_parse_skb_no_filter(struct sk_buff *skb,
 }
 
 static try_inline int direct_parse_skb(struct __sk_buff *skb, packet_t *pkt,
-				   pkt_args_t *bpf_args)
+				       pkt_args_t *bpf_args)
 {
 	struct ethhdr *eth = SKB_DATA(skb);
 	struct iphdr *ip = (void *)(eth + 1);

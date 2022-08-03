@@ -1,3 +1,5 @@
+#ifndef _H_SHARED
+#define _H_SHARED
 
 #include <packet.h>
 
@@ -12,3 +14,11 @@ enum {
 	LOCALTION_MARK,
 	LOCALTION_ERR,
 };
+
+struct bpf_args {
+	pkt_args_t pkt;
+	bool quiet;
+};
+typedef struct bpf_args bpf_args_t;
+
+#endif

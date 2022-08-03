@@ -16,13 +16,12 @@
 #include <arg_parse.h>
 #include <pkt_utils.h>
 
-#include "progs/bpf.h"
+#include "progs/shared.h"
 
 static inline int tc_attach(int prog_fd, char *nic, char *pref,
 			    bool ingress)
 {
 	char cmd[256], path_pin[256] = "/sys/fs/bpf/tc_tmp", *filter;
-	int ret;
 
 	if (bpf_obj_pin(prog_fd, path_pin)) {
 		printf("failed to pin mark\n");
@@ -35,7 +34,11 @@ static inline int tc_attach(int prog_fd, char *nic, char *pref,
 		"tc filter add dev %s %s bpf object-pinned %s;"
 		"rm %s",
 		nic, nic, nic, filter, path_pin, path_pin);
-	ret = system(cmd);
+
+	if (simple_exec(cmd)) {
+		pr_err("failed to attach eBPF program\n");
+		goto err;
+	}
 
 	sprintf(cmd, "tc filter show dev %s %s | grep tc_tmp |"
 		" tail -n 1 | awk '{print $5}'",
