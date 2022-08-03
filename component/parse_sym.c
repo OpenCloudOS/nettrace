@@ -46,7 +46,7 @@ static struct sym_result *lookup_sym_cache(__u64 pc, bool exact)
 		return NULL;
 	memcpy(head, sym, sizeof(*head));
 	head->pc = pc;
-	sprintf(head->desc, "%s+0x%x", head->name, pc - head->start);
+	sprintf(head->desc, "%s+0x%llx", head->name, pc - head->start);
 	add_sym_cache(head);
 	return head;
 }

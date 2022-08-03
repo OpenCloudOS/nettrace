@@ -173,8 +173,8 @@ found:
 	e->entry = pos;
 	pos->status &= ~ANALY_ENTRY_ONCPU;
 	pr_debug("found exit for entry: %s(%llx) on cpu %d with return "
-		 "value %llx, ctx:%x:%d\n", trace->name, pos->event->key, cpu,
-		 e->event.val, pos->ctx, pos->ctx->refs);
+		 "value %llx, ctx:%llx:%d\n", trace->name, pos->event->key, cpu,
+		 e->event.val, PTR2X(pos->ctx), pos->ctx->refs);
 out:
 	return RESULT_CONT;
 }
@@ -184,16 +184,16 @@ static analyzer_result_t probe_analy_entry(trace_t *trace, analy_entry_t *e)
 	struct list_head *list;
 
 	if (!trace_is_ret(trace)) {
-		pr_debug("tp found for %s(%llx), ctx:%x:%d\n", trace->name,
-			 (u64)e->event->key, (u32)(u64)e->ctx,
+		pr_debug("tp found for %s(%llx), ctx:%llx:%d\n", trace->name,
+			 (u64)e->event->key, PTR2X(e->ctx),
 			 e->ctx->refs);
 		goto out;
 	}
 	list = &cpus[e->cpu];
 	list_add(&e->cpu_list, list);
 	get_fake_analy_ctx(e->fake_ctx);
-	pr_debug("mounted entry %s(%llx) on cpu %d, ctx:%x:%d\n", trace->name,
-		 (u64)e->event->key, e->cpu, (u32)(u64)e->ctx,
+	pr_debug("mounted entry %s(%llx) on cpu %d, ctx:%llx:%d\n", trace->name,
+		 (u64)e->event->key, e->cpu, PTR2X(e->ctx),
 		 e->ctx->refs);
 	e->status |= ANALY_ENTRY_ONCPU;
 	

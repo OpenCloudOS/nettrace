@@ -64,7 +64,7 @@ static inline fake_analy_ctx_t
 	analy_fake_ctx_add(fake);
 
 	get_fake_analy_ctx(fake);
-	pr_debug("fake ctx alloc: %llx\n", fake);
+	pr_debug("fake ctx alloc: %llx\n", PTR2X(fake));
 	return fake;
 }
 
@@ -107,7 +107,7 @@ static analy_entry_t *analy_entry_alloc(void *data, u32 size)
 		return NULL;
 
 	if (size > MAX_EVENT_SIZE + 8) {
-		pr_err("trace data is too big! size: %d, max: %d\n",
+		pr_err("trace data is too big! size: %lu, max: %d\n",
 		       size, MAX_EVENT_SIZE);
 		return NULL;
 	}
@@ -146,7 +146,7 @@ static void analy_entry_handle(analy_entry_t *entry)
 	trace_t *t;
 
 	t = get_trace_from_analy_entry(entry);
-	pr_debug("output entry(%x)\n", entry);
+	pr_debug("output entry(%llx)\n", PTR2X(entry));
 	if (trace_ctx.detail) {
 		detail_event_t *detail = (void *)entry->event;
 		static char ifbuf[IF_NAMESIZE];
@@ -299,7 +299,7 @@ void tl_poll_handler(void *raw_ctx, int cpu, void *data, u32 size)
 	}
 	e = entry->event;
 	entry->cpu = cpu;
-	pr_debug("create entry: %x\n", entry);
+	pr_debug("create entry: %llxx\n", PTR2X(entry));
 
 	fake = analy_fake_ctx_fetch(e->key);
 	if (!fake) {
@@ -384,7 +384,7 @@ do_ret:;
 
 check_pending:
 	if (analy_ctx->refs <= 0) {
-		pr_debug("ctx(%x) finished with %s\n", analy_ctx,
+		pr_debug("ctx(%llx) finished with %s\n", PTR2X(analy_ctx),
 			 trace->name);
 		analy_ctx_handle(analy_ctx);
 	}

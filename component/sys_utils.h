@@ -53,4 +53,6 @@ do {						\
 #define MIN(a, b) (a > b ? b : a)
 #define MAX(a, b) (a > b ? a : b)
 
+#define PTR2X(ptr)	(__u64)(void *)ptr
+
 #endif
