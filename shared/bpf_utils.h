@@ -98,7 +98,7 @@ static inline int compat_bpf_attach_kprobe(int fd, char *name, bool ret)
 	if (file_exist(buf))
 		goto exist;
 
-	sprintf(buf, "echo '%c:%s %s' >> /sys/kernel/debug/tracing/kprobe_events",
+	sprintf(buf, "(echo '%c:%s %s' >> /sys/kernel/debug/tracing/kprobe_events) 2>&1",
 		ret ? 'r' : 'p', target, name);
 	if (simple_exec(buf)) {
 		pr_warn("failed to create kprobe: %s\n", target);
@@ -109,13 +109,13 @@ static inline int compat_bpf_attach_kprobe(int fd, char *name, bool ret)
 exist:;
 	int efd = open(buf, O_RDONLY, 0);
 	if (efd < 0) {
-		printf("failed to open event %s\n", name);
+		pr_warn("failed to open event %s\n", name);
 		return -1;
 	}
 	
 	err = read(efd, buf, sizeof(buf));
 	if (err < 0 || err >= sizeof(buf)) {
-		printf("read from '%s' failed '%s'\n", target, strerror(errno));
+		pr_warn("read from '%s' failed '%s'\n", target, strerror(errno));
 		return -1;
 	}
 
@@ -127,7 +127,7 @@ exist:;
 
 	efd = syscall(SYS_perf_event_open, &attr, -1, 0, -1, 0);
 	if (efd < 0) {
-		printf("event %d fd %d err %s\n", id, efd, strerror(errno));
+		pr_warn("event %d fd %d err %s\n", id, efd, strerror(errno));
 		return -1;
 	}
 	ioctl(efd, PERF_EVENT_IOC_ENABLE, 0);
