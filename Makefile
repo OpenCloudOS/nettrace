@@ -1,6 +1,7 @@
 
-export VERSION=1.2.0
-export RELEASE=1.tl3
+export VERSION	= 1.2.1
+RELEASE		?= 1.tl3
+export RELEASE
 
 targets		:= droptrace nodetrace src legacy
 targets-call	= for i in $^; do make -C $$i $@; done
