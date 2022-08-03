@@ -90,7 +90,7 @@ kheaders.h: $(kheaders_dep)
 
 drop_reason.h: $(DROP_REASON)
 	rm -rf $@
-ifneq ($(wildcard $(DROP_REASON)),)
+ifneq ($(strip $(DROP_REASON)),)
 	@awk 'BEGIN{ print "#ifndef _H_SKB_DROP_REASON"; \
 		print "#define _H_SKB_DROP_REASON\n";\
 		system("sed -e \"/enum skb_drop_reason {/,/}/!d\" $< >> $@");\

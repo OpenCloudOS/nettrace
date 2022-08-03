@@ -49,13 +49,17 @@ sudo yum install nettrace
 
 本工具在编译的时候依赖于`libelf`、`libbpf`和`bpftool`组件，`clang`和`gcc`编译工具。其中，bpftool二进制程序已经直接预编译好放到源码包的script目录中，因此可以不安装。但是对于版本较高的内核，请尽量从软件仓库安装该工具。
 
+##### ubuntu
+
 对于ubuntu系统，使用以下命令安装依赖：
 
 ```shell
-sudo apt install libelf-dev libbpf-dev linux-headers-generic clang llvm gcc bpftool
+sudo apt install libelf-dev libbpf-dev linux-headers-`uname -r` clang llvm gcc linux-tools-`uname -r` linux-tools-generic
 ```
 
 注意：如果当前发行版（如ubuntu16,ubuntu18）不支持libbpf-dev，请按照下文提示手动按照libbpf-0.2版本。同时，clang版本要在10+（低版本的测试有问题，暂时还没搞定），ubuntu18+直接安装clang-10 llvm-10即可，ubuntu16需要按照[这里](https://segmentfault.com/a/1190000040827790)的教程安装更新版本的clang。
+
+##### centos
 
 对于centos用于，使用以下命令来安装依赖：
 
@@ -99,6 +103,11 @@ make KERNEL=/home/ubuntu/kernel all
 
 ```shell
 make VMLINUX=/home/ubuntu/kernel/vmlinux all
+```
+
+可以手动指定`bpftool`命令的路径（对于5.18内核版本，请使用本地`bpftool`）：
+```shell
+make BPFTOOL=/usr/lib/linux-tools/5.15.0-43-generic/bpftool all
 ```
 
 需要注意，对于低版本的内核（4.x），在编译的时候需要加参数`COMPAT=1`，如下所示：
