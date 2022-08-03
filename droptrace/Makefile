@@ -9,7 +9,7 @@ include ../common.mk
 progs/common.h:
 	cd progs && wget $(REMOTE_ROOT)/droptrace/$@
 
-$(foreach i,$(bpf_progs),$(i).c): progs/common.h
+$(foreach i,$(bpf_progs),$(i).c): progs/common.h drop_reason.h
 	cd progs && wget $(REMOTE_ROOT)/droptrace/$@
 
 droptrace.c: drop_reason.h

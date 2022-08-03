@@ -8,3 +8,4 @@
 #include <uapi/linux/tcp.h>
 #include <uapi/linux/udp.h>
 #include <uapi/linux/icmp.h>
+#include <uapi/linux/bpf.h>

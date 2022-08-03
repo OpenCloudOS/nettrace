@@ -57,7 +57,8 @@ endif
 # preferred to generate drop reason from 
 ifeq ("$(KERNEL)$(VMLINUX)","")
 	DROP_REASON	:= $(call cmd_or_exist,$(HEADERS)/include/net/dropreason.h,\
-			   $(call cmd_exist,$(BTF),vmlinux.h,))
+			   $(call cmd_or_exist,$(HEADERS)/include/linux/skbuff.h,\
+			   $(call cmd_exist,$(BTF),vmlinux.h,)))
 endif
 
 # preferred to compile from kernel headers, then BTF
@@ -68,7 +69,8 @@ ifeq ($(mode),'btf')
 	kheaders_dep	:= vmlinux.h
 else
 ifndef DROP_REASON
-	DROP_REASON	:= $(call cmd_or_exist,$(HEADERS)/include/net/dropreason.h,)
+	DROP_REASON	:= $(call cmd_or_exist,$(HEADERS)/include/net/dropreason.h,\
+			   $(call cmd_or_exist,$(HEADERS)/include/linux/skbuff.h,))
 endif
 	kheaders_cmd	:= ln -s vmlinux_header.h kheaders.h
 	BPF_CFLAGS	+= $(KERNEL_CFLAGS)
