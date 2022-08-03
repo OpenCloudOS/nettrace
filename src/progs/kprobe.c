@@ -19,6 +19,11 @@ struct {
 	__uint(max_entries, TRACE_MAX);
 } m_ret SEC(".maps");
 
+#ifdef KERN_VER
+SEC("version")
+volatile __u32 kern_ver = KERN_VER;
+#endif
+
 struct {
 	__uint(type, BPF_MAP_TYPE_LRU_HASH);
 	__uint(max_entries, 102400);

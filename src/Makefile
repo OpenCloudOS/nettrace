@@ -12,6 +12,10 @@ ifdef COMPAT
 CFLAGS += -DMAP_CONFIG
 endif
 
+ifdef KERN_VER
+CFLAGS += -DKERN_VER=$(KERN_VER)
+endif
+
 include ../common.mk
 
 NFT_HEADER	:= $(HEADERS)/include/net/netfilter/nf_tables.h
