@@ -43,25 +43,27 @@ sudo yum install nettrace
 
 ### 2.3 手动编译
 
-下面来介绍下如何在Centos、ubuntu等环境上进行nettrace工具的手动编译和安装。本工具目前仅在5.4+的内核上进行过适配和测试，更低版本的内核暂未进行适配，后面会进行完善。
+下面来介绍下如何在Centos、ubuntu等环境上进行nettrace工具的手动编译和安装。本工具目前在4.14/4.15/5.4/5.10/5.18等版本的内核上均进行过适配和测试，更低版本的内核暂未进行适配。
 
 #### 2.3.1 依赖安装
 
-本工具在编译的时候依赖于`libelf`、`libbpf`和`bpftool`组件。其中，bpftool二进制程序已经直接预编译好放到源码包的script目录中，因此无需安装。对于支持BTF（即存在文件`/sys/kernel/btf/vmlinux`），可以不用安装headers头文件。
+本工具在编译的时候依赖于`libelf`、`libbpf`和`bpftool`组件，`clang`和`gcc`编译工具。其中，bpftool二进制程序已经直接预编译好放到源码包的script目录中，因此可以不安装。但是对于版本较高的内核，请尽量从软件仓库安装该工具。
 
 对于ubuntu系统，使用以下命令安装依赖：
 
 ```shell
-sudo apt install libelf-dev libbpf-dev linux-headers-amd64
+sudo apt install libelf-dev libbpf-dev linux-headers-generic clang llvm gcc bpftool
 ```
+
+注意：如果当前发行版（如ubuntu16,ubuntu18）不支持libbpf-dev，请按照下文提示手动按照libbpf-0.2版本。同时，clang版本要在10+（低版本的测试有问题，暂时还没搞定），ubuntu18+直接安装clang-10 llvm-10即可，ubuntu16需要按照[这里](https://segmentfault.com/a/1190000040827790)的教程安装更新版本的clang。
 
 对于centos用于，使用以下命令来安装依赖：
 
 ```shell
-sudo yum install elfutils-devel elfutils-devel-static libbpf-devel libbpf-static kernel-headers
+sudo yum install elfutils-devel elfutils-devel-static libbpf-devel libbpf-static kernel-headers clang llvm bpftool
 ```
 
-在编译过程中，如果因为libbpf导致了编译失败，或者当前发行版没有libbpf可以安装，那么请点击[这里](https://github.com/libbpf/libbpf/releases)下载安装较新版本的libbpf：
+请确保安装的clang版本在10+，如果版本较低请手边编译安装较高版本。在编译过程中，如果因为libbpf导致了编译失败，或者当前发行版没有libbpf可以安装，那么请点击[这里](https://github.com/libbpf/libbpf/releases)下载安装较新版本的libbpf：
 
 ```shell
 wget https://github.com/libbpf/libbpf/archive/refs/tags/v0.2.tar.gz
@@ -91,11 +93,23 @@ make -C src all
 ```shell
 make KERNEL=/home/ubuntu/kernel all
 ```
+对于发行版版本较低，难以安装高版本clang的情况下，可以尝试在高版本上通过指定KERNEL来为低版本的系统编译工具。由于是静态编译，因此编译的二进制是可以在低版本上运行起来的。
 
 也可以使用VMLINUX来指定BTF的源文件（即不使用默认的`/sys/kernel/btf/vmlinux`路径）：
 
 ```shell
 make VMLINUX=/home/ubuntu/kernel/vmlinux all
+```
+
+需要注意，对于低版本的内核（4.x），在编译的时候需要加参数`COMPAT=1`，如下所示：
+```shell
+make COMPAT=1 all
+```
+该参数会强制启用内联函数的方式，会使得编译出来的二进制程序变大，但是没办法，低版本的内核必须要用内核函数的方式才能加载。
+
+同时，对于ubuntu16.04系统，其内核似乎存在BUG，即其使用的内核版本实际为4.15.18，uname看到的却是4.15.0。这导致了加载eBPF程序的时候内核版本不一致，无法加载。因此对于这种情况，可以使用KERN_VER参数来手动指定内核版本（计算方式为：`(4<<16) + (15<<8) + 18`）：
+```shell
+make COMPAT=1 KERN_VER=266002 all
 ```
 
 #### 2.3.3 打包
