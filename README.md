@@ -49,6 +49,8 @@ sudo yum install nettrace
 
 本工具在编译的时候依赖于`libelf`、`libbpf`和`bpftool`组件，`clang`和`gcc`编译工具。其中，bpftool二进制程序已经直接预编译好放到源码包的script目录中，因此可以不安装。但是对于版本较高的内核，请尽量从软件仓库安装该工具。
 
+在编译过程中，会优先尝试从`kernel-headers`头文件进行编译。如果头文件不存在（即目录`/lib/modules/$(uname -a)/build`不存在），则会尝试从BTF中构建`vmlinux.h`进行编译。需要注意：nettrace工具（即src目录中的代码）的编译必须要使用`kernel-headers`的方式，因为它用到的一些结构体在内核模块里，BTF中是找不到的。
+
 ##### ubuntu
 
 对于ubuntu系统，使用以下命令安装依赖：
@@ -97,6 +99,7 @@ make -C src all
 ```shell
 make KERNEL=/home/ubuntu/kernel all
 ```
+
 对于发行版版本较低，难以安装高版本clang的情况下，可以尝试在高版本上通过指定KERNEL来为低版本的系统编译工具。由于是静态编译，因此编译的二进制是可以在低版本上运行起来的。
 
 也可以使用VMLINUX来指定BTF的源文件（即不使用默认的`/sys/kernel/btf/vmlinux`路径）：
@@ -114,6 +117,7 @@ make BPFTOOL=/usr/lib/linux-tools/5.15.0-43-generic/bpftool all
 ```shell
 make COMPAT=1 all
 ```
+
 该参数会强制启用内联函数的方式，会使得编译出来的二进制程序变大，但是没办法，低版本的内核必须要用内核函数的方式才能加载。
 
 同时，对于`ubuntu 16.04/ubuntu 18.04`系统，其内核似乎存在BUG，即其使用的内核版本实际为4.15.18，uname看到的却是4.15.0。这导致了加载eBPF程序的时候内核版本不一致，无法加载。因此对于这种情况，可以使用KERN_VER参数来手动指定内核版本（计算方式为：`(4<<16) + (15<<8) + 18`）：
@@ -141,6 +145,7 @@ Usage:
     -D, --dport      filter dest TCP/UDP port
     -P, --port       filter source or dest TCP/UDP port
     -p, --proto      filter L3/L4 protocol, such as 'tcp', 'arp'
+    --pid            filter by current process id(pid)
     -t, --trace      enable trace group or trace
     --ret            show function return value
     --detail         show extern packet info, such as pid, ifname, etc
@@ -155,7 +160,7 @@ Usage:
     -h, --help       show help information
 ```
 
-其中，参数`s/d/addr/S/D/port/p`用于进行报文的过滤，可以通过IP地址、端口、协议等属性进行过滤。其他参数的用途包括：
+其中，参数`s/d/addr/S/D/port/p/pid`用于进行报文的过滤，可以通过IP地址、端口、协议等属性进行过滤。其他参数的用途包括：
 
 - `t/trace`：要启用的跟踪模块，默认启用所有
 - `ret`：跟踪和显示内核函数的返回值
