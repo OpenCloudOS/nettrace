@@ -40,6 +40,7 @@ KERNEL_CFLAGS	+= $(NOSTDINC_FLAGS) $(LINUXINCLUDE) \
 		-Wno-address-of-packed-member -Wno-tautological-compare \
 		-Wno-unknown-warning-option -Wno-frame-address
 
+cmd_download	= @if [ ! -f $(1) ]; then wget -O $(1) $(REMOTE_ROOT)/$(2); fi
 cmd_exist	= $(if $(wildcard $(1)),$(2),$(3))
 cmd_or_exist	= $(call cmd_exist,$(1),$(1),$(2))
 ifeq ("$(wildcard $(HEADERS))$(wildcard $(BTF))",)

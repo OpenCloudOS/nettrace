@@ -8,7 +8,7 @@ prog-watch = watch.c $(COMMON_SHARED)
 include ../common.mk
 
 $(foreach i,$(bpf_progs),$(i).c):
-	cd progs && wget $(REMOTE_ROOT)/nodetrace/$@
+	$(call cmd_download,$@,nodetrace/$@)
 
 all: $(progs)
 

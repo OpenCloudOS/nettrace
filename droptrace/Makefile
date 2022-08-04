@@ -7,10 +7,10 @@ prog-droptrace = droptrace.c $(COMMON_SHARED) drop_reason.h \
 include ../common.mk
 
 progs/common.h:
-	cd progs && wget $(REMOTE_ROOT)/droptrace/$@
+	$(call cmd_download,$@,droptrace/$@)
 
 $(foreach i,$(bpf_progs),$(i).c): progs/common.h drop_reason.h
-	cd progs && wget $(REMOTE_ROOT)/droptrace/$@
+	$(call cmd_download,$@,droptrace/$@)
 
 droptrace.c: drop_reason.h
 	@if [ -z `grep SKB_DROP_REASON_MAX drop_reason.h` ];then	\
