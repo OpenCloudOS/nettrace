@@ -42,12 +42,13 @@ install: man $(targets)
 	@mkdir -p $(BCOMP); cd $(BCOMP); cp $(SCRIPT)/bash-completion.sh \
 		./nettrace; ln -s nettrace droptrace
 
+PACK_TARGET := nettrace-$(VERSION)-$(RELEASE)
 pack: $(targets)
-	@mkdir -p $(PREFIX)/nettrace-$(VERSION)
+	@mkdir -p $(PREFIX)/$(PACK_TARGET)
 	$(call targets-call)
 	@cd $(PREFIX) && ls -p | grep -v / | xargs -I % mv % \
-		nettrace-$(VERSION) && \
-		tar -cjf nettrace-$(VERSION).tar.bz2 nettrace-$(VERSION)
+		$(PACK_TARGET) && \
+		tar -cjf $(PACK_TARGET).tar.bz2 $(PACK_TARGET)
 
 rpm:
 	@make clean
