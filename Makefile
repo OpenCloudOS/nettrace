@@ -4,7 +4,7 @@ RELEASE		?= tl3
 export RELEASE
 
 targets		:= droptrace nodetrace src legacy
-targets-call	= for i in $^; do make $1 -C $$i $@; done
+targets-call	= for i in $1; do make $2 -C $$i $@; done
 man-target 	:= script/zh_CN/nettrace.8
 
 ROOT		:= $(abspath .)
@@ -20,8 +20,8 @@ SOURCE_DIR	:= ~/rpmbuild/SOURCES/nettrace-${VERSION}
 PACK_TARGET 	:= nettrace-$(VERSION)-$(RELEASE)
 PACK_PATH	:= $(abspath $(PREFIX)/$(PACK_TARGET))
 
-all clean:: $(targets)
-	$(call targets-call)
+all clean::
+	$(call targets-call,$(targets))
 
 clean::
 	rm -rf output $(man-target)
@@ -31,23 +31,29 @@ clean::
 
 man: $(man-target)
 
-install: man $(targets)
+install: man
 	@mkdir -p $(PREFIX)
-	$(call targets-call)
+	$(call targets-call,$(targets))
+
+	@mkdir -p ${MAN_DIR}/zh_CN/man8/; gzip -k $(SCRIPT)/zh_CN/*.8;	\
+		mv $(SCRIPT)/zh_CN/*.8.gz ${MAN_DIR}/zh_CN/man8
 
 	@mkdir -p ${MAN_DIR}/man8/; gzip -k $(SCRIPT)/*.8; mv		\
-		$(SCRIPT)/*.8.gz ${MAN_DIR}/man8/
-	
-	@mkdir -p ${MAN_DIR}/zh_CN/man8/; gzip -k $(SCRIPT)/zh_CN/*.8;	\
-		mv $(SCRIPT)/zh_CN/*.8.gz ${MAN_DIR}/zh_CN/man8/
+		$(SCRIPT)/*.8.gz ${MAN_DIR}/man8/;			\
+		cd ${MAN_DIR}/man8/; for i in `ls ../zh_CN/man8/`;	\
+		do							\
+			if [ ! -f $$i ];then				\
+				ln -s ../zh_CN/man8/$$i ./;		\
+			fi;						\
+		done
 
 	@mkdir -p $(BCOMP); cd $(BCOMP); cp $(SCRIPT)/bash-completion.sh \
 		./nettrace; ln -s nettrace droptrace
 
-pack: $(targets)
+pack:
 	@make clean
 	@rm -rf $(PACK_PATH) && mkdir -p $(PACK_PATH)
-	$(call targets-call,PREFIX=$(PACK_PATH))
+	$(call targets-call,$(targets),PREFIX=$(PACK_PATH))
 	@cd $(PREFIX) && tar -cjf $(PACK_TARGET).tar.bz2 $(PACK_TARGET)
 
 rpm:
