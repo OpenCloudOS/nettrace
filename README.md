@@ -105,7 +105,7 @@ make KERNEL=/home/ubuntu/kernel all
 make VMLINUX=/home/ubuntu/kernel/vmlinux all
 ```
 
-可以手动指定`bpftool`命令的路径（对于5.18内核版本，请使用本地`bpftool`）：
+可以手动指定`bpftool`命令的路径：
 ```shell
 make BPFTOOL=/usr/lib/linux-tools/5.15.0-43-generic/bpftool all
 ```

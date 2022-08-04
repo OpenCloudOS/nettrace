@@ -19,7 +19,7 @@ endif
 include ../common.mk
 
 NFT_HEADER	:= $(HEADERS)/include/net/netfilter/nf_tables.h
-ifeq ($(shell grep xt_action_param $(NFT_HEADER)),)
+ifeq ($(shell cat $(NFT_HEADER) 2>&1 | grep xt_action_param),)
 	BPF_CFLAGS += -DNFT_HIGH_VERSION
 endif
 
