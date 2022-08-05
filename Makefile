@@ -20,18 +20,15 @@ SOURCE_DIR	:= ~/rpmbuild/SOURCES/nettrace-${VERSION}
 PACK_TARGET 	:= nettrace-$(VERSION)-1$(RELEASE)
 PACK_PATH	:= $(abspath $(PREFIX)/$(PACK_TARGET))
 
-all clean::
+all clean:
 	$(call targets-call,$(targets))
-
-clean::
-	rm -rf output $(man-target)
 
 %.8: %.md
 	md2man-roff $< > $@
 
 man: $(man-target)
 
-install: man
+install:
 	@mkdir -p $(PREFIX)
 	$(call targets-call,$(targets))
 
@@ -58,7 +55,6 @@ pack:
 
 rpm:
 	@make clean
-	@make man
 	@rm -rf ${SOURCE_DIR} && mkdir -p ${SOURCE_DIR}
 	@cp -r * ${SOURCE_DIR}/
 	@sed -i 's/%{VERSION}/$(VERSION)/' ${SOURCE_DIR}/script/nettrace.spec
