@@ -4,9 +4,9 @@ Name: nettrace
 
 Version: %{VERSION}
 
-Release: %{?dist}
+Release: 1%{?dist}
 
-License: GPL
+License: MulanPSL-2.0
 
 BuildRoot:%{_tmppath}/%{name}-%{version}-%{release}-root
 
