@@ -4,10 +4,9 @@
 #include <bpf_endian.h>
 #include <bpf_tracing.h>
 
-#include <packet.h>
+#include "shared.h"
 #include <skb_utils.h>
 
-#include "shared.h"
 #include "kprobe_trace.h"
 
 #define TRACE_PREFIX __trace_
@@ -20,8 +19,7 @@ struct {
 } m_ret SEC(".maps");
 
 #ifdef KERN_VER
-SEC("version")
-volatile __u32 kern_ver = KERN_VER;
+__u32 kern_ver SEC("version") = KERN_VER;
 #endif
 
 struct {
@@ -37,10 +35,6 @@ enum args_status {
 	ARGS_RET_OFFSET,
 	ARGS_RET_ONLY_OFFSET,
 };
-
-#ifndef MAP_CONFIG
-struct bpf_args _bpf_args;
-#endif
 
 #define ARGS_END	(1 << ARGS_END_OFFSET)
 #define ARGS_STACK	(1 << ARGS_STACK_OFFSET)
@@ -287,8 +281,7 @@ on_hooks:;
 	num = _(entries->num_hook_entries);
 
 #define COPY_HOOK(i) do {					\
-	if (i >= num)						\
-			goto out;				\
+	if (i >= num) goto out;					\
 	hooks_event.hooks[i] = (u64)_(entries->hooks[i].hook);	\
 } while (0)
 
@@ -301,7 +294,7 @@ on_hooks:;
 	COPY_HOOK(6);
 	COPY_HOOK(7);
 
-	/* following code can't unroll, don't know way......:
+	/* following code can't unroll, don't know why......:
 	 * 
 	 * #pragma clang loop unroll(full)
 	 * 	for (i = 0; i < 8; i++)

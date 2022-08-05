@@ -4,7 +4,7 @@
 #include <bpf_endian.h>
 #include <bpf_tracing.h>
 
-#include <packet.h>
+#include <skb_shared.h>
 #include <skb_utils.h>
 
 #include "shared.h"

@@ -12,11 +12,11 @@
 #include <bpf/bpf.h>
 
 #include <net_utils.h>
-#include <bpf_utils.h>
 #include <arg_parse.h>
 #include <pkt_utils.h>
 
 #include "progs/shared.h"
+#include <bpf_utils.h>
 
 static inline int tc_attach(int prog_fd, char *nic, char *pref,
 			    bool ingress)

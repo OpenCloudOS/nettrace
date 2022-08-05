@@ -1,9 +1,5 @@
-#include <net_utils.h>
-#include <bpf_utils.h>
-
-#include "progs/shared.h"
-#include "progs/kprobe.skel.h"
 #include "trace.h"
+#include "progs/kprobe.skel.h"
 #include "analysis.h"
 #include "nettrace.h"
 #include "analysis.h"

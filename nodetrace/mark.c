@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MulanPSL-2.0
+#include <common_args.h>
 
 #include "common.h"
 #include "progs/shared.h"
@@ -33,10 +34,8 @@ static int parse_opts(int argc, char *argv[], bpf_args_t *args)
 	int proto_l;
 	u16 proto;
 
-#define E(name) &(args->pkt.enable_##name)
-#define R(name)	&(args->pkt.name)
 	option_item_t opts[] = {
-#include <common_args.h>
+		COMMON_PROG_ARGS(&args->pkt),
 		{ .type = OPTION_BLANK },
 		{
 			.sname = 'i', .dest = &nic, .type = OPTION_STRING,

@@ -9,8 +9,8 @@
 #include <net_utils.h>
 
 #include "progs/shared.h"
+#include <bpf_utils.h>
 #include "progs/kprobe_trace.h"
-#include "progs/kprobe.skel.h"
 
 enum trace_type {
 	TRACE_FUNCTION,

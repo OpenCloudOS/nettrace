@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MulanPSL-2.0
 
 #include <arg_parse.h>
+#include <common_args.h>
 
 #include "nettrace.h"
 #include "trace.h"
@@ -15,14 +16,13 @@ static void do_parse_args(int argc, char *argv[])
 {
 	trace_args_t *trace_args = &trace_ctx.args;
 	bpf_args_t *bpf_args = &trace_ctx.bpf_args;
+	pkt_args_t *pkt_args = &bpf_args->pkt;
 	bool show_log = false, debug = false;
 	int proto_l = 0;
 	u16 proto;
 
-#define E(name) &(bpf_args->pkt.enable_##name)
-#define R(name)	&(bpf_args->pkt.name)
 	option_item_t opts[] = {
-#include <common_args.h>
+		COMMON_PROG_ARGS(pkt_args),
 		{
 			.lname = "pid", .type = OPTION_U32,
 			.dest = &bpf_args->pid, .set = &bpf_args->enable_pid,
@@ -92,21 +92,25 @@ static void do_parse_args(int argc, char *argv[])
 
 	if (show_log)
 		set_log_level(1);
-	if (debug)
-		set_log_level(2);
-	else
+
+	if (!debug)
 		/* turn off warning of libbpf */
 		libbpf_set_print(NULL);
+	else
+		set_log_level(2);
 
-#define S_L(level)				\
-	do {					\
-		*R(l##level##_proto) = proto;	\
-		*E(l##level##_proto) = true;	\
-	} while (0)
-	if (proto_l == 3)
-		S_L(3);
-	else if (proto_l == 4)
-		S_L(4);
+	switch (proto_l) {
+	case 3:
+		pkt_args->enable_l3_proto = true;
+		pkt_args->l3_proto = proto;
+		break;
+	case 4:
+		pkt_args->enable_l4_proto = true;
+		pkt_args->l4_proto = proto;
+		break;
+	default:
+		break;
+	}
 
 	return;
 err:

@@ -1,5 +1,5 @@
-#ifndef _H_BPF_PACKET
-#define _H_BPF_PACKET
+#ifndef _H_BPF_SKB_SHARED
+#define _H_BPF_SKB_SHARED
 
 typedef struct {
 	u16	sport;
@@ -26,10 +26,6 @@ typedef struct __attribute__((__packed__)) {
 			u32	ack;
 			u8	flags;
 		} tcp;
-#define field_sport	field_tcp.sport
-#define field_dport	field_tcp.dport
-#define field_flags	field_tcp.flags
-#define field_tcp	l4.tcp
 		struct {
 			u16	sport;
 			u16	dport;

@@ -1,8 +1,19 @@
 #ifndef _H_BPF_SKB_UTILS
 #define _H_BPF_SKB_UTILS
 
+/* This file can only be used in eBPF program, can't be used in user space
+ * code.
+ */
+
 #include "macro.h"
-#include "packet.h"
+#include "skb_shared.h"
+
+typedef struct {
+	pkt_args_t pkt;
+#ifdef DEFINE_BPF_ARGS
+	DEFINE_BPF_ARGS();
+#endif
+} bpf_args_t;
 
 struct {
 	__uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
@@ -22,12 +33,11 @@ struct {
 	tmp;						\
 })
 
-struct bpf_args;
 #ifdef MAP_CONFIG
 struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);
 	__uint(key_size, sizeof(int));
-	__uint(value_size, CONFIG_MAP_SIZE);
+	__uint(value_size, sizeof(bpf_args_t));
 	__uint(max_entries, 1);
 } m_config SEC(".maps");
 
@@ -36,12 +46,12 @@ struct {
 	void * _v = bpf_map_lookup_elem(&m_config, &_key);	\
 	if (!_v)						\
 		return 0; /* this can't happen */		\
-	(struct bpf_args*)_v;					\
+	(bpf_args_t*)_v;					\
 })
 
 #define try_inline __attribute__((always_inline))
 #else
-extern struct bpf_args _bpf_args;
+bpf_args_t _bpf_args;
 #define CONFIG() &_bpf_args
 #define try_inline inline
 #endif
@@ -51,7 +61,7 @@ extern struct bpf_args _bpf_args;
 
 #define ARGS_ENABLED(name)	bpf_args->enable_##name
 #define ARGS_GET(name)		bpf_args->name
-#define ARGS_GET_CONFIG(name)	((struct bpf_args *)CONFIG())->name
+#define ARGS_GET_CONFIG(name)	((bpf_args_t *)CONFIG())->name
 #define ARGS_CHECK(name, val)	\
 	(ARGS_ENABLED(name) && bpf_args->name != (val))
 
@@ -137,10 +147,9 @@ static try_inline bool skb_l4_check(u16 l4, u16 l3)
 	return l4 == 0xFFFF || l4 <= l3;
 }
 
-#define CHECK_ATTR(attr)			\
-	((ARGS_CHECK(attr, d##attr) &&		\
-	  ARGS_CHECK(attr, s##attr)) ||		\
-	 ARGS_CHECK(s##attr, s##attr) ||	\
+#define CHECK_ATTR(attr)						\
+	((ARGS_CHECK(attr, d##attr) && ARGS_CHECK(attr, s##attr)) ||	\
+	 ARGS_CHECK(s##attr, s##attr) ||				\
 	 ARGS_CHECK(d##attr, d##attr))
 
 static try_inline int probe_parse_ip(void *ip, parse_ctx_t *ctx)
@@ -299,7 +308,7 @@ static try_inline int probe_parse_skb(struct sk_buff *skb, packet_t *pkt)
 }
 
 static try_inline int probe_parse_skb_no_filter(struct sk_buff *skb,
-					    packet_t *pkt)
+						packet_t *pkt)
 {
 	parse_ctx_t ctx = {
 		.args = (void *)CONFIG(),

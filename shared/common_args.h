@@ -1,50 +1,50 @@
 
-#define COMMON_PROG_ARGS()					\
+#define COMMON_PROG_ARGS(args)					\
 	{							\
 		.lname = "saddr",				\
 		.sname = 's',					\
-		.dest = R(saddr),				\
+		.dest = &(args)->saddr,				\
 		.type = OPTION_IPV4,				\
-		.set = E(saddr),				\
+		.set = &(args)->enable_saddr,			\
 		.desc = "filter source ip address",		\
 	},							\
 	{							\
 		.lname = "daddr",				\
 		.sname = 'd',					\
-		.dest = R(daddr),				\
+		.dest = &(args)->daddr,				\
 		.type = OPTION_IPV4,				\
-		.set = E(daddr),				\
+		.set = &(args)->enable_daddr,			\
 		.desc = "filter dest ip address",		\
 	},							\
 	{							\
 		.lname = "addr",				\
-		.dest = R(addr),				\
+		.dest = &(args)->addr,				\
 		.type = OPTION_IPV4,				\
-		.set = E(addr),					\
+		.set = &(args)->enable_addr,			\
 		.desc = "filter source or dest ip address",	\
 	},							\
 	{							\
 		.lname = "sport",				\
 		.sname = 'S',					\
-		.dest = R(sport),				\
+		.dest = &(args)->sport,				\
 		.type = OPTION_U16BE,				\
-		.set = E(sport),				\
+		.set = &(args)->enable_sport,			\
 		.desc = "filter source TCP/UDP port",		\
 	},							\
 	{							\
 		.lname = "dport",				\
 		.sname = 'D',					\
-		.dest = R(dport),				\
+		.dest = &(args)->dport,				\
 		.type = OPTION_U16BE,				\
-		.set = E(dport),				\
+		.set = &(args)->enable_dport,			\
 		.desc = "filter dest TCP/UDP port",		\
 	},							\
 	{							\
 		.lname = "port",				\
 		.sname = 'P',					\
-		.dest = R(port),				\
+		.dest = &(args)->port,				\
 		.type = OPTION_U16BE,				\
-		.set = E(port),					\
+		.set = &(args)->enable_port,			\
 		.desc = "filter source or dest TCP/UDP port",	\
 	},							\
 	{							\
@@ -54,6 +54,4 @@
 		.type = OPTION_PROTO,				\
 		.set = &proto_l,				\
 		.desc = "filter L3/L4 protocol, such as 'tcp', 'arp'",	\
-	},
-
-COMMON_PROG_ARGS()
+	}

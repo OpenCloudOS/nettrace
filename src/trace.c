@@ -3,8 +3,6 @@
 #include <stdio.h>
 #include <list.h>
 
-#include <bpf_utils.h>
-
 #include "nettrace.h"
 #include "trace.h"
 #include "analysis.h"

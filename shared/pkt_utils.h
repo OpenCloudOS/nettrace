@@ -2,7 +2,7 @@
 #define _H_PKT_UTILS
 
 #include <net_utils.h>
-#include <packet.h>
+#include <skb_shared.h>
 
 #define MAX_ADDR_LENGTH		48
 #define PARAM_SET(name, value)			\

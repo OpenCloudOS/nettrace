@@ -1,7 +1,8 @@
 LIBBPF		?= /usr/include/bpf
 COMPONENT	:= $(ROOT)/component
-COMMON_SHARED	:= $(ROOT)/shared/pkt_utils.c $(COMPONENT)/net_utils.c \
-		   $(COMPONENT)/arg_parse.c $(COMPONENT)/sys_utils.c
+COMMON_SHARED	:= $(ROOT)/shared/pkt_utils.c $(COMPONENT)/net_utils.c	\
+		   $(COMPONENT)/arg_parse.c $(COMPONENT)/sys_utils.c	\
+		   $(ROOT)/shared/bpf_utils.c
 
 CFLAGS		+= -I./ -I$(ROOT)/shared/bpf/
 BPF_CFLAGS	= $(CFLAGS) -I$(LIBBPF) -Wno-unused-function

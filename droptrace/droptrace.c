@@ -9,13 +9,15 @@
 #include <bpf/bpf.h>
 
 #include <net_utils.h>
-#include <bpf_utils.h>
 #include <arg_parse.h>
 #include <pkt_utils.h>
 #include <parse_sym.h>
+#include <common_args.h>
 
 #include "reasons.h"
 #include "./progs/shared.h"
+#include <bpf_utils.h>
+
 #include "progs/probe.skel.h"
 #include "progs/trace.skel.h"
 
@@ -102,10 +104,8 @@ static int parse_opts(int argc, char *argv[], bpf_args_t *args)
 	int proto_l = 0;
 	u16 proto;
 
-#define E(name) &(args->pkt.enable_##name)
-#define R(name)	&(args->pkt.name)
 	option_item_t opts[] = {
-#include <common_args.h>
+		COMMON_PROG_ARGS(&args->pkt),
 		{
 			.lname = "reason",
 			.sname = 'r',
