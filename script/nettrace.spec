@@ -2,9 +2,9 @@ Summary: A skb (network package) trace tool for kernel
 
 Name: nettrace
 
-Version: %{getenv:VERSION}
+Version: %{VERSION}
 
-Release: %{getenv:RELEASE}
+Release: %{?dist}
 
 License: GPL
 

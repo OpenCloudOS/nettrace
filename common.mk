@@ -4,8 +4,8 @@ COMMON_SHARED	:= $(ROOT)/shared/pkt_utils.c $(COMPONENT)/net_utils.c \
 		   $(COMPONENT)/arg_parse.c $(COMPONENT)/sys_utils.c
 
 CFLAGS		+= -I./ -I$(ROOT)/shared/bpf/
-BPF_CFLAGS	:= $(CFLAGS) -I$(LIBBPF) -Wno-unused-function
-HOST_CFLAGS	:= \
+BPF_CFLAGS	= $(CFLAGS) -I$(LIBBPF) -Wno-unused-function
+HOST_CFLAGS	= \
 		-lbpf -lelf -lz -g -O2 -static $(CFLAGS) \
 		-Wno-deprecated-declarations \
 		-I$(ROOT)/shared/ -I$(ROOT)/component

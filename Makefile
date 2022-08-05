@@ -58,10 +58,12 @@ pack:
 
 rpm:
 	@make clean
+	@make man
 	@rm -rf ${SOURCE_DIR} && mkdir -p ${SOURCE_DIR}
 	@cp -r * ${SOURCE_DIR}/
+	@sed -i 's/%{VERSION}/$(VERSION)/' ${SOURCE_DIR}/script/nettrace.spec
 	@cd ~/rpmbuild/SOURCES/ && tar -czf nettrace-${VERSION}.tar.gz	\
 		nettrace-${VERSION}
-	@rpmbuild -ba $(SCRIPT)/nettrace.spec
+	@rpmbuild -D 'dist $(RELEASE)' -ba ${SOURCE_DIR}/script/nettrace.spec
 
 .PHONY: $(targets)

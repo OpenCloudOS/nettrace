@@ -1,22 +1,25 @@
-ROOT ?= $(abspath ../)
-bpf_progs := progs/kprobe progs/tracing
-progs := nettrace
-prog-nettrace-origin = trace.c $(COMMON_SHARED) \
-		       trace_probe.c trace_tracing.c analysis.c \
-		       $(COMPONENT)/parse_sym.c trace_group.c \
-		       drop_reason.h
-
-prog-nettrace = $(prog-nettrace-origin) nettrace.c
-
-ifdef COMPAT
-CFLAGS += -DMAP_CONFIG
-endif
+ROOT		?= $(abspath ../)
+bpf_progs	:= progs/kprobe progs/tracing
+progs		:= nettrace
+prog-nettrace-origin = \
+		trace.c $(COMMON_SHARED) trace_probe.c trace_tracing.c \
+		analysis.c $(COMPONENT)/parse_sym.c trace_group.c \
+		drop_reason.h
+prog-nettrace	= $(prog-nettrace-origin) nettrace.c
 
 ifdef KERN_VER
-CFLAGS += -DKERN_VER=$(KERN_VER)
+	CFLAGS += -DKERN_VER=$(KERN_VER)
 endif
 
 include ../common.mk
+
+# check if current kernel version is 4.X
+COMPAT ?= $(if $(KERNEL),$(shell cat $(HEADERS)/Makefile | grep \
+	  'VERSION = 4'),$(shell uname -r | grep ^4))
+
+ifneq ($(strip $(COMPAT)),)
+	CFLAGS += -DMAP_CONFIG
+endif
 
 NFT_HEADER	:= $(HEADERS)/include/net/netfilter/nf_tables.h
 ifeq ($(shell cat $(NFT_HEADER) 2>&1 | grep xt_action_param),)
