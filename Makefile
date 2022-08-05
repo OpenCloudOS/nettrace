@@ -1,6 +1,6 @@
 
 export VERSION	= 1.2.1
-RELEASE		?= tl3
+RELEASE		?= .tl3
 export RELEASE
 
 targets		:= droptrace nodetrace src legacy
@@ -17,7 +17,7 @@ export PREFIX
 SCRIPT		= $(ROOT)/script
 export SCRIPT
 SOURCE_DIR	:= ~/rpmbuild/SOURCES/nettrace-${VERSION}
-PACK_TARGET 	:= nettrace-$(VERSION)-$(RELEASE)
+PACK_TARGET 	:= nettrace-$(VERSION)-1$(RELEASE)
 PACK_PATH	:= $(abspath $(PREFIX)/$(PACK_TARGET))
 
 all clean::
