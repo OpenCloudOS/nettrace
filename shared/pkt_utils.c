@@ -6,7 +6,7 @@
 
 int ts_print_packet(char *buf, packet_t *pkt, char *minfo)
 {
-	char saddr[MAX_ADDR_LENGTH], daddr[MAX_ADDR_LENGTH];
+	static char saddr[MAX_ADDR_LENGTH], daddr[MAX_ADDR_LENGTH];
 	u8 flags, l4;
 	int pos = 0;
 	u64 ts;
@@ -24,6 +24,12 @@ int ts_print_packet(char *buf, packet_t *pkt, char *minfo)
 
 	switch (pkt->proto_l3) {
 	case ETH_P_IP:
+		i2ip(saddr, pkt->l3.ipv4.saddr);
+		i2ip(daddr, pkt->l3.ipv4.daddr);
+		goto print_ip;
+	case ETH_P_IPV6:
+		i2ipv6(saddr, pkt->l3.ipv6.saddr);
+		i2ipv6(daddr, pkt->l3.ipv6.daddr);
 		goto print_ip;
 	case ETH_P_ARP:
 		goto print_arp;
@@ -35,9 +41,6 @@ int ts_print_packet(char *buf, packet_t *pkt, char *minfo)
 	goto out;
 
 print_ip:
-	i2ip(saddr, pkt->l3.ipv4.saddr);
-	i2ip(daddr, pkt->l3.ipv4.daddr);
-
 	l4 = pkt->proto_l4;
 	BUF_FMT("%s: ", i2l4(l4));
 	switch (l4) {

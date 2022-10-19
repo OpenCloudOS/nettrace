@@ -25,6 +25,8 @@ typedef __u32 u32;
 typedef __s64 s64;
 typedef __u64 u64;
 
+extern char *l4_proto_names[];
+
 static inline void i2ip(char *dest, __u32 ip)
 {
 	u8 *t = (u8 *)&ip;
@@ -48,12 +50,13 @@ static inline int ip2i(char *ip, __u32 *dest)
 	return 0;
 }
 
-int proto2i(char *proto, int *dest);
-
-extern char *l4_proto_names[];
 static inline char *i2l4(u8 num)
 {
 	return l4_proto_names[num];
 }
+
+int proto2i(char *proto, int *dest);
+void i2ipv6(char *dest, u8 ip[]);
+int ipv6toi(char *ip, u8 *dest);
 
 #endif

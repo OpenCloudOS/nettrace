@@ -59,6 +59,12 @@ typedef struct {
 	bool	enable_daddr;
 	u32	addr;
 	bool	enable_addr;
+	u8	saddr_v6[16];
+	bool	enable_saddr_v6;
+	u8	daddr_v6[16];
+	bool	enable_daddr_v6;
+	u8	addr_v6[16];
+	bool	enable_addr_v6;
 	u16	sport;
 	bool	enable_sport;
 	u16	dport;
