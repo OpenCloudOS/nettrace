@@ -44,7 +44,7 @@ KERNEL_CFLAGS	+= $(NOSTDINC_FLAGS) $(LINUXINCLUDE) \
 cmd_download	= @if [ ! -f $(1) ]; then wget -O $(1) $(REMOTE_ROOT)/$(2); fi
 cmd_exist	= $(if $(wildcard $(1)),$(2),$(3))
 cmd_or_exist	= $(call cmd_exist,$(1),$(1),$(2))
-ifeq ("$(wildcard $(HEADERS))$(wildcard $(BTF))",)
+ifeq ("$(wildcard $(HEADERS))$(wildcard $(BTF))","")
 $(error BTF is not found in your system, please install kernel headers)
 endif
 
