@@ -50,7 +50,7 @@ class Tracer:
     def is_valid(tracer):
         if Tracer.is_tp(tracer):
             return True
-        if 'skb' not in tracer and 'pskb' not in tracer:
+        if 'skb' not in tracer:
             return False
         return True
 
@@ -262,10 +262,6 @@ class Tracer:
                 pad_index = tracer['skb']
                 skb_param = 'struct sk_buff *skb'
                 bpf_prep = ''
-            elif 'pskb' in tracer:
-                pad_index = tracer['pskb']
-                skb_param = 'struct sk_buff **pskb'
-                bpf_prep = 'struct sk_buff *skb = *pskb;'
             else:
                 return
 

@@ -44,7 +44,6 @@ typedef struct trace {
 	char	*regex;
 	char	*tp;
 	int	skb;
-	int	pskb;
 	struct list_head sibling;
 	struct list_head list;
 	struct list_head rules;
