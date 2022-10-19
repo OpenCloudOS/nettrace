@@ -120,7 +120,10 @@ progs/%.o: progs/%.c kheaders.h
 	clang -O2 -c -g -S -Wall -Wno-pointer-sign -Wno-unused-value	\
 	-Wno-incompatible-pointer-types-discards-qualifiers		\
 	-fno-asynchronous-unwind-tables					\
-	$< -emit-llvm -Wno-unknown-attributes $(BPF_CFLAGS) -o - |	\
+	$< -emit-llvm -Wno-unknown-attributes $(BPF_CFLAGS) -Xclang	\
+	-disable-llvm-passes -o - | 					\
+	opt -O2 -mtriple=bpf-pc-linux | 				\
+	llvm-dis |							\
 	llc -march=bpf -filetype=obj -o $@
 	@file $@ | grep debug_info > /dev/null || (rm $@ && exit 1)
 

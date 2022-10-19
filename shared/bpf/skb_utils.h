@@ -5,6 +5,8 @@
  * code.
  */
 
+#include <bpf_core_read.h>
+
 #include "macro.h"
 #include "skb_shared.h"
 
@@ -32,6 +34,12 @@ struct {
 	bpf_probe_read_kernel(&tmp, sizeof(src), &(src));	\
 	tmp;							\
 })
+#undef _C
+#ifdef COMPAT_MODE
+#define _C(src, a)	_(src->a)
+#else
+#define _C(src, a, ...)	BPF_CORE_READ(src, a, ##__VA_ARGS__)
+#endif
 
 #ifdef MAP_CONFIG
 struct {
@@ -280,16 +288,16 @@ static try_inline int probe_parse_skb_cond(parse_ctx_t *ctx)
 	u16 l3_proto;
 	void *l3;
 
-	ctx->network_header = _(skb->network_header);
-	ctx->mac_header = _(skb->mac_header);
-	ctx->data = _(skb->head);
+	ctx->network_header = _C(skb, network_header);
+	ctx->mac_header = _C(skb, mac_header);
+	ctx->data = _C(skb, head);
 
 	if (skb_l2_check(ctx->mac_header)) {
 		/*
 		 * try to parse skb for send path, which means that
 		 * ether header doesn't exist in skb.
 		 */
-		l3_proto = bpf_ntohs(_(skb->protocol));
+		l3_proto = bpf_ntohs(_C(skb, protocol));
 		if (!l3_proto)
 			goto err;
 		if (!ctx->network_header)
@@ -312,7 +320,7 @@ static try_inline int probe_parse_skb_cond(parse_ctx_t *ctx)
 	if (filter && ARGS_CHECK(l3_proto, l3_proto))
 		goto err;
 
-	ctx->trans_header = _(skb->transport_header);
+	ctx->trans_header = _C(skb, transport_header);
 	pkt->proto_l3 = l3_proto;
 
 	switch (l3_proto) {
