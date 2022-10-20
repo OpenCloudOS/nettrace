@@ -6,6 +6,7 @@
 #include "nettrace.h"
 #include "trace.h"
 #include "analysis.h"
+#include "dropreason.h"
 
 trace_context_t trace_ctx = {
 	.mode = TRACE_MODE_TIMELINE,
@@ -183,6 +184,17 @@ static int trace_prepare_args()
 	trace_t *trace;
 	char *tmp, *cur;
 
+	if (args->basic)
+		trace_ctx.mode = TRACE_MODE_BASIC;
+
+	if (args->intel)
+		trace_ctx.mode = TRACE_MODE_INETL;
+
+	if (args->drop) {
+		trace_ctx.mode = TRACE_MODE_DROP;
+		traces = "kfree_skb";
+	}
+
 	if (!traces) {
 		trace_for_each(trace)
 			if (trace->def)
@@ -209,11 +221,10 @@ static int trace_prepare_args()
 	free(tmp);
 
 skip_trace:
-	if (args->basic)
-		trace_ctx.mode = TRACE_MODE_BASIC;
-
-	if (args->intel)
-		trace_ctx.mode = TRACE_MODE_INETL;
+	if (drop_reason_support()) {
+		trace_ctx.bpf_args.drop_reason = true;
+		trace_ctx.drop_reason = true;
+	}
 
 	switch (trace_ctx.mode) {
 	case TRACE_MODE_INETL:
@@ -228,10 +239,17 @@ skip_trace:
 			trace_group_enable("life");
 		break;
 	case TRACE_MODE_BASIC:
+	case TRACE_MODE_DROP:
+		if (!trace_ctx.drop_reason) {
+			pr_err("skb drop reason is not support by your kernel"
+			       ", please upgrade your kernel to 5.18+\n");
+			goto err;
+		}
 		break;
 	default:
 		goto err;
 	}
+	get_drop_reason(1);
 
 	if (args->ret) {
 		switch (trace_ctx.mode) {
@@ -248,12 +266,7 @@ skip_trace:
 		}
 	}
 
-	if (trace_drop_reason_support()) {
-		trace_ctx.bpf_args.drop_reason = true;
-		trace_ctx.drop_reason = true;
-	}
-
-	trace_ctx.bpf_args.trace_mode = trace_ctx.mode;
+	trace_ctx.bpf_args.trace_mode = 1 << trace_ctx.mode;
 	trace_ctx.detail = trace_ctx.bpf_args.detail;
 
 	return 0;

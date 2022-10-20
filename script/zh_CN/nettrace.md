@@ -60,14 +60,14 @@ nettrace - Linux系统下的网络报文跟踪、网络问题诊断工具
   启用`basic`跟踪模式。默认情况下，启用的是生命周期跟踪模式。启用该模式后，会直接打印
   出报文所经过的内核函数/tracepoint
 
-`--intel`
+`--diag`
   启用诊断模式
 
-`--intel-quiet`
+`--diag-quiet`
   只显示出现存在问题的报文，不显示正常的报文
 
-`--intel-keep`
-  持续跟踪。`intel`模式下，默认在跟踪到异常报文后会停止跟踪，使用该参数后，会持续跟踪下去。
+`--diag-keep`
+  持续跟踪。`diag`模式下，默认在跟踪到异常报文后会停止跟踪，使用该参数后，会持续跟踪下去。
 
 `--hooks`
   打印netfilter上的钩子函数
@@ -93,7 +93,7 @@ nettrace - Linux系统下的网络报文跟踪、网络问题诊断工具
 
 ### 诊断模式
 
-使用方式与上面的一致，加个`intel`参数即可使用诊断模式。上文的生命周期模式对于使用者的
+使用方式与上面的一致，加个`diag`参数即可使用诊断模式。上文的生命周期模式对于使用者的
 要求比较高，需要了解内核协议栈各个函数的用法、返回值的意义等，易用性较差。诊断模式是在
 生命周期模式的基础上，提供了更加丰富的信息，使得没有网络开发经验的人也可进行复杂
 网络问题的定位和分析。
@@ -106,10 +106,10 @@ nettrace - Linux系统下的网络报文跟踪、网络问题诊断工具
 - `ERROR`：异常信息，报文发生了问题（比如被丢弃）。
 
 如果当前报文存在`ERROR`，那么工具会给出一定的诊断修复建议，并终止当前诊断操作。通过添
-加`intel-keep`可以在发生`ERROR`事件时不退出，继续进行跟踪分析。下面是发生异常时的日志：
+加`diag-keep`可以在发生`ERROR`事件时不退出，继续进行跟踪分析。下面是发生异常时的日志：
 
 ```shell
-./nettrace -p icmp --intel --saddr 192.168.122.8
+./nettrace -p icmp --diag --saddr 192.168.122.8
 begin trace...
 ***************** ffff889fb3c64f00 ***************
 [4049.295546] [__netif_receive_skb_core] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
@@ -158,7 +158,7 @@ end trace...
 适配的，可以理解为将droptrace的功能集成到了这里的诊断结果中，这里可以看出其给出的丢包
 原因是`NETFILTER_DROP`。因此，可以通过一下命令来监控内核中所有的丢包事件以及丢包原因：
 
-*nettrace -t kfree_skb --intel --intel-keep*
+*nettrace -t kfree_skb --diag --diag-keep*
 
 ### netfilter支持
 
@@ -172,7 +172,7 @@ end trace...
 分析问题：
 
 ```shell
-./nettrace -p icmp --intel --saddr 192.168.122.8 --hooks
+./nettrace -p icmp --diag --saddr 192.168.122.8 --hooks
 begin trace...
 ***************** ffff889faa054500 ***************
 [5810.702473] [__netif_receive_skb_core] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943
@@ -234,4 +234,4 @@ Menglong Dong
 
 ## SEE ALSO
 
-nettrace-legacy(8), droptrace(8)
+nettrace-legacy(8)

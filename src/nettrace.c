@@ -68,6 +68,11 @@ static void do_parse_args(int argc, char *argv[])
 			.type = OPTION_BOOL,
 			.desc = "print netfilter hooks if dropping by netfilter",
 		},
+		{
+			.lname = "drop", .dest = &trace_args->drop,
+			.type = OPTION_BOOL,
+			.desc = "skb drop monitor mode, for replace of 'droptrace'",
+		},
 		{ .type = OPTION_BLANK },
 		{
 			.sname = 'v', .dest = &show_log,

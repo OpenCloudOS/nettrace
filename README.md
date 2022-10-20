@@ -21,7 +21,7 @@
 - 报文生命周期跟踪：跟踪网络报文从进入到内核协议栈到释放/丢弃的过程中在内核中所走过的路径，实现报文整个生命周期的监控，并采集生命周期各个阶段的事件、信息。通过观察报文在内核中的路径，对于有一定内核协议栈经验的人来说可以快速、有效地发现网络问题。
 - 网络故障诊断：将以往的经验集成到工具的知识库，通过知识匹配的方式来主动诊断当前网络故障，给出诊断结果以及修复建议。该功能入手简单、易用性强，无需过多的网络经验即可进行网络问题定位。
 - 网络异常监控：常态化地部署到生产环境中，主动地发现、上报环境上的网络异常。
-- `droptrace`：用于跟踪、监控系统中的丢包事件的工具，点击[这里](droptrace/README.md)查看详情介绍。该工具计划后面合入到`nettrace`功能中。
+- `droptrace`：用于跟踪、监控系统中的丢包事件的工具，点击[这里](docs/droptrace.md)查看详情介绍。该功能已被遗弃，可以使用`nettrace --drop`实现相同的功能。
 
 ## 二、安装方法
 
@@ -131,7 +131,7 @@ make COMPAT=1 KERN_VER=266002 all
 
 ## 三、使用方法
 
-`droptrace`主要用来进行系统丢包事件的监控，点击[这里](droptrace/README.md)可查看droptrace的用户文档，这里不再赘述，重点介绍nettrace的相关功能。nettrace是用来跟踪内核报文和诊断网络故障的，在进行报文跟踪时可以使用一定的过滤条件来跟踪特定的报文。其基本命令行参数为：
+nettrace是用来跟踪内核报文和诊断网络故障的，在进行报文跟踪时可以使用一定的过滤条件来跟踪特定的报文。其基本命令行参数为：
 
 ```shell
 $ nettrace -h
@@ -157,6 +157,7 @@ Usage:
     --diag-quiet     only print abnormal packet
     --diag-keep      don't quit when abnormal packet found
     --hooks          print netfilter hooks if dropping by netfilter
+    --drop           skb drop monitor mode, for replace of 'droptrace'
 
     -v               show log information
     --debug          show debug information
@@ -173,6 +174,7 @@ Usage:
 - `diag-quiet`：只显示出现存在问题的报文，不显示正常的报文
 - `diag-keep`：持续跟踪。`diag`模式下，默认在跟踪到异常报文后会停止跟踪，使用该参数后，会持续跟踪下去。
 - `hooks`：结合netfilter做的适配，详见下文
+- `drop`：进行系统丢包监控，取代原先的`droptrace`
 
 下面我们首先来看一下默认模式下的工具使用方法。
 
@@ -512,4 +514,26 @@ begin trace...
         NOT_SPECIFIED
 
 analysis finished!
+```
+
+## 3.3 丢包监控
+
+使用命令`nettrace --drop`可以对系统中的丢包事件进行监控，对于支持内核特性`skb drop reason`的内核，这里还会打印出丢包原因。可以通过查看`/tracing/events/skb/kfree_skb/format`来判断当前系统是否支持该特性：
+
+```shell
+cat /tracing/events/skb/kfree_skb/format 
+name: kfree_skb
+ID: 1524
+format:
+        field:unsigned short common_type;       offset:0;       size:2; signed:0;
+        field:unsigned char common_flags;       offset:2;       size:1; signed:0;
+        field:unsigned char common_preempt_count;       offset:3;       size:1; signed:0;
+        field:int common_pid;   offset:4;       size:4; signed:1;
+
+        field:void * skbaddr;   offset:8;       size:8; signed:0;
+        field:void * location;  offset:16;      size:8; signed:0;
+        field:unsigned short protocol;  offset:24;      size:2; signed:0;
+        field:enum skb_drop_reason reason;      offset:28;      size:4; signed:0;
+
+print fmt: "skbaddr=%p protocol=%u location=%p reason: %s", REC->skbaddr, REC->protocol, REC->location, __print_symbolic(REC->reason, { 1, "NOT_SPECIFIED" }, { 2, "NO_SOCKET" }, { 3, "PKT_TOO_SMALL" }, { 4, "TCP_CSUM" }, { 5, "SOCKET_FILTER" }, { 6, "UDP_CSUM" }, { 7, "NETFILTER_DROP" }, { 8, "OTHERHOST" }, { 9, "IP_CSUM" }, { 10, "IP_INHDR" }, { 11, "IP_RPFILTER" }, { 12, "UNICAST_IN_L2_MULTICAST" }, { 13, "XFRM_POLICY" }, { 14, "IP_NOPROTO" }, { 15, "SOCKET_RCVBUFF" }, { 16, "PROTO_MEM" }, { 17, "TCP_MD5NOTFOUND" }, { 18, "TCP_MD5UNEXPECTED" }, { 19, "TCP_MD5FAILURE" }, { 20, "SOCKET_BACKLOG" }, { 21, "TCP_FLAGS" }, { 22, "TCP_ZEROWINDOW" }, { 23, "TCP_OLD_DATA" }, { 24, "TCP_OVERWINDOW" }, { 25, "TCP_OFOMERGE" }, { 26, "TCP_RFC7323_PAWS" }, { 27, "TCP_INVALID_SEQUENCE" }, { 28, "TCP_RESET" }, { 29, "TCP_INVALID_SYN" }, { 30, "TCP_CLOSE" }, { 31, "TCP_FASTOPEN" }, { 32, "TCP_OLD_ACK" }, { 33, "TCP_TOO_OLD_ACK" }, { 34, "TCP_ACK_UNSENT_DATA" }, { 35, "TCP_OFO_QUEUE_PRUNE" }, { 36, "TCP_OFO_DROP" }, { 37, "IP_OUTNOROUTES" }, { 38, "BPF_CGROUP_EGRESS" }, { 39, "IPV6DISABLED" }, { 40, "NEIGH_CREATEFAIL" }, { 41, "NEIGH_FAILED" }, { 42, "NEIGH_QUEUEFULL" }, { 43, "NEIGH_DEAD" }, { 44, "TC_EGRESS" }, { 45, "QDISC_DROP" }, { 46, "CPU_BACKLOG" }, { 47, "XDP" }, { 48, "TC_INGRESS" }, { 49, "UNHANDLED_PROTO" }, { 50, "SKB_CSUM" }, { 51, "SKB_GSO_SEG" }, { 52, "SKB_UCOPY_FAULT" }, { 53, "DEV_HDR" }, { 54, "DEV_READY" }, { 55, "FULL_RING" }, { 56, "NOMEM" }, { 57, "HDR_TRUNC" }, { 58, "TAP_FILTER" }, { 59, "TAP_TXFILTER" }, { 60, "ICMP_CSUM" }, { 61, "INVALID_PROTO" }, { 62, "IP_INADDRERRORS" }, { 63, "IP_INNOROUTES" }, { 64, "PKT_TOO_BIG" }, { 65, "MAX" })
 ```

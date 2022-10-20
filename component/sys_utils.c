@@ -57,3 +57,14 @@ int liberate_l()
 	struct rlimit lim = {RLIM_INFINITY, RLIM_INFINITY};
 	return setrlimit(RLIMIT_MEMLOCK, &lim);
 }
+
+bool fsearch(FILE *f, char *target)
+{
+	char tmp[128];
+
+	while (fscanf(f, "%s", tmp) == 1) {
+		if (strstr(tmp, target))
+			return true;
+	}
+	return false;
+}

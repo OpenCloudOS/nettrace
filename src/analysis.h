@@ -176,13 +176,13 @@ static inline bool event_is_ret(int size)
 static inline void entry_set_extinfo(analy_entry_t *e, char *info)
 {
 	e->extinfo = info;
-	e->status != ANALY_ENTRY_EXTINFO;
+	e->status |= ANALY_ENTRY_EXTINFO;
 }
 
 static inline void entry_set_msg(analy_entry_t *e, char *info)
 {
 	e->msg = info;
-	e->status != ANALY_ENTRY_MSG;
+	e->status |= ANALY_ENTRY_MSG;
 }
 
 #endif

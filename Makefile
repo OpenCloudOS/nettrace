@@ -3,7 +3,7 @@ export VERSION	= 1.2.1
 RELEASE		?= .tl3
 export RELEASE
 
-targets		:= droptrace nodetrace src legacy
+targets		:= nodetrace src legacy
 targets-call	= for i in $1; do make $2 -C $$i $@; done
 man-target 	:= script/zh_CN/nettrace.8
 
@@ -45,7 +45,7 @@ install:
 		done
 
 	@mkdir -p $(BCOMP); cd $(BCOMP); cp $(SCRIPT)/bash-completion.sh \
-		./nettrace; ln -s nettrace droptrace
+		./nettrace
 
 pack:
 	@make clean

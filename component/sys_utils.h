@@ -6,12 +6,17 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <stdio.h>
 
 extern int log_level;
 
 int execf(char *output, char *fmt, ...);
 int exec(char *cmd, char *output);
 int liberate_l();
+bool fsearch(FILE *f, char *target);
 
 static inline int simple_exec(char *cmd)
 {

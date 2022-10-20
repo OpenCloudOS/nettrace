@@ -9,6 +9,7 @@
 
 #include "kprobe_trace.h"
 
+#define MODE_SKIP_LIFE_MASK (TRACE_MODE_BASIC_MASK | TRACE_MODE_DROP_MASK)
 #define TRACE_PREFIX __trace_
 
 struct {
@@ -75,7 +76,7 @@ static try_inline int handle_entry(void *regs, struct sk_buff *skb, event_t *e,
 		return -1;
 
 	pid = (u32)bpf_get_current_pid_tgid();
-	if (ARGS_GET(trace_mode) == TRACE_MODE_BASIC) {
+	if (ARGS_GET(trace_mode) & MODE_SKIP_LIFE_MASK) {
 		if (!probe_parse_skb(skb, pkt))
 			goto skip_life;
 		return -1;
@@ -122,7 +123,7 @@ out:
 
 static try_inline int handle_destroy(struct sk_buff *skb)
 {
-	if (ARGS_GET_CONFIG(trace_mode) != TRACE_MODE_BASIC)
+	if (!(ARGS_GET_CONFIG(trace_mode) & MODE_SKIP_LIFE_MASK))
 		bpf_map_delete_elem(&m_lookup, &skb);
 	return 0;
 }

@@ -71,8 +71,14 @@ typedef struct __attribute__((__packed__)) {
 
 typedef enum trace_mode {
 	TRACE_MODE_BASIC,
+	TRACE_MODE_DROP,
 	TRACE_MODE_TIMELINE,
 	TRACE_MODE_INETL,
 } trace_mode_t;
+
+#define TRACE_MODE_BASIC_MASK		(1 << TRACE_MODE_BASIC)
+#define TRACE_MODE_TIMELINE_MASK	(1 << TRACE_MODE_TIMELINE)
+#define TRACE_MODE_INETL_MASK		(1 << TRACE_MODE_INETL)
+#define TRACE_MODE_DROP_MASK		(1 << TRACE_MODE_DROP)
 
 #endif

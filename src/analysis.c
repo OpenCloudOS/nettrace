@@ -12,7 +12,7 @@
 
 #include "trace.h"
 #include "analysis.h"
-#include "drop_reason.h"
+#include "dropreason.h"
 
 #define CTX_HASH_LENGTH 1024
 static struct hlist_head ctx_hash[CTX_HASH_LENGTH] = {};
@@ -157,11 +157,11 @@ static void analy_entry_handle(analy_entry_t *entry)
 			ifname = ifname ?: "";
 		}
 
-		sprintf(tinfo, "[%llx][%-20s][cpu:%-3u][%-5s][pid:%-7u][%-12s]",
+		sprintf(tinfo, "[%llx][%-20s][cpu:%-3u][%-5s][pid:%-7u][%-12s] ",
 			detail->key, t->name, entry->cpu, ifname,
 			detail->pid, detail->task);
-	} else {
-		sprintf(tinfo, "[%-20s]", t->name);
+	} else if (trace_ctx.mode != TRACE_MODE_DROP) {
+		sprintf(tinfo, "[%-20s] ", t->name);
 	}
 
 	ts_print_packet(buf, pkt, tinfo);
@@ -174,7 +174,7 @@ static void analy_entry_handle(analy_entry_t *entry)
 			    (int)entry->priv);
 
 	if (entry->msg)
-		sprintf_end(buf, PFMT_EMPH_STR(" *%s*"), entry->msg);
+		sprintf_end(buf, "%s", entry->msg);
 
 	if (!entry->rule)
 		goto out;
@@ -278,6 +278,16 @@ free_ctx:
 	analy_ctx_free(ctx);
 }
 
+static int try_run_analyzer(trace_t *trace, analyzer_t *analyzer,
+			    analy_entry_t *entry)
+{
+	if (analyzer && (analyzer->mode & (1 << trace_ctx.mode)) &&
+	    analyzer->analy_entry)
+		return analyzer->analy_entry(trace, entry);
+
+	return RESULT_CONT;
+}
+
 void tl_poll_handler(void *raw_ctx, int cpu, void *data, u32 size)
 {
 	static char buf[1024], tinfo[128];
@@ -318,28 +328,22 @@ void tl_poll_handler(void *raw_ctx, int cpu, void *data, u32 size)
 
 	entry->ctx = analy_ctx;
 	entry->fake_ctx = fake;
-	if (analyzer->analy_entry) {
-		switch (analyzer->analy_entry(trace, entry)) {
-		case RESULT_CONSUME:
-			goto check_pending;
-		case RESULT_CONT:
-			break;
-		default:
-			break;
-		}
+	switch (try_run_analyzer(trace, analyzer, entry)) {
+	case RESULT_CONSUME:
+		goto check_pending;
+	case RESULT_CONT:
+		break;
+	default:
+		break;
 	}
 
-	analyzer = trace->analyzer;
-	if (analyzer && (analyzer->mode & (1 << trace_ctx.mode)) &&
-	    analyzer->analy_entry) {
-		switch (trace->analyzer->analy_entry(trace, entry)) {
-		case RESULT_CONSUME:
-			goto check_pending;
-		case RESULT_CONT:
-			break;
-		default:
-			break;
-		}
+	switch (try_run_analyzer(trace, trace->analyzer, entry)) {
+	case RESULT_CONSUME:
+		goto check_pending;
+	case RESULT_CONT:
+		break;
+	default:
+		break;
 	}
 
 	list_add_tail(&entry->list, &analy_ctx->entries);
@@ -396,7 +400,10 @@ void basic_poll_handler(void *ctx, int cpu, void *data, u32 size)
 		.event = data,
 		.cpu = cpu
 	};
+	trace_t *trace;
 
+	trace = get_trace_from_analy_entry(&entry);
+	try_run_analyzer(trace, trace->analyzer, &entry);
 	analy_entry_handle(&entry);
 }
 
@@ -457,19 +464,27 @@ out:
 	return RESULT_CONT;
 }
 
-#define FN(name) [SKB_DROP_REASON_##name] = #name,
-#ifndef __DEFINE_SKB_REASON
-#define __DEFINE_SKB_REASON(fn)
-#endif
-static char *drop_reasons[] = {
-	__DEFINE_SKB_REASON(FN)
-};
-DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_INETL_MASK)
+DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_INETL_MASK |
+			    TRACE_MODE_DROP_MASK)
 {
 	drop_event_t *event = (void *)e->event;
+	char *reason = NULL, *sym_str, *info;
 	struct sym_result *sym;
-	char *reason = NULL;
-	char *info;
+
+	reason = get_drop_reason(event->reason);
+	sym = parse_sym(event->location);
+	sym_str = sym ? sym->desc : "unknow";
+
+	info = malloc(1024);
+	info[0] = '\0';
+	if (trace_ctx.mode == TRACE_MODE_DROP) {
+		if (trace_ctx.drop_reason)
+			sprintf(info, ", reason: %s, %s", reason, sym_str);
+		else
+			sprintf(info, ", %s", sym_str);
+		entry_set_msg(e, info);
+		goto out;
+	}
 
 	put_fake_analy_ctx(e->fake_ctx);
 	hlist_del(&e->fake_ctx->hash);
@@ -477,16 +492,7 @@ DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_INETL_MASK)
 		goto out;
 
 	rule_run(e, trace, 0);
-	sym = parse_sym(event->location);
-
-	if (event->reason < ARRAY_SIZE(drop_reasons))
-		reason = drop_reasons[event->reason];
-
-	info = malloc(1024);
-	info[0] = '\0';
-	sprintf(info, PFMT_EMPH_STR("    location")":\n\t%s",
-		sym ? sym->desc : "unknow");
-
+	sprintf(info, PFMT_EMPH_STR("    location")":\n\t%s", sym_str);
 	if (trace_ctx.drop_reason) {
 		sprintf_end(info, PFMT_EMPH_STR("\n    drop reason")":\n\t%s",
 			    reason ?: "unknow");
@@ -560,7 +566,7 @@ DEFINE_ANALYZER_EXIT(nf, TRACE_MODE_INETL_MASK)
 	int i = 0;
 
 	msg[0] = '\0';
-	sprintf(msg, "%s in chain: %s", pf_names[event->pf],
+	sprintf(msg, PFMT_EMPH_STR(" *%s in chain: %s*"), pf_names[event->pf],
 		hook_names[event->pf][event->hook]);
 	entry_set_msg(entry, msg);
 	rule_run(entry, trace, e->event.val);
@@ -599,8 +605,8 @@ DEFINE_ANALYZER_EXIT(iptable, TRACE_MODE_INETL_MASK)
 		chain = event->chain;
 	else
 		chain = inet_hook_names[event->hook];
-	sprintf(msg, "iptables table:%s, chain:%s", event->table,
-		chain);
+	sprintf(msg, PFMT_EMPH_STR(" *iptables table:%s, chain:%s*"),
+		event->table, chain);
 	entry_set_msg(entry, msg);
 	rule_run(entry, trace, e->event.val);
 

@@ -4,7 +4,7 @@ progs		:= nettrace
 prog-nettrace-origin = \
 		trace.c $(COMMON_SHARED) trace_probe.c trace_tracing.c \
 		analysis.c $(COMPONENT)/parse_sym.c trace_group.c \
-		drop_reason.h
+		dropreason.c
 prog-nettrace	= $(prog-nettrace-origin) nettrace.c
 
 ifdef KERN_VER
@@ -48,5 +48,5 @@ pack: all
 clean:
 	rm -rf $(progs) trace_group.c progs/kprobe_trace.h \
 		$(bpf_progs) progs/*.o progs/*.skel.h \
-		vmlinux.h drop_reason.h kheaders.h
+		vmlinux.h kheaders.h
 

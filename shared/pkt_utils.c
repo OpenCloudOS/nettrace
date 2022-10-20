@@ -16,7 +16,7 @@ int ts_print_packet(char *buf, packet_t *pkt, char *minfo)
 		BUF_FMT("[%llu.%06llu] ", ts / 1000000000,
 			ts % 1000000000 / 1000);
 	if (minfo)
-		BUF_FMT("%s ", minfo);
+		BUF_FMT("%s", minfo);
 	if (!pkt->proto_l3) {
 		BUF_FMT("unknow");
 		goto out;
