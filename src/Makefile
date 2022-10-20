@@ -18,7 +18,7 @@ COMPAT ?= $(if $(KERNEL),$(shell cat $(HEADERS)/Makefile | grep \
 	  'VERSION = 4'),$(shell uname -r | grep ^4))
 
 ifneq ($(strip $(COMPAT)),)
-	CFLAGS += -DMAP_CONFIG
+	CFLAGS += -DCOMPAT_MODE
 endif
 
 NFT_HEADER	:= $(HEADERS)/include/net/netfilter/nf_tables.h

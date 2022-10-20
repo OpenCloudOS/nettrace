@@ -41,7 +41,7 @@ struct {
 #define _C(src, a, ...)	BPF_CORE_READ(src, a, ##__VA_ARGS__)
 #endif
 
-#ifdef MAP_CONFIG
+#ifdef COMPAT_MODE
 struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);
 	__uint(key_size, sizeof(int));

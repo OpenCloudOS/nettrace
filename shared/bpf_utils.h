@@ -18,7 +18,7 @@ typedef struct {
 
 extern long int syscall (long int __sysno, ...);
 
-#ifdef MAP_CONFIG
+#ifdef COMPAT_MODE
 #define bpf_set_config(skel, sec, value) do {		\
 	int fd = bpf_map__fd(skel->maps.m_config);	\
 	u8 buf[CONFIG_MAP_SIZE] = {};			\
