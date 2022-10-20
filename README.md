@@ -139,8 +139,11 @@ nettrace: a tool to trace skb in kernel and diagnose network problem
 
 Usage:
     -s, --saddr      filter source ip address
+    --saddr6         filter source ip v6 address
     -d, --daddr      filter dest ip address
+    --daddr6         filter dest ip v6 address
     --addr           filter source or dest ip address
+    --addr6          filter source or dest ip v6 address
     -S, --sport      filter source TCP/UDP port
     -D, --dport      filter dest TCP/UDP port
     -P, --port       filter source or dest TCP/UDP port
@@ -150,9 +153,9 @@ Usage:
     --ret            show function return value
     --detail         show extern packet info, such as pid, ifname, etc
     --basic          use 'basic' trace mode, don't trace skb's life
-    --intel          enable 'intel' mode
-    --intel-quiet    only print abnormal packet
-    --intel-keep     don't quit when abnormal packet found
+    --diag           enable 'diagnose' mode
+    --diag-quiet     only print abnormal packet
+    --diag-keep      don't quit when abnormal packet found
     --hooks          print netfilter hooks if dropping by netfilter
 
     -v               show log information
@@ -166,9 +169,9 @@ Usage:
 - `ret`：跟踪和显示内核函数的返回值
 - `detail`：显示跟踪详细信息，包括当前的进程、网口和CPU等信息
 - `basic`：启用`basic`跟踪模式。默认情况下，启用的是生命周期跟踪模式。启用该模式后，会直接打印出报文所经过的内核函数/tracepoint。
-- `intel`：启用诊断模式
-- `intel-quiet`：只显示出现存在问题的报文，不显示正常的报文
-- `intel-keep`：持续跟踪。`intel`模式是下，默认在跟踪到异常报文后会停止跟踪，使用该参数后，会持续跟踪下去。
+- `diag`：启用诊断模式
+- `diag-quiet`：只显示出现存在问题的报文，不显示正常的报文
+- `diag-keep`：持续跟踪。`diag`模式下，默认在跟踪到异常报文后会停止跟踪，使用该参数后，会持续跟踪下去。
 - `hooks`：结合netfilter做的适配，详见下文
 
 下面我们首先来看一下默认模式下的工具使用方法。
@@ -301,7 +304,7 @@ begin tracing......
 
 ### 3.2 诊断模式
 
-使用方式与上面的一致，加个`intel`参数即可使用诊断模式。上文的生命周期模式对于使用者的要求比较高，需要了解内核协议栈各个函数的用法、返回值的意义等，易用性较差。诊断模式是在生命周期模式的基础上，提供了更加丰富的信息，使得没有网络开发经验的人也可进行复杂网络问题的定位和分析。
+使用方式与上面的一致，加个`diag`参数即可使用诊断模式。上文的生命周期模式对于使用者的要求比较高，需要了解内核协议栈各个函数的用法、返回值的意义等，易用性较差。诊断模式是在生命周期模式的基础上，提供了更加丰富的信息，使得没有网络开发经验的人也可进行复杂网络问题的定位和分析。
 
 #### 3.2.1 基本用法
 
@@ -312,7 +315,7 @@ begin tracing......
 - `ERROR`：异常信息，报文发生了问题（比如被丢弃）。
 
 ```shell
-./nettrace -p icmp --intel --saddr 192.168.122.8
+./nettrace -p icmp --diag --saddr 192.168.122.8
 begin trace...
 ***************** ffff889fad356200 ***************
 [3445.575957] [__netif_receive_skb_core] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
@@ -344,10 +347,10 @@ begin trace...
         NAT happens (packet address will change)
 ```
 
-如果当前报文存在`ERROR`，那么工具会给出一定的诊断修复建议，并终止当前诊断操作。通过添加`intel-keep`可以在发生`ERROR`事件时不退出，继续进行跟踪分析。下面是发生异常时的日志：
+如果当前报文存在`ERROR`，那么工具会给出一定的诊断修复建议，并终止当前诊断操作。通过添加`diag-keep`可以在发生`ERROR`事件时不退出，继续进行跟踪分析。下面是发生异常时的日志：
 
 ```shell
-./nettrace -p icmp --intel --saddr 192.168.122.8
+./nettrace -p icmp --diag --saddr 192.168.122.8
 begin trace...
 ***************** ffff889fb3c64f00 ***************
 [4049.295546] [__netif_receive_skb_core] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
@@ -397,7 +400,7 @@ end trace...
 网络防火墙是网络故障、网络不同发生的重灾区，因此`netfilter`工具对`netfilter`提供了完美适配，包括老版本的`iptables-legacy`和新版本的`iptables-nft`。诊断模式下，`nettrace`能够跟踪报文所经过的`iptables`表和`iptables`链，并在发生由于iptables导致的丢包时给出一定的提示，上面的示例充分展现出了这部分。出了对iptables的支持，`nettrace`对整个netfilter大模块也提供了支持，能够显示在经过每个HOOK点时对应的协议族和链的名称。除此之外，为了应对一些注册到netfilter中的第三方内核模块导致的丢包问题，nettrace还可以通过添加参数`hooks`来打印出当前`HOOK`上所有的的钩子函数，从而深入分析问题：
 
 ```shell
-./nettrace -p icmp --intel --saddr 192.168.122.8 --hooks
+./nettrace -p icmp --diag --saddr 192.168.122.8 --hooks
 begin trace...
 ***************** ffff889faa054500 ***************
 [5810.702473] [__netif_receive_skb_core] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943
@@ -451,7 +454,7 @@ end trace...
 端口未监听导致的丢包：
 
 ```shell
-./nettrace --intel --intel-quiet
+./nettrace --diag --diag-quiet
 begin trace...
 ***************** ffff888f97730ee0 ***************
 [365673.326016] [ip_output           ] TCP: 127.0.0.1:40392 -> 127.0.0.1:9999 seq:3067626996, ack:0, flags:S
@@ -485,7 +488,7 @@ begin trace...
 XDP导致的丢包（XDP转发会给提示）：
 
 ```shell
-./nettrace -p icmp --intel --intel-quiet 
+./nettrace -p icmp --diag --diag-quiet 
 begin trace...
 ***************** ffff889f015acc00 ***************
 [18490.607809] [__netif_receive_skb_core] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
