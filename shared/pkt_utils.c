@@ -1,22 +1,53 @@
 #include <linux/icmp.h>
+#include <time.h>
+#include <linux/unistd.h>
+#include <linux/kernel.h>
+#include <sys/sysinfo.h>
 #define _LINUX_IN_H
 #include <netinet/in.h>
 
 #include "pkt_utils.h"
 
-int ts_print_packet(char *buf, packet_t *pkt, char *minfo)
+static time_t time_offset;
+static struct tm *convert_ts_to_date(u64 ts)
+{
+	struct tm *p;
+	time_t tmp;
+
+	if (!time_offset) {
+		struct sysinfo s_info;
+		sysinfo(&s_info);
+
+		time(&time_offset);
+		time_offset -= s_info.uptime;
+	}
+
+	tmp = time_offset + (ts / 1000000000);
+	return localtime(&tmp);
+}
+
+int ts_print_packet(char *buf, packet_t *pkt, char *minfo,
+		    bool date_format)
 {
 	static char saddr[MAX_ADDR_LENGTH], daddr[MAX_ADDR_LENGTH];
+	u64 ts = pkt->ts;
+	struct tm *p;
 	u8 flags, l4;
 	int pos = 0;
-	u64 ts;
 
-	ts = pkt->ts;
-	if (ts)
+	if (date_format) {
+		p = convert_ts_to_date(ts);
+		BUF_FMT("[%d-%d-%d %02d:%02d:%02d.%06d] ", 1900 + p->tm_year,
+			1 + p->tm_mon, p->tm_mday, p->tm_hour, p->tm_min,
+			p->tm_sec, ts % 1000000000 / 1000);
+	} else {
 		BUF_FMT("[%llu.%06llu] ", ts / 1000000000,
 			ts % 1000000000 / 1000);
+	}
+
 	if (minfo)
 		BUF_FMT("%s", minfo);
+
 	if (!pkt->proto_l3) {
 		BUF_FMT("unknow");
 		goto out;
@@ -97,5 +128,5 @@ out:
 
 int base_print_packet(char *buf, packet_t *pkt)
 {
-	return ts_print_packet(buf, pkt, NULL);
+	return ts_print_packet(buf, pkt, NULL, false);
 }

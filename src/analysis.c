@@ -164,7 +164,7 @@ static void analy_entry_handle(analy_entry_t *entry)
 		sprintf(tinfo, "[%-20s] ", t->name);
 	}
 
-	ts_print_packet(buf, pkt, tinfo);
+	ts_print_packet(buf, pkt, tinfo, trace_ctx.args.date);
 
 	if (trace_ctx.mode == TRACE_MODE_BASIC)
 		goto out;

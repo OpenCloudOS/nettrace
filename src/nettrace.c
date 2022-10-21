@@ -44,6 +44,11 @@ static void do_parse_args(int argc, char *argv[])
 			.desc = "show extern packet info, such as pid, ifname, etc",
 		},
 		{
+			.lname = "date", .dest = &trace_args->date,
+			.type = OPTION_BOOL,
+			.desc = "print timestamp in date-time format",
+		},
+		{
 			.lname = "basic", .dest = &trace_args->basic,
 			.type = OPTION_BOOL,
 			.desc = "use 'basic' trace mode, don't trace skb's life",
