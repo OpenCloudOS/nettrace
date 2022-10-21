@@ -184,6 +184,11 @@ static int trace_prepare_args()
 	trace_t *trace;
 	char *tmp, *cur;
 
+	if (args->basic + args->intel + args->drop > 1) {
+		pr_err("multi-mode specified!\n");
+		goto err;
+	}
+
 	if (args->basic)
 		trace_ctx.mode = TRACE_MODE_BASIC;
 

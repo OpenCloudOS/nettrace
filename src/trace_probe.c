@@ -204,6 +204,7 @@ static void probe_trace_ready()
 }
 
 analyzer_t probe_analyzer =  {
+	.mode = TRACE_MODE_INETL_MASK | TRACE_MODE_TIMELINE_MASK,
 	.analy_entry = probe_analy_entry,
 	.analy_exit = probe_analy_exit,
 };

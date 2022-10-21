@@ -64,7 +64,7 @@ static inline fake_analy_ctx_t
 	analy_fake_ctx_add(fake);
 
 	get_fake_analy_ctx(fake);
-	pr_debug("fake ctx alloc: %llx\n", PTR2X(fake));
+	pr_debug("fake ctx alloc: %llx, %llx\n", PTR2X(fake), key);
 	return fake;
 }
 
@@ -309,7 +309,7 @@ void tl_poll_handler(void *raw_ctx, int cpu, void *data, u32 size)
 	}
 	e = entry->event;
 	entry->cpu = cpu;
-	pr_debug("create entry: %llx\n", PTR2X(entry));
+	pr_debug("create entry: %llx, %llx\n", PTR2X(entry), e->key);
 
 	fake = analy_fake_ctx_fetch(e->key);
 	if (!fake) {
@@ -367,7 +367,8 @@ do_ret:;
 	}
 	entry = analy_exit.entry;
 	if (!entry) {
-		pr_err("entry for exit not found\n");
+		pr_err("entry for exit not found: %llx\n",
+		       analy_exit.event.val);
 		return;
 	}
 
@@ -424,13 +425,13 @@ static inline void rule_run(analy_entry_t *entry, trace_t *trace, int ret)
 			hit = rule->range.min < ret && rule->range.max > ret;
 			break;
 		case RULE_RETURN_LT:
-			hit =rule->expected < ret;
+			hit = rule->expected < ret;
 			break;
 		case RULE_RETURN_GT:
-			hit =rule->expected > ret;
+			hit = rule->expected > ret;
 			break;
 		case RULE_RETURN_NE:
-			hit =rule->expected != ret;
+			hit = rule->expected != ret;
 			break;
 		default:
 			continue;
@@ -506,9 +507,12 @@ DEFINE_ANALYZER_EXIT(clone, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_INETL_MASK)
 {
 	analy_entry_t *entry = e->entry;
 
-	if (!entry || !e->event.val)
+	if (!entry || !e->event.val) {
+		pr_err("skb clone failed\n");
 		goto out;
+	}
 
+	pr_debug("clone analyzer triggered on: %llx\n", e->event.val);
 	analy_fake_ctx_alloc(e->event.val, entry->ctx);
 	if (trace_mode_intel())
 		rule_run(entry, trace, 0);
