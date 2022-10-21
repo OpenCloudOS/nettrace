@@ -245,11 +245,9 @@ skip_trace:
 		break;
 	case TRACE_MODE_BASIC:
 	case TRACE_MODE_DROP:
-		if (!trace_ctx.drop_reason) {
-			pr_err("skb drop reason is not support by your kernel"
-			       ", please upgrade your kernel to 5.18+\n");
-			goto err;
-		}
+		if (!trace_ctx.drop_reason)
+			pr_warn("skb drop reason is not support by your kernel"
+				", drop reason will not be printed\n");
 		break;
 	default:
 		goto err;
@@ -273,6 +271,9 @@ skip_trace:
 
 	trace_ctx.bpf_args.trace_mode = 1 << trace_ctx.mode;
 	trace_ctx.detail = trace_ctx.bpf_args.detail;
+	/* from v5.14, the struct of nft_pktinfo changed */
+	trace_ctx.bpf_args.nft_high = kv_compare(5, 14, 0) >= 0;
+	pr_debug("nft high version: %d\n", trace_ctx.bpf_args.nft_high);
 
 	return 0;
 err:

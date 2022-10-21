@@ -1,5 +1,8 @@
 #include "trace.h"
 #include "progs/kprobe.skel.h"
+#ifndef COMPAT_MODE
+#include "progs/kprobe_core.skel.h"
+#endif
 #include "analysis.h"
 #include "nettrace.h"
 #include "analysis.h"
@@ -94,22 +97,26 @@ err:
 	return -1;
 }
 
+#define LOAD_SKEL(name)					\
+	skel = (void *) name##__open();			\
+	if (skel && !name##__load((void *)skel))	\
+		goto load_success;			\
+	pr_debug("failed to load skel: " #name "\n")
+
 static struct kprobe *skel;
 static int probe_trace_open()
 {
 	int i = 0;
 
-	skel = kprobe__open();
-	if (!skel) {
-		pr_err("failed to open kprobe-based eBPF\n");
-		goto err;
-	}
+#ifndef COMPAT_MODE
+	LOAD_SKEL(kprobe_core);
+#endif
+	LOAD_SKEL(kprobe);
 
-	if (kprobe__load(skel)) {
-		pr_err("failed to load kprobe-based eBPF\n");
-		goto err;
-	}
+	pr_err("failed to load kprobe-based eBPF\n");
+	goto err;
 
+load_success:
 	bpf_set_config(skel, bss, trace_ctx.bpf_args);
 	trace_ctx.obj = skel->obj;
 

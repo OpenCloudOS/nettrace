@@ -12,6 +12,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <sys/resource.h>
+#include <sys/utsname.h>
 
 #include "sys_utils.h"
 
@@ -67,4 +68,15 @@ bool fsearch(FILE *f, char *target)
 			return true;
 	}
 	return false;
+}
+
+int kernel_version()
+{
+	int major, minor, patch;
+	struct utsname buf;
+
+	uname(&buf);
+	sscanf(buf.release, "%d.%d.%d", &major, &minor, &patch);
+
+	return kv_to_num(major, minor, patch);
 }

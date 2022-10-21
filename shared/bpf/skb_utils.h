@@ -34,11 +34,19 @@ struct {
 	bpf_probe_read_kernel(&tmp, sizeof(src), &(src));	\
 	tmp;							\
 })
+
 #undef _C
 #ifdef COMPAT_MODE
 #define _C(src, a)	_(src->a)
+#define _CF(src, a)	_(src->a)
 #else
-#define _C(src, a, ...)	BPF_CORE_READ(src, a, ##__VA_ARGS__)
+#define _C(src, a, ...)		BPF_CORE_READ(src, a, ##__VA_ARGS__)
+#endif
+
+#ifdef CORE_FULL
+#define _CT(src, a, ...)	BPF_CORE_READ(src, a, ##__VA_ARGS__)
+#else
+#define _CT(src, a, ...)	_(src->a)
 #endif
 
 #ifdef COMPAT_MODE

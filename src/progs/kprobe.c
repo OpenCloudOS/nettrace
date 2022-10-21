@@ -244,10 +244,10 @@ DEFINE_KPROBE(ipt_do_table, 1)
 	struct xt_table *table = (void *)PT_REGS_PARM3(ctx);
 	nf_event_t e = {
 		.event = { .func = func, },
-		.hook = _(state->hook),
+		.hook = _C(state, hook),
 	};
 
-	bpf_probe_read(e.table, sizeof(e.table) - 1, table->name);
+	bpf_probe_read(e.table, sizeof(e.table) - 1, _C(table, name));
 	return handle_entry(ctx, skb, &e.event, sizeof(e), func);
 }
 
@@ -265,8 +265,8 @@ DEFINE_KPROBE(nf_hook_slow, 1)
 	if (handle_entry(ctx, skb, &e.event, 0, func))
 		return 0;
 
-	e.hook = _(state->hook);
-	e.pf = _(state->pf);
+	e.hook = _C(state, hook);
+	e.pf = _C(state, pf);
 	EVENT_OUTPUT(ctx, e);
 	return 0;
 
@@ -277,8 +277,8 @@ on_hooks:;
 	if (handle_entry(ctx, skb, &hooks_event.event, 0, func))
 		return 0;
 
-	hooks_event.hook = _(state->hook);
-	hooks_event.pf = _(state->pf);
+	hooks_event.hook = _C(state, hook);
+	hooks_event.pf = _C(state, pf);
 	num = _(entries->num_hook_entries);
 
 #define COPY_HOOK(i) do {					\
@@ -318,18 +318,20 @@ DEFINE_KPROBE_RAW(nft_do_chain, NULL)
 	if (handle_entry(ctx, skb, &e.event, 0, func))
 		return 0;
 
-#ifndef NFT_HIGH_VERSION
-	state = _(pkt->xt.state);
-#else
-	state = _(pkt->state);
-#endif
-	chain = (void *)PT_REGS_PARM2(ctx);
-	table = _(chain->table);
-	e.hook = _(state->hook);
-	e.pf = _(state->pf);
+	if (ARGS_GET_CONFIG(nft_high))
+		state = _(((struct _nft_pktinfo_new *)pkt)->state);
+	else
+		state = _(((struct _nft_pktinfo *)pkt)->xt.state);
 
-	bpf_probe_read_kernel_str(e.chain, sizeof(e.chain), _(chain->name));
-	bpf_probe_read_kernel_str(e.table, sizeof(e.table), _(table->name));
+	chain	= (void *)PT_REGS_PARM2(ctx);
+	table	= _CT(chain, table);
+	e.hook	= _C(state, hook);
+	e.pf	= _C(state, pf);
+
+	bpf_probe_read_kernel_str(e.chain, sizeof(e.chain),
+				  _CT(chain, name));
+	bpf_probe_read_kernel_str(e.table, sizeof(e.table),
+				  _CT(table, name));
 
 	EVENT_OUTPUT(ctx, e);
 	return 0;

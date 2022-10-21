@@ -92,12 +92,12 @@ progs/%.o: progs/%.c kheaders.h
 	@file $@ | grep debug_info > /dev/null || (rm $@ && exit 1)
 
 %.skel.h: %.o
-	$(BPFTOOL) gen skeleton $< > $@
+	$(BPFTOOL) gen skeleton $< $(SKEL_FLAGS) > $@
 
 $(bpf_progs): %: %.skel.h
-	@echo "bpf compile success"
+	@:
 
-bpf: $(bpf_progs)
+bpf: $(bpf_progs) $(bpf_progs_ext)
 
 $(progs): %: %.c bpf
 	@if [ -n "$(prog-$@)" ]; then				\
