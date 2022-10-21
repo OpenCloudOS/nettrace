@@ -1,5 +1,5 @@
 
-export VERSION	= 1.2.1
+export VERSION	= 1.2.2
 RELEASE		?= .tl3
 export RELEASE
 
