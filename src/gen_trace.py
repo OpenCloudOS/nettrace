@@ -121,9 +121,10 @@ def gen_group(group, is_root=False):
             else:
                 trace_type = 'TRACE_FUNCTION'
                 if 'skb' in child:
-                    skb_str = '\n\t.skb = {},'.format(child["skb"])
+                    skb_index = int(child["skb"]) + 1
+                    skb_str = '\n\t.skb = {},'.format(skb_index)
                     probe_str += '\tFN({}, {})\t\\\n'.format(name,
-                                                             int(child["skb"]) + 1)
+                                                             skb_index)
             if 'analyzer' in child:
                 analyzer = '\n\t.analyzer = &ANALYZER({}),'.format(
                     child["analyzer"])

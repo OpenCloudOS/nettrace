@@ -9,6 +9,13 @@
 		.desc = "filter source ip address",		\
 	},							\
 	{							\
+		.lname = "saddr6",				\
+		.dest = &(args)->saddr_v6,			\
+		.type = OPTION_IPV6,				\
+		.set = &(args)->enable_saddr_v6,		\
+		.desc = "filter source ip v6 address",		\
+	},							\
+	{							\
 		.lname = "daddr",				\
 		.sname = 'd',					\
 		.dest = &(args)->daddr,				\
@@ -17,11 +24,25 @@
 		.desc = "filter dest ip address",		\
 	},							\
 	{							\
+		.lname = "daddr6",				\
+		.dest = &(args)->daddr_v6,			\
+		.type = OPTION_IPV6,				\
+		.set = &(args)->enable_daddr_v6,		\
+		.desc = "filter dest ip v6 address",		\
+	},							\
+	{							\
 		.lname = "addr",				\
 		.dest = &(args)->addr,				\
 		.type = OPTION_IPV4,				\
 		.set = &(args)->enable_addr,			\
 		.desc = "filter source or dest ip address",	\
+	},							\
+	{							\
+		.lname = "addr6",				\
+		.dest = &(args)->addr_v6,			\
+		.type = OPTION_IPV6,				\
+		.set = &(args)->enable_addr_v6,			\
+		.desc = "filter source or dest ip v6 address",	\
 	},							\
 	{							\
 		.lname = "sport",				\

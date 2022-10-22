@@ -52,21 +52,27 @@ nettrace \- Linux系统下的网络报文跟踪、网络问题诊断工具
 \fB\fC\-\-detail\fR
 显示跟踪详细信息，包括当前的进程、网口和CPU等信息
 .TP
+\fB\fC\-\-date\fR
+以时间格式打印（以2022\-10\-24 xx:xx:xx.xxxxxx格式打印），而不是时间戳
+.TP
 \fB\fC\-\-basic\fR
 启用\fB\fCbasic\fR跟踪模式。默认情况下，启用的是生命周期跟踪模式。启用该模式后，会直接打印
 出报文所经过的内核函数/tracepoint
 .TP
-\fB\fC\-\-intel\fR
+\fB\fC\-\-diag\fR
 启用诊断模式
 .TP
-\fB\fC\-\-intel\-quiet\fR
+\fB\fC\-\-diag\-quiet\fR
 只显示出现存在问题的报文，不显示正常的报文
 .TP
-\fB\fC\-\-intel\-keep\fR
-持续跟踪。\fB\fCintel\fR模式下，默认在跟踪到异常报文后会停止跟踪，使用该参数后，会持续跟踪下去。
+\fB\fC\-\-diag\-keep\fR
+持续跟踪。\fB\fCdiag\fR模式下，默认在跟踪到异常报文后会停止跟踪，使用该参数后，会持续跟踪下去。
 .TP
 \fB\fC\-\-hooks\fR
 打印netfilter上的钩子函数
+.TP
+\fB\fC\-\-drop\fR
+进行系统丢包监控，取代原先的\fB\fCdroptrace\fR
 .TP
 \fB\fC\-v\fR
 显示程序启动的日志信息
@@ -86,7 +92,7 @@ nettrace \- Linux系统下的网络报文跟踪、网络问题诊断工具
 \fInettrace \-p icmp \-s 192.168.1.8 \-\-detail\fP
 .SS 诊断模式
 .PP
-使用方式与上面的一致，加个\fB\fCintel\fR参数即可使用诊断模式。上文的生命周期模式对于使用者的
+使用方式与上面的一致，加个\fB\fCdiag\fR参数即可使用诊断模式。上文的生命周期模式对于使用者的
 要求比较高，需要了解内核协议栈各个函数的用法、返回值的意义等，易用性较差。诊断模式是在
 生命周期模式的基础上，提供了更加丰富的信息，使得没有网络开发经验的人也可进行复杂
 网络问题的定位和分析。
@@ -103,11 +109,11 @@ nettrace \- Linux系统下的网络报文跟踪、网络问题诊断工具
 .RE
 .PP
 如果当前报文存在\fB\fCERROR\fR，那么工具会给出一定的诊断修复建议，并终止当前诊断操作。通过添
-加\fB\fCintel\-keep\fR可以在发生\fB\fCERROR\fR事件时不退出，继续进行跟踪分析。下面是发生异常时的日志：
+加\fB\fCdiag\-keep\fR可以在发生\fB\fCERROR\fR事件时不退出，继续进行跟踪分析。下面是发生异常时的日志：
 .PP
 .RS
 .nf
-\&./nettrace \-p icmp \-\-intel \-\-saddr 192.168.122.8
+\&./nettrace \-p icmp \-\-diag \-\-saddr 192.168.122.8
 begin trace...
 ***************** ffff889fb3c64f00 ***************
 [4049.295546] [__netif_receive_skb_core] ICMP: 192.168.122.8 \-> 10.123.119.98 ping request, seq: 0
@@ -157,7 +163,45 @@ end trace...
 适配的，可以理解为将droptrace的功能集成到了这里的诊断结果中，这里可以看出其给出的丢包
 原因是\fB\fCNETFILTER_DROP\fR。因此，可以通过一下命令来监控内核中所有的丢包事件以及丢包原因：
 .PP
-\fInettrace \-t kfree_skb \-\-intel \-\-intel\-keep\fP
+\fInettrace \-t kfree_skb \-\-diag \-\-diag\-keep\fP
+.SS 丢包监控
+.PP
+使用命令\fB\fCnettrace \-\-drop\fR可以对系统中的丢包事件进行监控，对于支持内核特性
+\fB\fCskb drop reason\fR的内核，这里还会打印出丢包原因。可以通过查看
+\fB\fC/tracing/events/skb/kfree_skb/format\fR来判断当前系统是否支持该特性。
+.PP
+该模式下使用的效果与原先的\fB\fCdroptrace\fR完全相同，如下所示：
+.PP
+.RS
+.nf
+nettrace \-\-drop
+begin trace...
+[142.097193] TCP: 162.241.189.135:57022 \-> 172.27.0.6:22 seq:299038593, ack:3843597961, flags:AR, reason: NOT_SPECIFIED, tcp_v4_rcv+0x81
+[142.331798] TCP: 162.241.189.135:57022 \-> 172.27.0.6:22 seq:299038593, ack:3843597961, flags:A, reason: NOT_SPECIFIED, tcp_v4_do_rcv+0x83
+[142.331857] TCP: 162.241.189.135:57022 \-> 172.27.0.6:22 seq:299038593, ack:3843597961, flags:AP, reason: NOT_SPECIFIED, tcp_v4_do_rcv+0x83
+[146.136576] TCP: 127.0.0.1:43582 \-> 127.0.0.1:9999 seq:3819454691, ack:0, flags:S, reason: NO_SOCKET, tcp_v4_rcv+0x81
+[146.220414] TCP: 169.254.0.138:8186 \-> 172.27.0.6:40634 seq:8486084, ack:2608831141, flags:A, reason: TCP_INVALID_SEQUENCE, tcp_validate_incoming+0x126
+[146.533728] TCP: 127.0.0.1:36338 \-> 127.0.0.1:56100 seq:1110580666, ack:1951926207, flags:A, reason: TCP_INVALID_SEQUENCE, tcp_validate_incoming+0x126
+[147.255946] TCP: 20.44.10.122:443 \-> 192.168.255.10:42878 seq:2950381253, ack:211751623, flags:A, reason: NOT_SPECIFIED, tcp_rcv_state_process+0xe9
+.fi
+.RE
+.PP
+同样可以使用\fB\fCman dropreason\fR命令来查看对应的丢包原因的详细解释。对于不支持
+\fB\fCskb drop reason\fR特性的内核，该模式下将不会打印丢包原因字段，效果如下所示：
+.PP
+.RS
+.nf
+nettrace \-\-drop
+begin trace...
+[2016.965295] TCP: 162.241.189.135:45432 \-> 172.27.0.6:22 seq:133152310, ack:2529234288, flags:AR, tcp_v4_rcv+0x50
+[2017.201315] TCP: 162.241.189.135:45432 \-> 172.27.0.6:22 seq:133152310, ack:2529234288, flags:A, tcp_v4_do_rcv+0x70
+[2019.041344] TCP: 176.58.124.134:37441 \-> 172.27.0.6:443 seq:1160140493, ack:0, flags:S, tcp_v4_rcv+0x50
+[2021.867340] TCP: 127.0.0.1:34936 \-> 127.0.0.1:9999 seq:1309795878, ack:0, flags:S, tcp_v4_rcv+0x50
+[2024.997146] TCP: 162.241.189.135:46756 \-> 172.27.0.6:22 seq:1304582308, ack:1354418612, flags:AR, tcp_v4_rcv+0x50
+[2025.235953] TCP: 162.241.189.135:46756 \-> 172.27.0.6:22 seq:1304582308, ack:1354418612, flags:A, tcp_v4_do_rcv+0x70
+[2025.235967] TCP: 162.241.189.135:46756 \-> 172.27.0.6:22 seq:1304582308, ack:1354418612, flags:AP, tcp_v4_do_rcv+0x70
+.fi
+.RE
 .SS netfilter支持
 .PP
 网络防火墙是网络故障、网络不同发生的重灾区，因此\fB\fCnetfilter\fR工具对\fB\fCnetfilter\fR提供了
@@ -171,7 +215,7 @@ end trace...
 .PP
 .RS
 .nf
-\&./nettrace \-p icmp \-\-intel \-\-saddr 192.168.122.8 \-\-hooks
+\&./nettrace \-p icmp \-\-diag \-\-saddr 192.168.122.8 \-\-hooks
 begin trace...
 ***************** ffff889faa054500 ***************
 [5810.702473] [__netif_receive_skb_core] ICMP: 192.168.122.8 \-> 10.123.119.98 ping request, seq: 943
@@ -221,7 +265,7 @@ end trace...
 丢包的所有的钩子函数，这里只有\fB\fCiptables\fR一个钩子函数。
 .SH REQUIREMENTS
 .PP
-内核需要支持CONFIG\fIBPF, CONFIG\fPKPROBE功能
+内核需要支持\fB\fCCONFIG_BPF\fR, \fB\fCCONFIG_KPROBE\fR, \fB\fCCONFIG_DEBUG_INFO_BTF\fR(可选)功能
 .SH OS
 .PP
 Linux
@@ -231,4 +275,4 @@ Menglong Dong
 .SH SEE ALSO
 .PP
 .BR nettrace-legacy (8), 
-.BR droptrace (8)
+.BR dropreason (8)

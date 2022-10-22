@@ -44,22 +44,27 @@ static void do_parse_args(int argc, char *argv[])
 			.desc = "show extern packet info, such as pid, ifname, etc",
 		},
 		{
+			.lname = "date", .dest = &trace_args->date,
+			.type = OPTION_BOOL,
+			.desc = "print timestamp in date-time format",
+		},
+		{
 			.lname = "basic", .dest = &trace_args->basic,
 			.type = OPTION_BOOL,
 			.desc = "use 'basic' trace mode, don't trace skb's life",
 		},
 		{
-			.lname = "intel", .dest = &trace_args->intel,
+			.lname = "diag", .dest = &trace_args->intel,
 			.type = OPTION_BOOL,
-			.desc = "enable 'intel' mode",
+			.desc = "enable 'diagnose' mode",
 		},
 		{
-			.lname = "intel-quiet", .dest = &trace_args->intel_quiet,
+			.lname = "diag-quiet", .dest = &trace_args->intel_quiet,
 			.type = OPTION_BOOL,
 			.desc = "only print abnormal packet",
 		},
 		{
-			.lname = "intel-keep", .dest = &trace_args->intel_keep,
+			.lname = "diag-keep", .dest = &trace_args->intel_keep,
 			.type = OPTION_BOOL,
 			.desc = "don't quit when abnormal packet found",
 		},
@@ -67,6 +72,11 @@ static void do_parse_args(int argc, char *argv[])
 			.lname = "hooks", .dest = &bpf_args->hooks,
 			.type = OPTION_BOOL,
 			.desc = "print netfilter hooks if dropping by netfilter",
+		},
+		{
+			.lname = "drop", .dest = &trace_args->drop,
+			.type = OPTION_BOOL,
+			.desc = "skb drop monitor mode, for replace of 'droptrace'",
 		},
 		{ .type = OPTION_BLANK },
 		{

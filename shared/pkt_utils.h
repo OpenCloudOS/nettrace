@@ -14,9 +14,10 @@
 		pos = sprintf(buf, fmt, ##args);	\
 	} while (0)
 
-#define BUF_FMT(fmt, args...) pos += sprintf(buf + pos, fmt, ##args);
+#define BUF_FMT(fmt, args...) pos += sprintf(buf + pos, fmt, ##args)
 
-int ts_print_packet(char *buf, packet_t *pkt, char *minfo);
+int ts_print_packet(char *buf, packet_t *pkt, char *minfo,
+		    bool date_format);
 int base_print_packet(char *buf, packet_t *pkt);
 
 #endif

@@ -18,16 +18,20 @@
 
 `nettrace`是一款基于eBPF的集网络报文跟踪（故障定位）、网络故障诊断、网络异常监控于一体的网络工具集，旨在能够提供一种更加高效、易用的方法来解决复杂场景下的网络问题。目前，其实现的功能包括：
 
-- 报文生命周期跟踪：跟踪网络报文从进入到内核协议栈到释放/丢弃的过程中在内核中所走过的路径，实现报文整个生命周期的监控，并采集生命周期各个阶段的事件、信息。通过观察报文在内核中的路径，对于有一定内核协议栈经验的人来说可以快速、有效地发现网络问题。
+- 网络报文跟踪：跟踪网络报文从进入到内核协议栈到释放/丢弃的过程中在内核中所走过的路径，实现报文整个生命周期的监控，并采集生命周期各个阶段的事件、信息。通过观察报文在内核中的路径，对于有一定内核协议栈经验的人来说可以快速、有效地发现网络问题。
 - 网络故障诊断：将以往的经验集成到工具的知识库，通过知识匹配的方式来主动诊断当前网络故障，给出诊断结果以及修复建议。该功能入手简单、易用性强，无需过多的网络经验即可进行网络问题定位。
 - 网络异常监控：常态化地部署到生产环境中，主动地发现、上报环境上的网络异常。
-- `droptrace`：用于跟踪、监控系统中的丢包事件的工具，点击[这里](droptrace/README.md)查看详情介绍。该工具计划后面合入到`nettrace`功能中。
+- `droptrace`：用于跟踪、监控系统中的丢包事件的工具，点击[这里](docs/droptrace.md)查看详情介绍。该功能已被遗弃，可以使用`nettrace --drop`实现相同的功能。
 
 ## 二、安装方法
 
-nettrace是采用C语言编写的基于eBPF（libbpf）的命令行工具，在使用和安装时可以用编译好的RPM包和二进制程序。需要注意的是，github上发布的RPM和二进制程序都是基于TencentOS（5.4.119内核版本）编译的，对于不支持CORE的其他版本的内核，最好下载源码编译后使用，以防止数据结构不兼容的问题。
+nettrace是采用C语言编写的基于eBPF（libbpf）的命令行工具，在使用和安装时可以用编译好的RPM包和二进制程序。
 
-### 2.1 RPM安装
+## 2.1 系统要求
+
+**注意**：对于支持BTF特性（内核版本 >= 5.3，并且配置了`CONFIG_DEBUG_INFO_BTF=y`内核配置项）的内核，可以直接下载[releases](https://github.com/OpenCloudOS/nettrace/releases)中编译好的`nettrace-xxx-1.btf.x86_64.rpm`、`nettrace-xxx-1.btf.x86_64.deb`安装包进行安装使用，或者下载包含了二进制程序的`nettrace-xxx-1.btf.tar.bz2`压缩包；对于不支持BTF的低版本的内核，需要在对应的系统上手动编译后才能使用。
+
+### 2.2 RPM/DEB安装
 
 对于TencentOS系统，可以直接使用yum命令来进行在线安装：
 
@@ -35,17 +39,17 @@ nettrace是采用C语言编写的基于eBPF（libbpf）的命令行工具，在�
 sudo yum install nettrace
 ```
 
-也可以直接从[releases](https://github.com/OpenCloudOS/nettrace/releases)中下载对应的RPM安装包，手动进行安装。
+也可以直接从[releases](https://github.com/OpenCloudOS/nettrace/releases)中下载对应的RPM/DEB安装包，手动进行安装。
 
-### 2.2 二进制下载
+### 2.3 二进制下载
 
-直接从[releases](https://github.com/OpenCloudOS/nettrace/releases)下载编译好的二进制包也是可以的，[releases](https://github.com/OpenCloudOS/nettrace/releases)中的`tar.bz2`格式的压缩包即为二进制程序。由于里面的工具采用的都是静态编译的方式，因此在内核版本支持的情况下，都是可以直接下载解压后运行的。再次提醒：对于不支持`CO-RE`模式的非`TencentOS`的内核版本，最好在对应的环境上编译后使用。
+直接从[releases](https://github.com/OpenCloudOS/nettrace/releases)下载编译好的二进制包也是可以的，[releases](https://github.com/OpenCloudOS/nettrace/releases)中的`tar.bz2`格式的压缩包即为二进制程序。由于里面的工具采用的都是静态编译的方式，因此在内核版本支持的情况下，都是可以直接下载解压后运行的。**再次提醒**：对于不支持BTF的内核版本，最好在对应的环境上编译后使用。
 
-### 2.3 手动编译
+### 2.4 手动编译
 
 下面来介绍下如何在Centos、ubuntu等环境上进行nettrace工具的手动编译和安装。本工具目前在4.14/4.15/5.4/5.10/5.18等版本的内核上均进行过适配和测试，更低版本的内核暂未进行适配。
 
-#### 2.3.1 依赖安装
+#### 2.4.1 依赖安装
 
 本工具在编译的时候依赖于`libelf`、`libbpf`和`bpftool`组件，`clang`和`gcc`编译工具。其中，bpftool二进制程序已经直接预编译好放到源码包的script目录中，因此可以不安装。但是对于版本较高的内核，请尽量从软件仓库安装该工具。
 
@@ -59,7 +63,7 @@ sudo yum install nettrace
 sudo apt install libelf-dev libbpf-dev linux-headers-`uname -r` clang llvm gcc linux-tools-`uname -r` linux-tools-generic
 ```
 
-注意：如果当前发行版（如ubuntu16,ubuntu18）不支持libbpf-dev，请按照下文提示手动按照libbpf-0.2版本。同时，clang版本要在10+（低版本的测试有问题，暂时还没搞定），ubuntu18+直接安装clang-10 llvm-10即可，ubuntu16需要按照[这里](https://segmentfault.com/a/1190000040827790)的教程安装更新版本的clang。
+注意：如果当前发行版（如ubuntu16,ubuntu18）不支持libbpf-dev，请按照下文提示手动安装libbpf-0.2版本。同时，clang版本要在10+（低版本的测试有问题，暂时还没搞定），ubuntu18+直接安装clang-10 llvm-10即可，ubuntu16需要按照[这里](https://segmentfault.com/a/1190000040827790)的教程安装更新版本的clang。
 
 ##### centos
 
@@ -78,7 +82,7 @@ cd libbpf-0.2/src
 make install
 ```
 
-#### 2.3.2 编译
+#### 2.4.2 编译
 
 直接下载nettrace的源码即可进行编译安装：
 
@@ -87,6 +91,14 @@ git clone https://github.com/OpenCloudOS/nettrace.git
 cd nettrace
 make all
 ```
+
+**注意**：对于不支持BTF的5.X版本的内核，在编译的时候需要加参数`COMPAT=1`，如下所示（4.X版本的内核会自动启用该参数）：
+
+```shell
+make COMPAT=1 all
+```
+
+启用该参数，eBPF程序会以BPF_PROBE_READ的方式来读取数据；否则，eBPF程序会以BPF_CORE_READ的方式来读取。
 
 也可以单独编译其中的某个子工具，例如只编译nettrace命令：
 
@@ -113,25 +125,18 @@ make VMLINUX=/home/ubuntu/kernel/vmlinux all
 make BPFTOOL=/usr/lib/linux-tools/5.15.0-43-generic/bpftool all
 ```
 
-需要注意，对于低版本的内核（4.x），在编译的时候需要加参数`COMPAT=1`，如下所示：
-```shell
-make COMPAT=1 all
-```
-
-该参数会强制启用内联函数的方式，会使得编译出来的二进制程序变大，但是没办法，低版本的内核必须要用内核函数的方式才能加载。
-
 同时，对于`ubuntu 16.04/ubuntu 18.04`系统，其内核似乎存在BUG，即其使用的内核版本实际为4.15.18，uname看到的却是4.15.0。这导致了加载eBPF程序的时候内核版本不一致，无法加载。因此对于这种情况，可以使用KERN_VER参数来手动指定内核版本（计算方式为：`(4<<16) + (15<<8) + 18`）：
 ```shell
-make COMPAT=1 KERN_VER=266002 all
+make KERN_VER=266002 all
 ```
 
-#### 2.3.3 打包
+#### 2.4.3 打包
 
 使用命令`make rpm`可制作rpm包；使用命令`make pack`可制作二进制包（二进制程序打包到压缩包中，默认存放路径为output文件夹）。
 
 ## 三、使用方法
 
-`droptrace`主要用来进行系统丢包事件的监控，点击[这里](droptrace/README.md)可查看droptrace的用户文档，这里不再赘述，重点介绍nettrace的相关功能。nettrace是用来跟踪内核报文和诊断网络故障的，在进行报文跟踪时可以使用一定的过滤条件来跟踪特定的报文。其基本命令行参数为：
+nettrace是用来跟踪内核报文和诊断网络故障的，在进行报文跟踪时可以使用一定的过滤条件来跟踪特定的报文。其基本命令行参数为：
 
 ```shell
 $ nettrace -h
@@ -139,8 +144,11 @@ nettrace: a tool to trace skb in kernel and diagnose network problem
 
 Usage:
     -s, --saddr      filter source ip address
+    --saddr6         filter source ip v6 address
     -d, --daddr      filter dest ip address
+    --daddr6         filter dest ip v6 address
     --addr           filter source or dest ip address
+    --addr6          filter source or dest ip v6 address
     -S, --sport      filter source TCP/UDP port
     -D, --dport      filter dest TCP/UDP port
     -P, --port       filter source or dest TCP/UDP port
@@ -149,11 +157,13 @@ Usage:
     -t, --trace      enable trace group or trace
     --ret            show function return value
     --detail         show extern packet info, such as pid, ifname, etc
+    --date           print timestamp in date-time format
     --basic          use 'basic' trace mode, don't trace skb's life
-    --intel          enable 'intel' mode
-    --intel-quiet    only print abnormal packet
-    --intel-keep     don't quit when abnormal packet found
+    --diag           enable 'diagnose' mode
+    --diag-quiet     only print abnormal packet
+    --diag-keep      don't quit when abnormal packet found
     --hooks          print netfilter hooks if dropping by netfilter
+    --drop           skb drop monitor mode, for replace of 'droptrace'
 
     -v               show log information
     --debug          show debug information
@@ -165,11 +175,13 @@ Usage:
 - `t/trace`：要启用的跟踪模块，默认启用所有
 - `ret`：跟踪和显示内核函数的返回值
 - `detail`：显示跟踪详细信息，包括当前的进程、网口和CPU等信息
+- `date`：以时间格式打印（以2022-10-24 xx:xx:xx.xxxxxx格式打印），而不是时间戳
 - `basic`：启用`basic`跟踪模式。默认情况下，启用的是生命周期跟踪模式。启用该模式后，会直接打印出报文所经过的内核函数/tracepoint。
-- `intel`：启用诊断模式
-- `intel-quiet`：只显示出现存在问题的报文，不显示正常的报文
-- `intel-keep`：持续跟踪。`intel`模式是下，默认在跟踪到异常报文后会停止跟踪，使用该参数后，会持续跟踪下去。
+- `diag`：启用诊断模式
+- `diag-quiet`：只显示出现存在问题的报文，不显示正常的报文
+- `diag-keep`：持续跟踪。`diag`模式下，默认在跟踪到异常报文后会停止跟踪，使用该参数后，会持续跟踪下去。
 - `hooks`：结合netfilter做的适配，详见下文
+- `drop`：进行系统丢包监控，取代原先的`droptrace`
 
 下面我们首先来看一下默认模式下的工具使用方法。
 
@@ -301,7 +313,7 @@ begin tracing......
 
 ### 3.2 诊断模式
 
-使用方式与上面的一致，加个`intel`参数即可使用诊断模式。上文的生命周期模式对于使用者的要求比较高，需要了解内核协议栈各个函数的用法、返回值的意义等，易用性较差。诊断模式是在生命周期模式的基础上，提供了更加丰富的信息，使得没有网络开发经验的人也可进行复杂网络问题的定位和分析。
+使用方式与上面的一致，加个`diag`参数即可使用诊断模式。上文的生命周期模式对于使用者的要求比较高，需要了解内核协议栈各个函数的用法、返回值的意义等，易用性较差。诊断模式是在生命周期模式的基础上，提供了更加丰富的信息，使得没有网络开发经验的人也可进行复杂网络问题的定位和分析。
 
 #### 3.2.1 基本用法
 
@@ -312,7 +324,7 @@ begin tracing......
 - `ERROR`：异常信息，报文发生了问题（比如被丢弃）。
 
 ```shell
-./nettrace -p icmp --intel --saddr 192.168.122.8
+./nettrace -p icmp --diag --saddr 192.168.122.8
 begin trace...
 ***************** ffff889fad356200 ***************
 [3445.575957] [__netif_receive_skb_core] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
@@ -344,10 +356,10 @@ begin trace...
         NAT happens (packet address will change)
 ```
 
-如果当前报文存在`ERROR`，那么工具会给出一定的诊断修复建议，并终止当前诊断操作。通过添加`intel-keep`可以在发生`ERROR`事件时不退出，继续进行跟踪分析。下面是发生异常时的日志：
+如果当前报文存在`ERROR`，那么工具会给出一定的诊断修复建议，并终止当前诊断操作。通过添加`diag-keep`可以在发生`ERROR`事件时不退出，继续进行跟踪分析。下面是发生异常时的日志：
 
 ```shell
-./nettrace -p icmp --intel --saddr 192.168.122.8
+./nettrace -p icmp --diag --saddr 192.168.122.8
 begin trace...
 ***************** ffff889fb3c64f00 ***************
 [4049.295546] [__netif_receive_skb_core] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
@@ -390,14 +402,14 @@ end trace...
 
 从这里的日志可以看出，在报文经过iptables的filter表的forward链的时候，发生了丢包。在诊断结果里，会列出所有的异常事件，一个报文跟踪可能会命中多条诊断结果。这里的诊断建议是让用户检查iptables中的规则是否存在问题。
 
-其中，`kfree_skb`这个跟踪点是对`drop reason`内核特性（详见droptrace中的介绍）做了适配的，可以理解为将droptrace的功能集成到了这里的诊断结果中，这里可以看出其给出的对包原因是`NETFILTER_DROP`。
+其中，`kfree_skb`这个跟踪点是对`drop reason`内核特性（详见[droptrace](docs/droptrace.md)中的介绍）做了适配的，可以理解为将droptrace的功能集成到了这里的诊断结果中，这里可以看出其给出的对包原因是`NETFILTER_DROP`。
 
 #### 3.2.2 netfilter支持
 
 网络防火墙是网络故障、网络不同发生的重灾区，因此`netfilter`工具对`netfilter`提供了完美适配，包括老版本的`iptables-legacy`和新版本的`iptables-nft`。诊断模式下，`nettrace`能够跟踪报文所经过的`iptables`表和`iptables`链，并在发生由于iptables导致的丢包时给出一定的提示，上面的示例充分展现出了这部分。出了对iptables的支持，`nettrace`对整个netfilter大模块也提供了支持，能够显示在经过每个HOOK点时对应的协议族和链的名称。除此之外，为了应对一些注册到netfilter中的第三方内核模块导致的丢包问题，nettrace还可以通过添加参数`hooks`来打印出当前`HOOK`上所有的的钩子函数，从而深入分析问题：
 
 ```shell
-./nettrace -p icmp --intel --saddr 192.168.122.8 --hooks
+./nettrace -p icmp --diag --saddr 192.168.122.8 --hooks
 begin trace...
 ***************** ffff889faa054500 ***************
 [5810.702473] [__netif_receive_skb_core] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943
@@ -451,7 +463,7 @@ end trace...
 端口未监听导致的丢包：
 
 ```shell
-./nettrace --intel --intel-quiet
+./nettrace --diag --diag-quiet
 begin trace...
 ***************** ffff888f97730ee0 ***************
 [365673.326016] [ip_output           ] TCP: 127.0.0.1:40392 -> 127.0.0.1:9999 seq:3067626996, ack:0, flags:S
@@ -485,7 +497,7 @@ begin trace...
 XDP导致的丢包（XDP转发会给提示）：
 
 ```shell
-./nettrace -p icmp --intel --intel-quiet 
+./nettrace -p icmp --diag --diag-quiet 
 begin trace...
 ***************** ffff889f015acc00 ***************
 [18490.607809] [__netif_receive_skb_core] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
@@ -510,3 +522,55 @@ begin trace...
 
 analysis finished!
 ```
+
+## 3.3 丢包监控
+
+使用命令`nettrace --drop`可以对系统中的丢包事件进行监控，对于支持内核特性`skb drop reason`的内核，这里还会打印出丢包原因。可以通过查看`/tracing/events/skb/kfree_skb/format`来判断当前系统是否支持该特性：
+
+```shell
+cat /tracing/events/skb/kfree_skb/format 
+name: kfree_skb
+ID: 1524
+format:
+        field:unsigned short common_type;       offset:0;       size:2; signed:0;
+        field:unsigned char common_flags;       offset:2;       size:1; signed:0;
+        field:unsigned char common_preempt_count;       offset:3;       size:1; signed:0;
+        field:int common_pid;   offset:4;       size:4; signed:1;
+
+        field:void * skbaddr;   offset:8;       size:8; signed:0;
+        field:void * location;  offset:16;      size:8; signed:0;
+        field:unsigned short protocol;  offset:24;      size:2; signed:0;
+        field:enum skb_drop_reason reason;      offset:28;      size:4; signed:0;
+
+print fmt: "skbaddr=%p protocol=%u location=%p reason: %s", REC->skbaddr, REC->protocol, REC->location, __print_symbolic(REC->reason, { 1, "NOT_SPECIFIED" }, { 2, "NO_SOCKET" }, { 3, "PKT_TOO_SMALL" }, { 4, "TCP_CSUM" }, { 5, "SOCKET_FILTER" }, { 6, "UDP_CSUM" }, { 7, "NETFILTER_DROP" }, { 8, "OTHERHOST" }, { 9, "IP_CSUM" }, { 10, "IP_INHDR" }, { 11, "IP_RPFILTER" }, { 12, "UNICAST_IN_L2_MULTICAST" }, { 13, "XFRM_POLICY" }, { 14, "IP_NOPROTO" }, { 15, "SOCKET_RCVBUFF" }, { 16, "PROTO_MEM" }, { 17, "TCP_MD5NOTFOUND" }, { 18, "TCP_MD5UNEXPECTED" }, { 19, "TCP_MD5FAILURE" }, { 20, "SOCKET_BACKLOG" }, { 21, "TCP_FLAGS" }, { 22, "TCP_ZEROWINDOW" }, { 23, "TCP_OLD_DATA" }, { 24, "TCP_OVERWINDOW" }, { 25, "TCP_OFOMERGE" }, { 26, "TCP_RFC7323_PAWS" }, { 27, "TCP_INVALID_SEQUENCE" }, { 28, "TCP_RESET" }, { 29, "TCP_INVALID_SYN" }, { 30, "TCP_CLOSE" }, { 31, "TCP_FASTOPEN" }, { 32, "TCP_OLD_ACK" }, { 33, "TCP_TOO_OLD_ACK" }, { 34, "TCP_ACK_UNSENT_DATA" }, { 35, "TCP_OFO_QUEUE_PRUNE" }, { 36, "TCP_OFO_DROP" }, { 37, "IP_OUTNOROUTES" }, { 38, "BPF_CGROUP_EGRESS" }, { 39, "IPV6DISABLED" }, { 40, "NEIGH_CREATEFAIL" }, { 41, "NEIGH_FAILED" }, { 42, "NEIGH_QUEUEFULL" }, { 43, "NEIGH_DEAD" }, { 44, "TC_EGRESS" }, { 45, "QDISC_DROP" }, { 46, "CPU_BACKLOG" }, { 47, "XDP" }, { 48, "TC_INGRESS" }, { 49, "UNHANDLED_PROTO" }, { 50, "SKB_CSUM" }, { 51, "SKB_GSO_SEG" }, { 52, "SKB_UCOPY_FAULT" }, { 53, "DEV_HDR" }, { 54, "DEV_READY" }, { 55, "FULL_RING" }, { 56, "NOMEM" }, { 57, "HDR_TRUNC" }, { 58, "TAP_FILTER" }, { 59, "TAP_TXFILTER" }, { 60, "ICMP_CSUM" }, { 61, "INVALID_PROTO" }, { 62, "IP_INADDRERRORS" }, { 63, "IP_INNOROUTES" }, { 64, "PKT_TOO_BIG" }, { 65, "MAX" })
+```
+
+该模式下使用的效果与原先的`droptrace`完全相同，如下所示：
+
+```shell
+nettrace --drop
+begin trace...
+[142.097193] TCP: 162.241.189.135:57022 -> 172.27.0.6:22 seq:299038593, ack:3843597961, flags:AR, reason: NOT_SPECIFIED, tcp_v4_rcv+0x81
+[142.331798] TCP: 162.241.189.135:57022 -> 172.27.0.6:22 seq:299038593, ack:3843597961, flags:A, reason: NOT_SPECIFIED, tcp_v4_do_rcv+0x83
+[142.331857] TCP: 162.241.189.135:57022 -> 172.27.0.6:22 seq:299038593, ack:3843597961, flags:AP, reason: NOT_SPECIFIED, tcp_v4_do_rcv+0x83
+[146.136576] TCP: 127.0.0.1:43582 -> 127.0.0.1:9999 seq:3819454691, ack:0, flags:S, reason: NO_SOCKET, tcp_v4_rcv+0x81
+[146.220414] TCP: 169.254.0.138:8186 -> 172.27.0.6:40634 seq:8486084, ack:2608831141, flags:A, reason: TCP_INVALID_SEQUENCE, tcp_validate_incoming+0x126
+[146.533728] TCP: 127.0.0.1:36338 -> 127.0.0.1:56100 seq:1110580666, ack:1951926207, flags:A, reason: TCP_INVALID_SEQUENCE, tcp_validate_incoming+0x126
+[147.255946] TCP: 20.44.10.122:443 -> 192.168.255.10:42878 seq:2950381253, ack:211751623, flags:A, reason: NOT_SPECIFIED, tcp_rcv_state_process+0xe9
+```
+
+同样可以使用`man dropreason`命令来查看对应的丢包原因的详细解释。对于不支持`skb drop reason`特性的内核，该模式下将不会打印丢包原因字段，效果如下所示：
+
+```shell
+nettrace --drop
+begin trace...
+[2016.965295] TCP: 162.241.189.135:45432 -> 172.27.0.6:22 seq:133152310, ack:2529234288, flags:AR, tcp_v4_rcv+0x50
+[2017.201315] TCP: 162.241.189.135:45432 -> 172.27.0.6:22 seq:133152310, ack:2529234288, flags:A, tcp_v4_do_rcv+0x70
+[2019.041344] TCP: 176.58.124.134:37441 -> 172.27.0.6:443 seq:1160140493, ack:0, flags:S, tcp_v4_rcv+0x50
+[2021.867340] TCP: 127.0.0.1:34936 -> 127.0.0.1:9999 seq:1309795878, ack:0, flags:S, tcp_v4_rcv+0x50
+[2024.997146] TCP: 162.241.189.135:46756 -> 172.27.0.6:22 seq:1304582308, ack:1354418612, flags:AR, tcp_v4_rcv+0x50
+[2025.235953] TCP: 162.241.189.135:46756 -> 172.27.0.6:22 seq:1304582308, ack:1354418612, flags:A, tcp_v4_do_rcv+0x70
+[2025.235967] TCP: 162.241.189.135:46756 -> 172.27.0.6:22 seq:1304582308, ack:1354418612, flags:AP, tcp_v4_do_rcv+0x70
+```
+
+

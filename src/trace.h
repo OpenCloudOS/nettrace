@@ -44,7 +44,6 @@ typedef struct trace {
 	char	*regex;
 	char	*tp;
 	int	skb;
-	int	pskb;
 	struct list_head sibling;
 	struct list_head list;
 	struct list_head rules;
@@ -62,6 +61,8 @@ typedef struct trace_args {
 	bool intel_quiet;
 	bool intel_keep;
 	bool basic;
+	bool drop;
+	bool date;
 	char *traces;
 } trace_args_t;
 
@@ -76,10 +77,6 @@ typedef struct {
 	void (*trace_ready)();
 	struct analyzer *analyzer;
 } trace_ops_t;
-
-#define TRACE_MODE_BASIC_MASK		(1 << TRACE_MODE_BASIC)
-#define TRACE_MODE_TIMELINE_MASK	(1 << TRACE_MODE_TIMELINE)
-#define TRACE_MODE_INETL_MASK		(1 << TRACE_MODE_INETL)
 
 typedef struct {
 	trace_ops_t	*ops;
@@ -152,13 +149,6 @@ static inline bool trace_mode_timeline()
 static inline bool trace_mode_intel()
 {
 	return trace_ctx.mode == TRACE_MODE_INETL;
-}
-
-/* check if drop reason on kfree_skb is supported */
-static inline bool trace_drop_reason_support()
-{
-	return simple_exec("cat /sys/kernel/debug/tracing/events/skb/"
-			   "kfree_skb/format | grep reason") == 0;
 }
 
 void trace_show(trace_group_t *group);

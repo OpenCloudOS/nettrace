@@ -130,6 +130,13 @@ found:
 			}
 			S_SET(bool, true);
 			break;
+		case OPTION_IPV6:
+			if (ipv6toi(optarg, item->dest)) {
+				printf("invalid ip address: %s\n", optarg);
+				goto err;
+			}
+			S_SET(bool, true);
+			break;
 		case OPTION_HELP:
 			goto help;
 		case OPTION_PROTO: {

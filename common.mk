@@ -44,7 +44,7 @@ KERNEL_CFLAGS	+= $(NOSTDINC_FLAGS) $(LINUXINCLUDE) \
 cmd_download	= @if [ ! -f $(1) ]; then wget -O $(1) $(REMOTE_ROOT)/$(2); fi
 cmd_exist	= $(if $(wildcard $(1)),$(2),$(3))
 cmd_or_exist	= $(call cmd_exist,$(1),$(1),$(2))
-ifeq ("$(wildcard $(HEADERS))$(wildcard $(BTF))",)
+ifeq ("$(wildcard $(HEADERS))$(wildcard $(BTF))","")
 $(error BTF is not found in your system, please install kernel headers)
 endif
 
@@ -56,24 +56,12 @@ ifeq ($(if $(VMLINUX),$(wildcard $(VMLINUX)),"pass"),)
 $(error vmlinux path not exist)
 endif
 
-# preferred to generate drop reason from 
-ifeq ("$(KERNEL)$(VMLINUX)","")
-	DROP_REASON	:= $(call cmd_or_exist,$(HEADERS)/include/net/dropreason.h,\
-			   $(call cmd_or_exist,$(HEADERS)/include/linux/skbuff.h,\
-			   $(call cmd_exist,$(BTF),vmlinux.h,)))
-endif
-
 # preferred to compile from kernel headers, then BTF
 mode := $(if $(VMLINUX),'btf',$(call cmd_exist,$(HEADERS),'kernel','btf'))
 ifeq ($(mode),'btf')
-	DROP_REASON	?= vmlinux.h
 	kheaders_cmd	:= ln -s vmlinux.h kheaders.h
 	kheaders_dep	:= vmlinux.h
 else
-ifndef DROP_REASON
-	DROP_REASON	:= $(call cmd_or_exist,$(HEADERS)/include/net/dropreason.h,\
-			   $(call cmd_or_exist,$(HEADERS)/include/linux/skbuff.h,))
-endif
 	kheaders_cmd	:= ln -s vmlinux_header.h kheaders.h
 	BPF_CFLAGS	+= $(KERNEL_CFLAGS)
 endif
@@ -92,45 +80,24 @@ vmlinux.h:
 kheaders.h: $(kheaders_dep)
 	$(call kheaders_cmd)
 
-drop_reason.h: $(DROP_REASON)
-	rm -rf $@
-ifneq ($(strip $(DROP_REASON)),)
-	@awk 'BEGIN{ print "#ifndef _H_SKB_DROP_REASON"; \
-		print "#define _H_SKB_DROP_REASON\n";\
-		system("sed -e \"/enum skb_drop_reason {/,/}/!d\" $< >> $@");\
-		print "\n#define __DEFINE_SKB_REASON(FN) \\";\
-	}\
-	/^enum skb_drop/ { dr=1; }\
-	/^\};/ { dr=0; }\
-	/^\tSKB_DROP_REASON_/ {\
-		if (dr) {\
-			sub(/SKB_DROP_REASON_/, "", $$1);\
-			sub(/,/, "", $$1);\
-			printf "\tFN(%s)\t\\\n", $$1;\
-		}\
-	}\
-	END{ print "\n#endif" }' $< >> $@
-	@echo generated drop_reason.h
-else
-	touch $@
-	@echo drop reason not supported, skips
-endif
-
 progs/%.o: progs/%.c kheaders.h
 	clang -O2 -c -g -S -Wall -Wno-pointer-sign -Wno-unused-value	\
 	-Wno-incompatible-pointer-types-discards-qualifiers		\
 	-fno-asynchronous-unwind-tables					\
-	$< -emit-llvm -Wno-unknown-attributes $(BPF_CFLAGS) -o - |	\
+	$< -emit-llvm -Wno-unknown-attributes $(BPF_CFLAGS) -Xclang	\
+	-disable-llvm-passes -o - | 					\
+	opt -O2 -mtriple=bpf-pc-linux | 				\
+	llvm-dis |							\
 	llc -march=bpf -filetype=obj -o $@
 	@file $@ | grep debug_info > /dev/null || (rm $@ && exit 1)
 
 %.skel.h: %.o
-	$(BPFTOOL) gen skeleton $< > $@
+	$(BPFTOOL) gen skeleton $< $(SKEL_FLAGS) > $@
 
 $(bpf_progs): %: %.skel.h
-	@echo "bpf compile success"
+	@:
 
-bpf: $(bpf_progs)
+bpf: $(bpf_progs) $(bpf_progs_ext)
 
 $(progs): %: %.c bpf
 	@if [ -n "$(prog-$@)" ]; then				\

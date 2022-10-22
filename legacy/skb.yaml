@@ -20,8 +20,7 @@ children:
     - name: __netif_receive_skb_core
       skb: 0
       if: kernelVersion < 504
-    - name: __netif_receive_skb_core
-      pskb: 0
+    - name: __netif_receive_skb_core_pskb
       if: kernelVersion >= 504
   - name: link-out
     desc: link layer (L2) of packet out

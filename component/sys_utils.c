@@ -12,6 +12,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <sys/resource.h>
+#include <sys/utsname.h>
 
 #include "sys_utils.h"
 
@@ -56,4 +57,26 @@ int liberate_l()
 {
 	struct rlimit lim = {RLIM_INFINITY, RLIM_INFINITY};
 	return setrlimit(RLIMIT_MEMLOCK, &lim);
+}
+
+bool fsearch(FILE *f, char *target)
+{
+	char tmp[128];
+
+	while (fscanf(f, "%s", tmp) == 1) {
+		if (strstr(tmp, target))
+			return true;
+	}
+	return false;
+}
+
+int kernel_version()
+{
+	int major, minor, patch;
+	struct utsname buf;
+
+	uname(&buf);
+	sscanf(buf.release, "%d.%d.%d", &major, &minor, &patch);
+
+	return kv_to_num(major, minor, patch);
 }

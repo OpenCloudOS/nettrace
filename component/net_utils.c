@@ -3,6 +3,9 @@
 #include "net_utils.h"
 #include "arg_parse.h"
 
+#define _LINUX_IN_H
+#include <netinet/in.h>
+
 typedef struct {
 	char *name;
 	int val;
@@ -141,5 +144,41 @@ int proto2i(char *proto, int *dest)
 		return 3;
 	if (!l4proto2i(proto, dest))
 		return 4;
+	return 0;
+}
+
+void i2ipv6(char *dest, __u8 ip[])
+{
+	int i = 0, offset = 0;
+
+	for (;  i < 16; i += 2) {
+		if (ip[i] || ip[i + 1])
+			offset += sprintf(dest + offset, "%02x%02x:",
+					  ip[i], ip[i + 1]);
+		else
+			offset += sprintf(dest + offset, ":");
+	}
+	*(dest + offset - 1) = '\0';
+}
+
+int ipv6toi(char *ip, __u8 *dest)
+{
+	u16 *c = (u16 *)dest;
+	u32 t[8] = {}, i = 0;
+
+	if (sscanf(ip, "%x:%x:%x:%x:%x:%x:%x:%x", t, t + 1, t + 2,
+		   t + 3, t + 4, t + 5, t + 6, t + 7) == 8)
+		goto is_valid;
+
+	memset(t, 0, sizeof(t));
+	if (sscanf(ip, "%x::%x:%x:%x:%x", t, t + 4, t + 5, t + 6,
+		   t + 7) == 5)
+		goto is_valid;
+
+	return -1;
+
+is_valid:
+	for (i = 0; i < 8; i++)
+		c[i] = htons(t[i]);
 	return 0;
 }

@@ -6,12 +6,18 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <stdio.h>
 
 extern int log_level;
 
-int execf(char *output, char *fmt, ...);
-int exec(char *cmd, char *output);
-int liberate_l();
+int	execf(char *output, char *fmt, ...);
+int	exec(char *cmd, char *output);
+int	liberate_l();
+bool	fsearch(FILE *f, char *target);
+int	kernel_version();
 
 static inline int simple_exec(char *cmd)
 {
@@ -21,6 +27,17 @@ static inline int simple_exec(char *cmd)
 static inline bool file_exist(char *path)
 {
 	return access(path, F_OK) == 0;
+}
+
+static inline int kv_to_num(int major, int minor, int patch)
+{
+	return (major << 16) + (minor << 8) + patch;
+}
+
+/* compare current kernel version with the provided one */
+static inline int kv_compare(int major, int minor, int patch)
+{
+	return kernel_version() - kv_to_num(major, minor, patch);
 }
 
 #define pr_level(level, target, fmt, args...)	\
