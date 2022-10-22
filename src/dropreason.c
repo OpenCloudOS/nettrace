@@ -30,8 +30,11 @@ static int parse_reason_enum()
 	f = fopen("/sys/kernel/debug/tracing/events/skb/kfree_skb/format",
 		 "r");
 
-	if (!f || !fsearch(f, "__print_symbolic"))
+	if (!f || !fsearch(f, "__print_symbolic")) {
+		if (f)
+			fclose(f);
 		return -1;
+	}
 
 	while (true) {
 		if (!fsearch(f, "{") ||
@@ -41,6 +44,8 @@ static int parse_reason_enum()
 	}
 	drop_reason_max = index;
 	drop_reason_inited = true;
+
+	fclose(f);
 	return 0;
 }
 
