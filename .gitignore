@@ -1,3 +1,13 @@
 .vscode
 __pycache__
 *.pyc
+output
+vmlinux.h
+*.skel.h
+*.o
+.*
+GPATH
+GTAGS
+GRTAGS
+kheaders.h
+build.sh

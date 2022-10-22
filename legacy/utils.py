@@ -3,12 +3,15 @@ import struct
 import socket
 import subprocess
 import re
-
-from numpy import mat
+import pkg_resources
 
 cur_dir = os.path.dirname(os.path.abspath(__file__))
-_cur_version = None
+_CUR_VERSION = None
 
+
+def load_resource(name):
+    """ load resource from current directory """
+    return pkg_resources.resource_string(__name__, name).decode(encoding='utf-8')
 
 def project_file(name):
     return os.path.join(cur_dir, name)
@@ -30,13 +33,13 @@ def kernel_version_cur():
     return kernel_version_num(kernel_version())
 
 def kernel_version():
-    global _cur_version
-    if _cur_version:
-        return _cur_version
+    global _CUR_VERSION
+    if _CUR_VERSION:
+        return _CUR_VERSION
     (code, result) = subprocess.getstatusoutput('uname -r')
     if code != 0:
         return None
-    _cur_version = result
+    _CUR_VERSION = result
     return result
 
 class NetUtils:

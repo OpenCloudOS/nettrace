@@ -1,265 +1,283 @@
-# nettrace
+# nettrace - 网络诊断工具
 
-nettrace is is a powerful tool to trace network packet and diagnose network problem inside kernel on TencentOS. It make use of eBPF and BCC.
+## 一、工具简介
 
-> [BCC (BPF Compiler Collection)](https://github.com/iovisor/bcc) is a toolkit to make eBPF programs easier to write, with kernel instrumentation in C (and includes a C wrapper around LLVM), and front-ends in Python and lua.
+### 1.1 背景
 
-'skb' is the struct that used in kernel to store network package. By tracing kernel function and tracepoint (with the help of kprobe based on eBPF) that handle skb, nettrace is able to show the path of skb bypass inside kernel network stack. Therefor, some network issue (such as package drop) can be solved simply.
+在一些场景下（特别是云原生场景），Linux系统中的网络部署变得越来越复杂。一个TCP连接，从客户端到服务端，中间可能要经过复杂的`NAT`、`GRE`、IPVS`等`过程，网络报文在节点（主机）上的处理路径也变得越来越长。在发生网络故障（比如网络丢包）时，如何快速、有效地定位出网络问题成为了一个难题。目前常规的网络故障定位手段，如`tcpdump`、`dropwatch`、`ftrace`、`kprobe`等存在一定的短板：
 
-## 1. install
+- `tcpdump`：只能在链路层抓包，无法定位内核协议栈中的问题，比如常规的内核丢包问题
+- `ftrace`：只能跟踪内核函数，无法进行报文过滤，且入手较难，需要对内核协议栈有一定了解
+- `kprobe`：临时编写内核模块，效率和安全性低
+- `BCC`：功能单一，临时编写`BCC`程序跟踪效率低，需要对内核有一定了解，入手难
+- `dropwatch`：功能单一，只能查看网络丢包问题，且无法得到丢包原因和解决方案
 
-### 1.1 source code
+在此背景下，笔者结合多年的Kernel网络协议栈故障定位经验，基于eBPF开发了Linux环境下网络故障定位工具集——`nettrace`。
 
-For centos, the package 'bcc' should be installed; For ubuntu, the package 'bpfcc-tools' shoudl be installed.
+### 1.2 功能介绍
 
-Then, simply download the source code and run 'nettrace.py' in it.
+`nettrace`是一款基于eBPF的集网络报文跟踪（故障定位）、网络故障诊断、网络异常监控于一体的网络工具集，旨在能够提供一种更加高效、易用的方法来解决复杂场景下的网络问题。目前，其实现的功能包括：
 
-### 1.2 rpm
+- 报文生命周期跟踪：跟踪网络报文从进入到内核协议栈到释放/丢弃的过程中在内核中所走过的路径，实现报文整个生命周期的监控，并采集生命周期各个阶段的事件、信息。通过观察报文在内核中的路径，对于有一定内核协议栈经验的人来说可以快速、有效地发现网络问题。
+- 网络故障诊断：将以往的经验集成到工具的知识库，通过知识匹配的方式来主动诊断当前网络故障，给出诊断结果以及修复建议。该功能入手简单、易用性强，无需过多的网络经验即可进行网络问题定位。
+- 网络异常监控：常态化地部署到生产环境中，主动地发现、上报环境上的网络异常。
+- `droptrace`：用于跟踪、监控系统中的丢包事件的工具，点击[这里](droptrace/README.md)查看详情介绍。该工具计划后面合入到`nettrace`功能中。
 
-Download the rpm package from the release and install it. Then you can run 'nettrace' command.
+## 二、安装方法
 
-### 1.3 docker
+nettrace是采用C语言编写的基于eBPF（libbpf）的命令行工具，在使用和安装时可以用编译好的RPM包和二进制程序。需要注意的是，github上发布的RPM和二进制程序都是基于TencentOS（5.4.119内核版本）编译的，对于不支持CORE的其他版本的内核，最好下载源码编译后使用，以防止数据结构不兼容的问题。
 
-Download the docker image in the release. You can use it in two ways:
+### 2.1 RPM安装
 
-**Way 1:**
-
-import the image to docker with the command:
-
-`docker import ./docker-nettrace.tar.bz2 nettrace`
-
-and create the container with command:
-
-`docker run -itd -v /usr/src/:/usr/src/ -v /lib/modules/:/lib/modules/ --name nettrace --privileged nettrace bash`
-
-Then, you can enter the container with command:
-
-`docker exec -it nettrace bash`
-
-and use the command 'nettrace' in it.
-
-**Way 2:**
-
-directly unzip the tar file with the command `mkdir nettrace && tar -xf ./docker-nettrace.tar.bz2 -C nettrace` and run the command `cd nettrace && ./ntenter.sh`, then you can use the command 'nettrace'.
-
-the command `./ntenter.sh clean` is able to umount the mountpoint and header files that it created, so run this command to do the clean job if you don't need nettrace anymore.
-
-## 2. usage
-
-### 2.1 Base usage
-
-Below is the basic usage of nettrace to trace icmp package with ip address `10.35.13.63`. The kernel function that skb bypass,  timestamp and basic icmp information are printed.
+对于TencentOS系统，可以直接使用yum命令来进行在线安装：
 
 ```shell
-$ nettrace -p icmp --addr 10.35.13.63                                                
-begin tracing......
-453516.922978: [napi_gro_receive        ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-453516.922998: [enqueue_to_backlog      ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-453516.923012: [__netif_receive_skb_core]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-453516.923019: [tpacket_rcv             ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-453516.923025: [ip_rcv                  ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-453516.923028: [ip_rcv_core             ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-453516.923032: [skb_clone               ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-453516.923036: [nf_hook_slow            ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-453516.923055: [ip_rcv_finish           ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-453516.923061: [ip_local_deliver        ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-453516.923063: [nf_hook_slow            ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-453516.923070: [ip_local_deliver_finish ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
+sudo yum install nettrace
 ```
 
-With `--detail` specified, more information can be see:
+也可以直接从[releases](https://github.com/OpenCloudOS/nettrace/releases)中下载对应的RPM安装包，手动进行安装。
+
+### 2.2 二进制下载
+
+直接从[releases](https://github.com/OpenCloudOS/nettrace/releases)下载编译好的二进制包也是可以的，[releases](https://github.com/OpenCloudOS/nettrace/releases)中的`tar.bz2`格式的压缩包即为二进制程序。由于里面的工具采用的都是静态编译的方式，因此在内核版本支持的情况下，都是可以直接下载解压后运行的。再次提醒：对于不支持`CO-RE`模式的非`TencentOS`的内核版本，最好在对应的环境上编译后使用。
+
+### 2.3 手动编译
+
+下面来介绍下如何在Centos、ubuntu等环境上进行nettrace工具的手动编译和安装。本工具目前在4.14/4.15/5.4/5.10/5.18等版本的内核上均进行过适配和测试，更低版本的内核暂未进行适配。
+
+#### 2.3.1 依赖安装
+
+本工具在编译的时候依赖于`libelf`、`libbpf`和`bpftool`组件，`clang`和`gcc`编译工具。其中，bpftool二进制程序已经直接预编译好放到源码包的script目录中，因此可以不安装。但是对于版本较高的内核，请尽量从软件仓库安装该工具。
+
+在编译过程中，会优先尝试从`kernel-headers`头文件进行编译。如果头文件不存在（即目录`/lib/modules/$(uname -a)/build`不存在），则会尝试从BTF中构建`vmlinux.h`进行编译。需要注意：nettrace工具（即src目录中的代码）的编译必须要使用`kernel-headers`的方式，因为它用到的一些结构体在内核模块里，BTF中是找不到的。
+
+##### ubuntu
+
+对于ubuntu系统，使用以下命令安装依赖：
 
 ```shell
-$ nettrace -p icmp --addr 10.35.13.63 --detail
-begin tracing......
-454861.534996: [ffff8887b6260800][2:eth1][pid:0,swapper/3][link-in     ][napi_gro_receive        ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-454861.535022: [ffff8887b6260800][2:eth1][pid:0,swapper/3][link-in     ][enqueue_to_backlog      ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-454861.535048: [ffff8887b6260800][2:eth1][pid:0,swapper/2][link-in     ][__netif_receive_skb_core]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-454861.535060: [ffff8887b6260800][2:eth1][pid:0,swapper/2][pkt-in      ][tpacket_rcv             ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-454861.535070: [ffff8887b6260800][2:eth1][pid:0,swapper/2][ip-in       ][ip_rcv                  ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-454861.535078: [ffff8887b6260800][2:eth1][pid:0,swapper/2][ip-in       ][ip_rcv_core             ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-454861.535086: [ffff8887b6260800][2:eth1][pid:0,swapper/2][life        ][skb_clone               ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-454861.535094: [ffff88858f242100][2:eth1][pid:0,swapper/2][netfilter   ][nf_hook_slow            ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-454861.535119: [ffff88858f242100][2:eth1][pid:0,swapper/2][ip-in       ][ip_rcv_finish           ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-454861.535129: [ffff88858f242100][2:eth1][pid:0,swapper/2][ip-in       ][ip_local_deliver        ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
+sudo apt install libelf-dev libbpf-dev linux-headers-`uname -r` clang llvm gcc linux-tools-`uname -r` linux-tools-generic
 ```
 
-As we can see, the address of skb, network interface, current process and the tracer that the function belongs to are displayed.
+注意：如果当前发行版（如ubuntu16,ubuntu18）不支持libbpf-dev，请按照下文提示手动按照libbpf-0.2版本。同时，clang版本要在10+（低版本的测试有问题，暂时还没搞定），ubuntu18+直接安装clang-10 llvm-10即可，ubuntu16需要按照[这里](https://segmentfault.com/a/1190000040827790)的教程安装更新版本的clang。
 
-### 2.2 optional
+##### centos
+
+对于centos用于，使用以下命令来安装依赖：
+
+```shell
+sudo yum install elfutils-devel elfutils-devel-static libbpf-devel libbpf-static kernel-headers clang llvm bpftool
+```
+
+请确保安装的clang版本在10+，如果版本较低请手边编译安装较高版本。在编译过程中，如果因为libbpf导致了编译失败，或者当前发行版没有libbpf可以安装，那么请点击[这里](https://github.com/libbpf/libbpf/releases)下载安装较新版本的libbpf：
+
+```shell
+wget https://github.com/libbpf/libbpf/archive/refs/tags/v0.2.tar.gz
+tar -xf v0.2.tar.gz
+cd libbpf-0.2/src
+make install
+```
+
+#### 2.3.2 编译
+
+直接下载nettrace的源码即可进行编译安装：
+
+```shell
+git clone https://github.com/OpenCloudOS/nettrace.git
+cd nettrace
+make all
+```
+
+也可以单独编译其中的某个子工具，例如只编译nettrace命令：
+
+```shell
+make -C src all
+```
+
+可以使用KERNEL来手动指定要使用的内核源码（内核头文件）：
+
+```shell
+make KERNEL=/home/ubuntu/kernel all
+```
+
+对于发行版版本较低，难以安装高版本clang的情况下，可以尝试在高版本上通过指定KERNEL来为低版本的系统编译工具。由于是静态编译，因此编译的二进制是可以在低版本上运行起来的。
+
+也可以使用VMLINUX来指定BTF的源文件（即不使用默认的`/sys/kernel/btf/vmlinux`路径）：
+
+```shell
+make VMLINUX=/home/ubuntu/kernel/vmlinux all
+```
+
+可以手动指定`bpftool`命令的路径：
+```shell
+make BPFTOOL=/usr/lib/linux-tools/5.15.0-43-generic/bpftool all
+```
+
+需要注意，对于低版本的内核（4.x），在编译的时候需要加参数`COMPAT=1`，如下所示：
+```shell
+make COMPAT=1 all
+```
+
+该参数会强制启用内联函数的方式，会使得编译出来的二进制程序变大，但是没办法，低版本的内核必须要用内核函数的方式才能加载。
+
+同时，对于`ubuntu 16.04/ubuntu 18.04`系统，其内核似乎存在BUG，即其使用的内核版本实际为4.15.18，uname看到的却是4.15.0。这导致了加载eBPF程序的时候内核版本不一致，无法加载。因此对于这种情况，可以使用KERN_VER参数来手动指定内核版本（计算方式为：`(4<<16) + (15<<8) + 18`）：
+```shell
+make COMPAT=1 KERN_VER=266002 all
+```
+
+#### 2.3.3 打包
+
+使用命令`make rpm`可制作rpm包；使用命令`make pack`可制作二进制包（二进制程序打包到压缩包中，默认存放路径为output文件夹）。
+
+## 三、使用方法
+
+`droptrace`主要用来进行系统丢包事件的监控，点击[这里](droptrace/README.md)可查看droptrace的用户文档，这里不再赘述，重点介绍nettrace的相关功能。nettrace是用来跟踪内核报文和诊断网络故障的，在进行报文跟踪时可以使用一定的过滤条件来跟踪特定的报文。其基本命令行参数为：
 
 ```shell
 $ nettrace -h
-usage: nettrace.py [-h] [-s SADDR] [-d DADDR] [--addr ADDR] [-p PROTO] [--dport DPORT] [--sport SPORT] [--port PORT] [--tcp-flags TCP_FLAGS] [-t TRACER] [-o OUTPUT] [--detail] [--stack] [--stack-tracer STACK_TRACER] [--force-stack] [--ret] [--timeline] [-c COUNT] [--skb-mode] [-v]
+nettrace: a tool to trace skb in kernel and diagnose network problem
 
-optional arguments:
-  -h, --help            show this help message and exit
-  -s SADDR, --saddr SADDR
-                        ip source address
-  -d DADDR, --daddr DADDR
-                        ip dest address
-  --addr ADDR           ip source or dest address
-  -p PROTO, --proto PROTO
-                        network protocol (L3 or L4) in lower case, such ip, tcp, udp, etc.
-  --dport DPORT         TCP/UDP dest port
-  --sport SPORT         TCP/UDP source port
-  --port PORT           TCP/UDP source or dest port
-  --tcp-flags TCP_FLAGS
-                        TCP flags to filter, such as S(syn), A(ack), R(rst), etc
-  -t TRACER, --tracer TRACER
-                        The network module or kernel function to trace. Use "-t ?" to see available tracer
-  -o OUTPUT, --output OUTPUT
-                        print extern info. options include: pid, if, id, cpu and module. pid: process info; if: ifindex and ifname; id: memory address of skb; cpu: the cpu id that run on; module: the network module of the tracer belong to. multiple options should be splited by ","
-  --detail              show all info for trace output, which means enable all options in "--output"
-  --stack               print kernel function call stack
-  --stack-tracer STACK_TRACER
-                        print kernel call stack for special tracer.
-  --force-stack         force print stack for "all" tracer
-  --ret                 trace the return value
-  --timeline            print skb on timeline
-  -c COUNT, --count COUNT
-                        skb count to trace (timeline should be enabled)
-  --skb-mode            keep tracing skb once it is matched
-  -v, --verbose         show more verbose info
+Usage:
+    -s, --saddr      filter source ip address
+    -d, --daddr      filter dest ip address
+    --addr           filter source or dest ip address
+    -S, --sport      filter source TCP/UDP port
+    -D, --dport      filter dest TCP/UDP port
+    -P, --port       filter source or dest TCP/UDP port
+    -p, --proto      filter L3/L4 protocol, such as 'tcp', 'arp'
+    --pid            filter by current process id(pid)
+    -t, --trace      enable trace group or trace
+    --ret            show function return value
+    --detail         show extern packet info, such as pid, ifname, etc
+    --basic          use 'basic' trace mode, don't trace skb's life
+    --intel          enable 'intel' mode
+    --intel-quiet    only print abnormal packet
+    --intel-keep     don't quit when abnormal packet found
+    --hooks          print netfilter hooks if dropping by netfilter
+
+    -v               show log information
+    --debug          show debug information
+    -h, --help       show help information
 ```
 
-- `--stack`: print the function call stack for the kernel function or tracepoint that enabled.
-- `--stack-tracer`: maybe you don't want to print stack for all kernel function that enable, you can specify the tracer (or kernel function) that you want to print stack.
-- `--force_stack`: by default, you can't set `-t all` and `--stack` together for performance problem. With this option, you can do it.
-- `--tcp-flags`: use tcp flags to filter tcp skb. S(syn), A(ack), R(rst) and P(push) are supported.
-- `--ret`: once this enabled, both kprobe and kretprobe will be create for kernel function in the tracer that enabled, and the return value will be printed.
+其中，参数`s/d/addr/S/D/port/p/pid`用于进行报文的过滤，可以通过IP地址、端口、协议等属性进行过滤。其他参数的用途包括：
 
-### 2.3 example
+- `t/trace`：要启用的跟踪模块，默认启用所有
+- `ret`：跟踪和显示内核函数的返回值
+- `detail`：显示跟踪详细信息，包括当前的进程、网口和CPU等信息
+- `basic`：启用`basic`跟踪模式。默认情况下，启用的是生命周期跟踪模式。启用该模式后，会直接打印出报文所经过的内核函数/tracepoint。
+- `intel`：启用诊断模式
+- `intel-quiet`：只显示出现存在问题的报文，不显示正常的报文
+- `intel-keep`：持续跟踪。`intel`模式是下，默认在跟踪到异常报文后会停止跟踪，使用该参数后，会持续跟踪下去。
+- `hooks`：结合netfilter做的适配，详见下文
 
-trace icmp package with source ip '192.168.1.8':
+下面我们首先来看一下默认模式下的工具使用方法。
 
-**# nettrace -p icmp -s 192.168.1.8**
+### 3.1 生命周期
 
-trace tcp package with source ip '192.168.1.8' and syn+ack flags:
+默认情况下，`nettrace`会跟踪报文从进入到内核协议栈到离开（销毁）的过程。对于有一定内核网络经验的人来说，可以通过报文的内核路径来快速推断出当前的网络问题，达到快速定位的目的。
 
-**# nettrace -p tcp -s 192.168.1.8 --tcp-flags SA**
-
-trace icmp package with source ip '192.168.1.8' in ip and icmp layer:
-
-**# nettrace -p icmp -s 192.168.1.8 -t ip,icmp**
-
-trace icmp package with source ip '192.168.1.8' in timeline mode:
-
-**# nettrace -p icmp -s 192.168.1.8 --timeline**
-
-trace icmp package with source ip '192.168.1.8' in skb mode:
-
-**# nettrace -p icmp -s 192.168.1.8 --skb-mode**
-
-trace icmp package with source ip '192.168.1.8' and print detail information
-
-**# nettrace -p icmp -s 192.168.1.8 --detail**
-
-## 3. tracer
-
-### 3.1 trace tree
-
-kernel function and tracepoint are organized in a 'tracer' tree, and every node of the tree is a tracer. 'all' is the root of the 'tracer' tree. The tree can be displayed with the command: `nettrace -t ?`
+#### 3.1.1 跟踪ping报文
 
 ```shell
-$ nettrace -t ?
-available tracer:
----------------------------------------------------
+sudo ./nettrace -p icmp
+begin trace...
+***************** ffff889be8fbd500,ffff889be8fbcd00 ***************
+[1272349.614564] [dev_gro_receive     ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
+[1272349.614579] [__netif_receive_skb_core] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
+[1272349.614585] [ip_rcv              ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
+[1272349.614592] [ip_rcv_core         ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
+[1272349.614599] [skb_clone           ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
+[1272349.614616] [nf_hook_slow        ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
+[1272349.614629] [nft_do_chain        ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
+[1272349.614635] [ip_rcv_finish       ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
+[1272349.614643] [ip_route_input_slow ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
+[1272349.614647] [fib_validate_source ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
+[1272349.614652] [ip_local_deliver    ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
+[1272349.614658] [nf_hook_slow        ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
+[1272349.614663] [ip_local_deliver_finish] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
+[1272349.614666] [icmp_rcv            ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
+[1272349.614671] [icmp_echo           ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
+[1272349.614675] [icmp_reply          ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
+[1272349.614715] [consume_skb         ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
+[1272349.614722] [packet_rcv          ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
+[1272349.614725] [consume_skb         ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
 
-all: trace the whole kernel network stack
-    link: link layer (L2) of the network stack
-        link-in: link layer (L2) of packet in
-            napi_gro_receive
-            enqueue_to_backlog
-            __netif_receive_skb_core
-            do_xdp_generic
-            xdp_do_generic_redirect
-            generic_xdp_tx
-            sch_handle_ingress
-        link-out: link layer (L2) of packet out
-            dev_queue_xmit
-            dev_hard_start_xmit
-        sched: TC(traffic control) module
-            tcf_classify
-            sch_handle_egress
-            cls_bpf_classify
-            tcf_bpf_act
-......
+***************** ffff889be8fbde00 ***************
+[1272349.614681] [nf_hook_slow        ] ICMP: 172.27.0.6 -> 169.254.128.15 ping reply, seq: 48220
+[1272349.614688] [ip_output           ] ICMP: 172.27.0.6 -> 169.254.128.15 ping reply, seq: 48220
+[1272349.614690] [nf_hook_slow        ] ICMP: 172.27.0.6 -> 169.254.128.15 ping reply, seq: 48220
+[1272349.614693] [ip_finish_output    ] ICMP: 172.27.0.6 -> 169.254.128.15 ping reply, seq: 48220
+[1272349.614697] [ip_finish_output2   ] ICMP: 172.27.0.6 -> 169.254.128.15 ping reply, seq: 48220
+[1272349.614705] [__dev_queue_xmit    ] ICMP: 172.27.0.6 -> 169.254.128.15 ping reply, seq: 48220
+[1272349.614709] [dev_hard_start_xmit ] ICMP: 172.27.0.6 -> 169.254.128.15 ping reply, seq: 48220
+[1272351.286866] [consume_skb         ] ICMP: 172.27.0.6 -> 169.254.128.15 ping reply, seq: 48220
 ```
 
-This is the part of the tracer tree. 'link' just represent the link layer (L2) of the network stack, and 'link-in' represent receive package, 'link-out' represent send package. 'ip' represent ip layer, 'tcp' represent tcp layer, etc.
+上面的*中间的表示当前所跟踪的skb的地址，由于当前的报文被克隆过，因此当前跟踪上下文存在两个报文。
 
-When trace skb, tracer can be specified by `-t` (or `--tracer`), and multiple are supported. By default, 'all' tracer is used. For example, `nettrace -t napi_gro_receive,ip` to trace the function napi_gro_receive (function is tracer too) and ip layer.
-
-### 3.2. custom
-
-Tracer tree is keep in `skb.yaml`, so it is simple to extend your own tracer. Leaf node of the tree can be the kernel function or tracepoint that we want to trace, and they have the following fields:
-
-- name: The name of kernel function or tracepoint.
-- skb: For kprobe, this is the index of 'struct sk_buff' in the function params which begin from 0; For tracepoint, this is the name of 'struct sk_buff', which may be 'skbaddr'.
-- type: the type of this item, which can be 'kprobe' by default, 'kretprobe' and 'tracepoint'.
-- tp: this is for tracpoint, which shoud be the path of tracepint in format of 'skb:kfree_skb'.
-- is_end: if this function/tracepoint is the end of the life of the skb. This is used to trace the life of skb.
-- regex: the regex for kernel function name. Sometimes, the function name compiled can be different, such as 'do_xdp_generic' is compiled to 'do_xdp_generic.cold'. So we can use regex to match the compiled name with 'do_xdp_generic.*'.
-
-If nettrace is used by rpm package or docker image, the 'skb.yaml' is located in '/opt/nettrace/skb.yaml'.
-
-## 4. timeline mode
-
-By default, kernel function are printed directly. It's not easy to distinguish single skb, especially multi skb are printed at the same time. To solve this problem, `timeline mode` is introduced. In this mode, every skb has a 'context', which is used to mange the life of the skb. The skb won't be printed until it 'dies', and it will be print singly:
+#### 3.1.2 指定过滤条件
 
 ```shell
-$ nettrace -p icmp --addr 10.35.13.63 --detail --timeline
-begin tracing......
-<------------------- skb: ffff88858f243100 ---------------------->
-456901.372837: [ffff8887b6260200][2:eth1][pid:0,swapper/3       ][link-in     ][napi_gro_receive        ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-456901.372863: [ffff8887b6260200][2:eth1][pid:0,swapper/3       ][link-in     ][enqueue_to_backlog      ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-456901.372883: [ffff8887b6260200][2:eth1][pid:897081,nettrace   ][link-in     ][__netif_receive_skb_core]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-456901.372893: [ffff8887b6260200][2:eth1][pid:897081,nettrace   ][pkt-in      ][tpacket_rcv             ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-456901.372902: [ffff8887b6260200][2:eth1][pid:897081,nettrace   ][ip-in       ][ip_rcv                  ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-456901.372909: [ffff8887b6260200][2:eth1][pid:897081,nettrace   ][ip-in       ][ip_rcv_core             ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-456901.372921: [ffff8887b6260200][2:eth1][pid:897081,nettrace   ][life        ][skb_clone               ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-                return value:ffff88858f242900
-456901.372930: [ffff88858f242900][2:eth1][pid:897081,nettrace   ][netfilter   ][nf_hook_slow            ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-456901.372952: [ffff88858f242900][2:eth1][pid:897081,nettrace   ][ip-in       ][ip_rcv_finish           ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-456901.372961: [ffff88858f242900][2:eth1][pid:897081,nettrace   ][ip-in       ][ip_local_deliver        ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-456901.372967: [ffff88858f242900][2:eth1][pid:897081,nettrace   ][netfilter   ][nf_hook_slow            ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-456901.372977: [ffff88858f242900][2:eth1][pid:897081,nettrace   ][ip-in       ][ip_local_deliver_finish ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-456901.373002: [ffff88858f242900][2:eth1][pid:897081,nettrace   ][icmp-in     ][icmp_rcv                ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-456901.373006: [ffff88858f242900][2:eth1][pid:897081,nettrace   ][icmp-in     ][icmp_echo               ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-456901.373064: [ffff88858f242900][2:eth1][pid:897081,nettrace   ][life        ][consume_skb             ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-456901.373068: [ffff8887b6260200][2:eth1][pid:897081,nettrace   ][pkt-in      ][packet_rcv              ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-456901.373072: [ffff8887b6260200][2:eth1][pid:897081,nettrace   ][life        ][consume_skb             ]: ICMP: 10.35.13.63 -> 9.135.224.89, ping request   , seq: 1
-
-<------------------- skb: ffff88858f243a00 ---------------------->
-461052.796174: [ffff88858f243a00][    ][pid:0,swapper/2         ][ip-out      ][ip_send_skb             ]: ICMP: 9.135.224.89 -> 10.35.13.63, ping reply     , seq: 1
-461052.796179: [ffff88858f243a00][    ][pid:0,swapper/2         ][ip-out      ][__ip_local_out          ]: ICMP: 9.135.224.89 -> 10.35.13.63, ping reply     , seq: 1
-461052.796182: [ffff88858f243a00][    ][pid:0,swapper/2         ][netfilter   ][nf_hook_slow            ]: ICMP: 9.135.224.89 -> 10.35.13.63, ping reply     , seq: 1
-461052.796186: [ffff88858f243a00][    ][pid:0,swapper/2         ][ip-out      ][ip_output               ]: ICMP: 9.135.224.89 -> 10.35.13.63, ping reply     , seq: 1
-461052.796189: [ffff88858f243a00][2:eth1][pid:0,swapper/2       ][netfilter   ][nf_hook_slow            ]: ICMP: 9.135.224.89 -> 10.35.13.63, ping reply     , seq: 1
-461052.796194: [ffff88858f243a00][2:eth1][pid:0,swapper/2       ][ip-out      ][ip_finish_output        ]: ICMP: 9.135.224.89 -> 10.35.13.63, ping reply     , seq: 1
-461052.796197: [ffff88858f243a00][2:eth1][pid:0,swapper/2       ][ip-out      ][ip_finish_output2       ]: ICMP: 9.135.224.89 -> 10.35.13.63, ping reply     , seq: 1
-461052.796203: [ffff88858f243a00][2:eth1][pid:0,swapper/2       ][link-out    ][dev_queue_xmit          ]: ICMP: 9.135.224.89 -> 10.35.13.63, ping reply     , seq: 1
-461052.796210: [ffff88858f243a00][2:eth1][pid:0,swapper/2       ][link-out    ][dev_hard_start_xmit     ]: ICMP: 9.135.224.89 -> 10.35.13.63, ping reply     , seq: 1
-461052.796214: [ffff88858f243a00][2:eth1][pid:0,swapper/2       ][life        ][skb_clone               ]: ICMP: 9.135.224.89 -> 10.35.13.63, ping reply     , seq: 1
-                return value:ffff88858f242900
-461052.796219: [ffff88858f242900][2:eth1][pid:0,swapper/2       ][pkt-in      ][tpacket_rcv             ]: ICMP: 9.135.224.89 -> 10.35.13.63, ping reply     , seq: 1
-461052.796224: [ffff88858f242900][2:eth1][pid:0,swapper/2       ][life        ][consume_skb             ]: ICMP: 9.135.224.89 -> 10.35.13.63, ping reply     , seq: 1
-461052.796264: [ffff88858f243a00][2:eth1][pid:0,swapper/0       ][life        ][consume_skb             ]: ICMP: 9.135.224.89 -> 10.35.13.63, ping reply     , seq: 1
+sudo ./nettrace -p icmp --saddr 169.254.128.15
+begin trace...
+***************** ffff889be8fbc700,ffff889be8fbdc00 ***************
+[1273445.360831] [dev_gro_receive     ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 54754
+[1273445.360844] [__netif_receive_skb_core] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 54754
+[1273445.360847] [ip_rcv              ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 54754
+[1273445.360850] [ip_rcv_core         ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 54754
+[1273445.360854] [skb_clone           ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 54754
+[1273445.360861] [nf_hook_slow        ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 54754
+[1273445.360868] [nft_do_chain        ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 54754
+[1273445.360875] [ip_rcv_finish       ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 54754
+[1273445.360878] [ip_route_input_slow ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 54754
+[1273445.360882] [fib_validate_source ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 54754
+[1273445.360887] [ip_local_deliver    ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 54754
+[1273445.360890] [nf_hook_slow        ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 54754
+[1273445.360895] [ip_local_deliver_finish] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 54754
+[1273445.360899] [icmp_rcv            ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 54754
+[1273445.360903] [icmp_echo           ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 54754
+[1273445.360908] [icmp_reply          ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 54754
+[1273445.360922] [consume_skb         ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 54754
+[1273445.360930] [packet_rcv          ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 54754
+[1273445.360933] [consume_skb         ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 54754
 ```
 
-As we can see, printing for every skb are split clearly. What's more, the skb **cloned** from one skb is thought to be in the same context. Therefor, the skb with address `ffff8887b6260200` is printed with `ffff88858f242900` together.
-
-## 5. skb mode
-
-Traditional packet filter is supported, such protocol, ip source address, ip destination address, source port, destination port, etc. However, while the data of skb changing (for example, NAT), it can't work probably.
-
-`skb mode` is used to solve this problem. While it is enabled with `--skb-mode`, nettrace will keep tracing the skb once it is matched, even if ip address or port changed. This mode is helpful when you want to trace the skb whose data will be change by iptables.
-
-As we can see below, we want to trace icmp package with ip address `192.168.122.8`. However, DNAT is done by iptables, and the ip source address of this skb changed to `9.135.224.89`. With this mode enabled, we still can keep tracing it.
+#### 3.1.3 显示详细信息
 
 ```shell
-$ nettrace -p icmp --addr 192.168.122.8 --timeline --skb-mode
+sudo ./nettrace -p icmp --saddr 169.254.128.15 --detail
+begin trace...
+***************** ffff889be8fbcd00,ffff889be8fbcc00 ***************
+[1273732.110173] [ffff889be8fbcd00][dev_gro_receive     ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110185] [ffff889be8fbcd00][__netif_receive_skb_core][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110189] [ffff889be8fbcd00][ip_rcv              ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110192] [ffff889be8fbcd00][ip_rcv_core         ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110196] [ffff889be8fbcd00][skb_clone           ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110204] [ffff889be8fbcc00][nf_hook_slow        ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110211] [ffff889be8fbcc00][nft_do_chain        ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110222] [ffff889be8fbcc00][ip_rcv_finish       ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110229] [ffff889be8fbcc00][ip_route_input_slow ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110234] [ffff889be8fbcc00][fib_validate_source ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110240] [ffff889be8fbcc00][ip_local_deliver    ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110243] [ffff889be8fbcc00][nf_hook_slow        ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110252] [ffff889be8fbcc00][ip_local_deliver_finish][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110255] [ffff889be8fbcc00][icmp_rcv            ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110260] [ffff889be8fbcc00][icmp_echo           ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110267] [ffff889be8fbcc00][icmp_reply          ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110283] [ffff889be8fbcc00][consume_skb         ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110291] [ffff889be8fbcd00][packet_rcv          ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110294] [ffff889be8fbcd00][consume_skb         ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+```
+
+可以看到，每个报文的地址、所在CPU、网口和进程信息都被打印了出来。
+
+#### 3.1.4 NAT跟踪
+
+在对报文进行跟踪时，一旦报文被跟踪起来（命中过滤条件），那么这个报文即使内容发生了变化也会持续被跟踪，知道报文被释放。下面是NAT场景下的跟踪，可以看到报文的源地址由`192.168.122.8`通过SNAT被修改成了`9.135.224.89`，但是报文依然被跟踪到了：
+
+```shell
+$ sudo ./nettrace -p icmp --addr 192.168.122.8
 begin tracing......
 <------------------- skb: ffff88818f02f900 ---------------------->
 463697.331957: [__netif_receive_skb_core]: ICMP: 192.168.122.8 -> 10.123.119.98, ping request   , seq: 0
@@ -281,3 +299,214 @@ begin tracing......
 463697.332060: [consume_skb             ]: ICMP: 9.135.224.89  -> 10.123.119.98, ping request   , seq: 0
 ```
 
+### 3.2 诊断模式
+
+使用方式与上面的一致，加个`intel`参数即可使用诊断模式。上文的生命周期模式对于使用者的要求比较高，需要了解内核协议栈各个函数的用法、返回值的意义等，易用性较差。诊断模式是在生命周期模式的基础上，提供了更加丰富的信息，使得没有网络开发经验的人也可进行复杂网络问题的定位和分析。
+
+#### 3.2.1 基本用法
+
+下面是使用诊断模式进行报文跟踪的用法，可以看出来相比于普通模式，诊断模式提供了更多的可供参考的信息，包括当前报文经过了iptables的哪些表和哪些链、报文发生了NAT、报文被克隆了等。诊断模式设置了三种提示级别：
+
+- `INFO`：正常的信息提示
+- `WARN`：警告信息，该报文可能存在一定的问题，需要关注
+- `ERROR`：异常信息，报文发生了问题（比如被丢弃）。
+
+```shell
+./nettrace -p icmp --intel --saddr 192.168.122.8
+begin trace...
+***************** ffff889fad356200 ***************
+[3445.575957] [__netif_receive_skb_core] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
+[3445.575978] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *ipv4 in chain: PRE_ROUTING*
+[3445.575990] [nft_do_chain        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *iptables table:nat, chain:PREROUT* *packet is accepted*
+[3445.576005] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *bridge in chain: PRE_ROUTING*
+[3445.576014] [__netif_receive_skb_core] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
+[3445.576024] [ip_rcv              ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
+[3445.576029] [ip_rcv_core         ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
+[3445.576040] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *ipv4 in chain: PRE_ROUTING*
+[3445.576044] [ip_rcv_finish       ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
+[3445.576052] [ip_route_input_slow ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
+[3445.576061] [fib_validate_source ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
+[3445.576080] [ip_forward          ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
+[3445.576084] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *ipv4 in chain: FORWARD*
+[3445.576087] [nft_do_chain        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *iptables table:filter, chain:FORWARD* *packet is accepted*
+[3445.576107] [ip_output           ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
+[3445.576113] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *ipv4 in chain: POST_ROUTING*
+[3445.576116] [nft_do_chain        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *iptables table:nat, chain:POSTROU* *packet is accepted*
+[3445.576131] [nf_nat_manip_pkt    ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *NAT happens (packet address will change)*
+[3445.576148] [ip_finish_output    ] ICMP: 192.168.255.10 -> 10.123.119.98 ping request, seq: 0
+[3445.576152] [ip_finish_output2   ] ICMP: 192.168.255.10 -> 10.123.119.98 ping request, seq: 0
+[3445.576158] [__dev_queue_xmit    ] ICMP: 192.168.255.10 -> 10.123.119.98 ping request, seq: 0
+[3445.576165] [netdev_core_pick_tx ] ICMP: 192.168.255.10 -> 10.123.119.98 ping request, seq: 0
+[3445.576177] [dev_hard_start_xmit ] ICMP: 192.168.255.10 -> 10.123.119.98 ping request, seq: 0
+[3445.576215] [consume_skb         ] ICMP: 192.168.255.10 -> 10.123.119.98 ping request, seq: 0 *packet is freed (normally)*
+---------------- ANALYSIS RESULT ---------------------
+[1] WARNING happens in nf_nat_manip_pkt(netfilter):
+        NAT happens (packet address will change)
+```
+
+如果当前报文存在`ERROR`，那么工具会给出一定的诊断修复建议，并终止当前诊断操作。通过添加`intel-keep`可以在发生`ERROR`事件时不退出，继续进行跟踪分析。下面是发生异常时的日志：
+
+```shell
+./nettrace -p icmp --intel --saddr 192.168.122.8
+begin trace...
+***************** ffff889fb3c64f00 ***************
+[4049.295546] [__netif_receive_skb_core] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
+[4049.295566] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *ipv4 in chain: PRE_ROUTING*
+[4049.295578] [nft_do_chain        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *iptables table:nat, chain:PREROUT* *packet is accepted*
+[4049.295594] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *bridge in chain: PRE_ROUTING*
+[4049.295612] [__netif_receive_skb_core] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
+[4049.295624] [ip_rcv              ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
+[4049.295629] [ip_rcv_core         ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
+[4049.295640] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *ipv4 in chain: PRE_ROUTING*
+[4049.295644] [ip_rcv_finish       ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
+[4049.295655] [ip_route_input_slow ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
+[4049.295664] [fib_validate_source ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
+[4049.295683] [ip_forward          ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
+[4049.295687] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *ipv4 in chain: FORWARD* *packet is dropped by netfilter (NF_DROP)*
+[4049.295695] [nft_do_chain        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *iptables table:filter, chain:FORWARD* *packet is dropped by iptables/iptables-nft*
+[4049.295711] [kfree_skb           ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *packet is dropped by kernel*
+---------------- ANALYSIS RESULT ---------------------
+[1] ERROR happens in nf_hook_slow(netfilter):
+        packet is dropped by netfilter (NF_DROP)
+    fix advice:
+        check your netfilter rule
+
+[2] ERROR happens in nft_do_chain(netfilter):
+        packet is dropped by iptables/iptables-nft
+    fix advice:
+        check your iptables rule
+
+[3] ERROR happens in kfree_skb(life):
+        packet is dropped by kernel
+    location:
+        nf_hook_slow+0x96
+    drop reason:
+        NETFILTER_DROP
+
+analysis finished!
+
+end trace...
+```
+
+从这里的日志可以看出，在报文经过iptables的filter表的forward链的时候，发生了丢包。在诊断结果里，会列出所有的异常事件，一个报文跟踪可能会命中多条诊断结果。这里的诊断建议是让用户检查iptables中的规则是否存在问题。
+
+其中，`kfree_skb`这个跟踪点是对`drop reason`内核特性（详见droptrace中的介绍）做了适配的，可以理解为将droptrace的功能集成到了这里的诊断结果中，这里可以看出其给出的对包原因是`NETFILTER_DROP`。
+
+#### 3.2.2 netfilter支持
+
+网络防火墙是网络故障、网络不同发生的重灾区，因此`netfilter`工具对`netfilter`提供了完美适配，包括老版本的`iptables-legacy`和新版本的`iptables-nft`。诊断模式下，`nettrace`能够跟踪报文所经过的`iptables`表和`iptables`链，并在发生由于iptables导致的丢包时给出一定的提示，上面的示例充分展现出了这部分。出了对iptables的支持，`nettrace`对整个netfilter大模块也提供了支持，能够显示在经过每个HOOK点时对应的协议族和链的名称。除此之外，为了应对一些注册到netfilter中的第三方内核模块导致的丢包问题，nettrace还可以通过添加参数`hooks`来打印出当前`HOOK`上所有的的钩子函数，从而深入分析问题：
+
+```shell
+./nettrace -p icmp --intel --saddr 192.168.122.8 --hooks
+begin trace...
+***************** ffff889faa054500 ***************
+[5810.702473] [__netif_receive_skb_core] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943
+[5810.702491] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943 *ipv4 in chain: PRE_ROUTING*
+[5810.702504] [nft_do_chain        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943 *iptables table:nat, chain:PREROUT* *packet is accepted*
+[5810.702519] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943 *bridge in chain: PRE_ROUTING*
+[5810.702527] [__netif_receive_skb_core] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943
+[5810.702535] [ip_rcv              ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943
+[5810.702540] [ip_rcv_core         ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943
+[5810.702546] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943 *ipv4 in chain: PRE_ROUTING*
+[5810.702551] [ip_rcv_finish       ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943
+[5810.702556] [ip_route_input_slow ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943
+[5810.702565] [fib_validate_source ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943
+[5810.702579] [ip_forward          ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943
+[5810.702583] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943 *ipv4 in chain: FORWARD* *packet is dropped by netfilter (NF_DROP)*
+[5810.702586] [nft_do_chain        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943 *iptables table:filter, chain:FORWARD* *packet is dropped by iptables/iptables-nft*
+[5810.702599] [kfree_skb           ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943 *packet is dropped by kernel*
+---------------- ANALYSIS RESULT ---------------------
+[1] ERROR happens in nf_hook_slow(netfilter):
+        packet is dropped by netfilter (NF_DROP)
+
+    following hook functions are blamed:
+        nft_do_chain_ipv4
+
+    fix advice:
+        check your netfilter rule
+
+[2] ERROR happens in nft_do_chain(netfilter):
+        packet is dropped by iptables/iptables-nft
+    fix advice:
+        check your iptables rule
+
+[3] ERROR happens in kfree_skb(life):
+        packet is dropped by kernel
+    location:
+        nf_hook_slow+0x96
+    drop reason:
+        NETFILTER_DROP
+
+analysis finished!
+
+end trace...
+```
+
+可以看出，上面`following hook functions are blamed`中列出了导致当前`netfilter`丢包的所有的钩子函数，这里只有`iptables`一个钩子函数。
+
+#### 3.2.3 其他场景
+
+由于对`drop reason`内核特性进行了适配，因此对于支持`drop reason`的系统，基于`drop reason`本工具可以诊断70+种丢包问题。`nettrace`通过将网络诊断经验翻译成规则存储到规则库的方式来进行诊断分析，通过扩充规则配置文件的方式能够不断增强其诊断功能。目前，本工具已经集成了20+典型网络故障诊断功能，并且在实践中不断完善知识库（规则库）。
+
+端口未监听导致的丢包：
+
+```shell
+./nettrace --intel --intel-quiet
+begin trace...
+***************** ffff888f97730ee0 ***************
+[365673.326016] [ip_output           ] TCP: 127.0.0.1:40392 -> 127.0.0.1:9999 seq:3067626996, ack:0, flags:S
+[365673.326026] [ip_finish_output    ] TCP: 127.0.0.1:40392 -> 127.0.0.1:9999 seq:3067626996, ack:0, flags:S
+[365673.326029] [ip_finish_output2   ] TCP: 127.0.0.1:40392 -> 127.0.0.1:9999 seq:3067626996, ack:0, flags:S
+[365673.326032] [__dev_queue_xmit    ] TCP: 127.0.0.1:40392 -> 127.0.0.1:9999 seq:3067626996, ack:0, flags:S
+[365673.326039] [dev_hard_start_xmit ] TCP: 127.0.0.1:40392 -> 127.0.0.1:9999 seq:3067626996, ack:0, flags:S
+[365673.326042] [enqueue_to_backlog  ] TCP: 127.0.0.1:40392 -> 127.0.0.1:9999 seq:3067626996, ack:0, flags:S
+[365673.326051] [__netif_receive_skb_core] TCP: 127.0.0.1:40392 -> 127.0.0.1:9999 seq:3067626996, ack:0, flags:S
+[365673.326059] [ip_rcv              ] TCP: 127.0.0.1:40392 -> 127.0.0.1:9999 seq:3067626996, ack:0, flags:S
+[365673.326061] [ip_rcv_core         ] TCP: 127.0.0.1:40392 -> 127.0.0.1:9999 seq:3067626996, ack:0, flags:S
+[365673.326068] [ip_rcv_finish       ] TCP: 127.0.0.1:40392 -> 127.0.0.1:9999 seq:3067626996, ack:0, flags:S
+[365673.326072] [ip_local_deliver    ] TCP: 127.0.0.1:40392 -> 127.0.0.1:9999 seq:3067626996, ack:0, flags:S
+[365673.326075] [ip_local_deliver_finish] TCP: 127.0.0.1:40392 -> 127.0.0.1:9999 seq:3067626996, ack:0, flags:S
+[365673.326078] [tcp_v4_rcv          ] TCP: 127.0.0.1:40392 -> 127.0.0.1:9999 seq:3067626996, ack:0, flags:S
+[365673.326084] [__inet_lookup_listener] TCP: 127.0.0.1:40392 -> 127.0.0.1:9999 seq:3067626996, ack:0, flags:S *tcp port is not listened*
+[365673.326090] [tcp_v4_send_reset   ] TCP: 127.0.0.1:40392 -> 127.0.0.1:9999 seq:3067626996, ack:0, flags:S
+[365673.326125] [kfree_skb           ] TCP: 127.0.0.1:40392 -> 127.0.0.1:9999 seq:3067626996, ack:0, flags:S *packet is dropped by kernel*
+---------------- ANALYSIS RESULT ---------------------
+[1] WARNING happens in __inet_lookup_listener(tcp-in):
+        tcp port is not listened
+    fix advice:
+        check your target tcp port
+
+[2] ERROR happens in kfree_skb(life):
+        packet is dropped by kernel
+    location:
+        tcp_v4_rcv+0x4a
+```
+
+XDP导致的丢包（XDP转发会给提示）：
+
+```shell
+./nettrace -p icmp --intel --intel-quiet 
+begin trace...
+***************** ffff889f015acc00 ***************
+[18490.607809] [__netif_receive_skb_core] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
+[18490.607828] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *ipv4 in chain: PRE_ROUTING*
+[18490.607840] [nft_do_chain        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *iptables table:nat, chain:PREROUT* *packet is accepted*
+[18490.607855] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *bridge in chain: PRE_ROUTING*
+[18490.607874] [__netif_receive_skb_core] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
+[18490.607882] [netif_receive_generic_xdp] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *packet is dropped by XDP program*
+[18490.607888] [kfree_skb           ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *packet is dropped by kernel*
+---------------- ANALYSIS RESULT ---------------------
+[1] ERROR happens in netif_receive_generic_xdp(link-in):
+        packet is dropped by XDP program
+    fix advice:
+        check your XDP eBPF program
+
+[2] ERROR happens in kfree_skb(life):
+        packet is dropped by kernel
+    location:
+        netif_receive_generic_xdp+0x259
+    drop reason:
+        NOT_SPECIFIED
+
+analysis finished!
+```
