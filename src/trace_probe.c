@@ -101,7 +101,7 @@ err:
 	skel = (void *) name##__open();			\
 	if (skel && !name##__load((void *)skel))	\
 		goto load_success;			\
-	pr_debug("failed to load skel: " #name "\n")
+	pr_warn("failed to load skel: " #name "\n")
 
 static struct kprobe *skel;
 static int probe_trace_open()
