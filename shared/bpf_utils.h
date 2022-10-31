@@ -18,7 +18,6 @@ typedef struct {
 
 extern long int syscall (long int __sysno, ...);
 
-#ifdef COMPAT_MODE
 #define bpf_set_config(skel, sec, value) do {		\
 	int fd = bpf_map__fd(skel->maps.m_config);	\
 	u8 buf[CONFIG_MAP_SIZE] = {};			\
@@ -50,10 +49,6 @@ extern long int syscall (long int __sysno, ...);
 	args->name = value;				\
 	bpf_map_update_elem(fd, &key, args, 0);		\
 } while (0)
-#else
-#define bpf_set_config(skel, sec, value) skel->sec->_bpf_args = value
-#define bpf_set_config_field(skel, sec, name, value) skel->sec->_bpf_args.name = value
-#endif
 
 void
 perf_output_cond(int fd, perf_buffer_sample_fn cb, perf_buffer_lost_fn lost,

@@ -24,6 +24,21 @@ struct {
 	__uint(max_entries, 64);
 } m_event SEC(".maps");
 
+struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY);
+	__uint(key_size, sizeof(int));
+	__uint(value_size, sizeof(bpf_args_t));
+	__uint(max_entries, 1);
+} m_config SEC(".maps");
+
+#define CONFIG() ({						\
+	int _key = 0;						\
+	void * _v = bpf_map_lookup_elem(&m_config, &_key);	\
+	if (!_v)						\
+		return 0; /* this can't happen */		\
+	(bpf_args_t*)_v;					\
+})
+
 #define EVENT_OUTPUT(ctx, data)					\
 	bpf_perf_event_output(ctx, &m_event, BPF_F_CURRENT_CPU,	\
 			      &(data), sizeof(data))
@@ -50,25 +65,8 @@ struct {
 #endif
 
 #ifdef COMPAT_MODE
-struct {
-	__uint(type, BPF_MAP_TYPE_ARRAY);
-	__uint(key_size, sizeof(int));
-	__uint(value_size, sizeof(bpf_args_t));
-	__uint(max_entries, 1);
-} m_config SEC(".maps");
-
-#define CONFIG() ({						\
-	int _key = 0;						\
-	void * _v = bpf_map_lookup_elem(&m_config, &_key);	\
-	if (!_v)						\
-		return 0; /* this can't happen */		\
-	(bpf_args_t*)_v;					\
-})
-
 #define try_inline __attribute__((always_inline))
 #else
-bpf_args_t _bpf_args;
-#define CONFIG() &_bpf_args
 #define try_inline inline
 #endif
 
