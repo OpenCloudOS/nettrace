@@ -78,8 +78,8 @@ print_ip:
 	case IPPROTO_TCP:
 	case IPPROTO_UDP:
 		BUF_FMT("%s:%d -> %s:%d",
-			saddr, htons(pkt->l4.min.sport),
-			daddr, htons(pkt->l4.min.dport));
+			saddr, ntohs(pkt->l4.min.sport),
+			daddr, ntohs(pkt->l4.min.dport));
 		break;
 	case IPPROTO_ICMP:
 		BUF_FMT("%s -> %s", saddr, daddr);
@@ -94,8 +94,8 @@ print_ip:
 		flags = pkt->l4.tcp.flags;
 #define CONVERT_FLAG(mask, name) ((flags & mask) ? name : "")
 		BUF_FMT(" seq:%u, ack:%u, flags:%s%s%s%s",
-			pkt->l4.tcp.seq,
-			pkt->l4.tcp.ack,
+			ntohl(pkt->l4.tcp.seq),
+			ntohl(pkt->l4.tcp.ack),
 			CONVERT_FLAG(TCP_FLAGS_SYN, "S"),
 			CONVERT_FLAG(TCP_FLAGS_ACK, "A"),
 			CONVERT_FLAG(TCP_FLAGS_RST, "R"),
