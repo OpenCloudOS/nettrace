@@ -18,7 +18,6 @@ include $(ROOT)/script/arch.mk
 
 HEADERS		:= $(if $(KERNEL),$(KERNEL),/lib/modules/$(shell uname -r)/build/)
 NOSTDINC_FLAGS	+= -nostdinc -isystem $(shell $(CC) -print-file-name=include)
-BTF		:= $(if $(VMLINUX),$(VMLINUX),/sys/kernel/btf/vmlinux)
 export HEADERS
 
 USERINCLUDE	:= \
@@ -42,28 +41,20 @@ KERNEL_CFLAGS	+= $(NOSTDINC_FLAGS) $(LINUXINCLUDE) \
 		-Wno-unknown-warning-option -Wno-frame-address
 
 cmd_download	= @if [ ! -f $(1) ]; then wget -O $(1) $(REMOTE_ROOT)/$(2); fi
-cmd_exist	= $(if $(wildcard $(1)),$(2),$(3))
-cmd_or_exist	= $(call cmd_exist,$(1),$(1),$(2))
-ifeq ("$(wildcard $(HEADERS))$(wildcard $(BTF))","")
-$(error BTF is not found in your system, please install kernel headers)
+
+ifdef KERN_VER
+	CFLAGS		+= -DKERN_VER=$(KERN_VER)
 endif
 
-ifeq ($(if $(KERNEL),$(wildcard $(KERNEL)),"pass"),)
-$(error kernel path not exist)
+ifdef COMPAT
+ifeq ($(wildcard $(HEADERS)),)
+$(error kernel headers not exist in COMPAT mdoe, please install it)
 endif
-
-ifeq ($(if $(VMLINUX),$(wildcard $(VMLINUX)),"pass"),)
-$(error vmlinux path not exist)
-endif
-
-# preferred to compile from kernel headers, then BTF
-mode := $(if $(VMLINUX),'btf',$(call cmd_exist,$(HEADERS),'kernel','btf'))
-ifeq ($(mode),'btf')
-	kheaders_cmd	:= ln -s vmlinux.h kheaders.h
-	kheaders_dep	:= vmlinux.h
-else
 	kheaders_cmd	:= ln -s vmlinux_header.h kheaders.h
+	CFLAGS		+= -DCOMPAT_MODE
 	BPF_CFLAGS	+= $(KERNEL_CFLAGS)
+else
+	kheaders_cmd	:= ln -s ../shared/bpf/vmlinux.h kheaders.h
 endif
 
 ifndef BPFTOOL
@@ -74,13 +65,10 @@ else
 endif
 endif
 
-vmlinux.h:
-	$(BPFTOOL) btf dump file $(BTF) format c > vmlinux.h
-
-kheaders.h: $(kheaders_dep)
+kheaders.h:
 	$(call kheaders_cmd)
 
-progs/%.o: progs/%.c kheaders.h
+progs/%.o: progs/%.c $(BPF_EXTRA_DEP)
 	clang -O2 -c -g -S -Wall -Wno-pointer-sign -Wno-unused-value	\
 	-Wno-incompatible-pointer-types-discards-qualifiers		\
 	-fno-asynchronous-unwind-tables					\
