@@ -37,7 +37,7 @@ int ts_print_packet(char *buf, packet_t *pkt, char *minfo,
 
 	if (date_format) {
 		p = convert_ts_to_date(ts);
-		BUF_FMT("[%d-%d-%d %02d:%02d:%02d.%06d] ", 1900 + p->tm_year,
+		BUF_FMT("[%d-%d-%d %02d:%02d:%02d.%06lld] ", 1900 + p->tm_year,
 			1 + p->tm_mon, p->tm_mday, p->tm_hour, p->tm_min,
 			p->tm_sec, ts % 1000000000 / 1000);
 	} else {
