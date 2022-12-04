@@ -2,7 +2,6 @@
 __pycache__
 *.pyc
 output
-vmlinux.h
 *.skel.h
 *.o
 .*

@@ -8,25 +8,8 @@ prog-nettrace-origin = \
 		dropreason.c
 prog-nettrace	= $(prog-nettrace-origin) nettrace.c
 
-ifdef KERN_VER
-	CFLAGS += -DKERN_VER=$(KERN_VER)
-endif
-
+BPF_EXTRA_DEP := kheaders.h
 include ../common.mk
-
-# check if current kernel version is 4.X
-COMPAT ?= $(if $(KERNEL),$(shell cat $(HEADERS)/Makefile | grep \
-	  'VERSION = 4'),$(shell uname -r | grep ^4))
-
-ifneq ($(strip $(COMPAT)),)
-	CFLAGS += -DCOMPAT_MODE
-	COMPAT_MODE := 1
-endif
-
-NFT_HEADER	:= $(HEADERS)/include/net/netfilter/nf_tables.h
-ifeq ($(shell cat $(NFT_HEADER) 2>&1 | grep xt_action_param),)
-	BPF_CFLAGS += -DNFT_HIGH_VERSION
-endif
 
 progs/kprobe_trace.h:
 	python3 gen_trace.py probe > progs/kprobe_trace.h
@@ -41,7 +24,7 @@ kprobe_gen_cmd = @make BPF_CFLAGS="$(BPF_CFLAGS) $(1)" \
 		progs/kprobe.skel.h; \
 		mv progs/kprobe.skel.h progs/$(2).skel.h
 
-ifndef COMPAT_MODE
+ifndef COMPAT
 $(bpf_progs_ext):
 	rm -rf progs/kprobe*.skel.h
 	$(call kprobe_gen_cmd,-DCORE_FULL,kprobe_core)
@@ -65,5 +48,4 @@ pack: all
 clean:
 	rm -rf $(progs) trace_group.c progs/kprobe_trace.h \
 		$(bpf_progs) progs/*.o progs/*.skel.h \
-		vmlinux.h kheaders.h
-
+		kheaders.h

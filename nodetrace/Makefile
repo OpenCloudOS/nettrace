@@ -7,9 +7,6 @@ prog-watch = watch.c $(COMMON_SHARED)
 
 include ../common.mk
 
-$(foreach i,$(bpf_progs),$(i).c):
-	$(call cmd_download,$@,nodetrace/$@)
-
 all: $(progs)
 
 install: all
@@ -22,4 +19,4 @@ pack: all
 		cp watch $(PREFIX)/nodetrace-watch
 
 clean:
-	rm -rf progs/*.skel.h progs/*.o vmlinux.h watch mark kheaders.h
+	rm -rf progs/*.skel.h progs/*.o watch mark

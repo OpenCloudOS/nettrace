@@ -25,15 +25,11 @@
 
 ## 二、安装方法
 
-nettrace是采用C语言编写的基于eBPF（libbpf）的命令行工具，在使用和安装时可以用编译好的RPM包和二进制程序。
+nettrace是采用C语言编写的基于eBPF（libbpf）的命令行工具，在使用和安装时可以用编译好的RPM包和二进制程序。**注意**：本工具目前仅在`4.14`及以上的内核版本上进行过兼容性测试，因此请确保当前的系统所使用的的内核版本在`4.14`以上。
 
-## 2.1 系统要求
+### 2.1 RPM/DEB安装
 
-**注意**：对于支持BTF特性（内核版本 >= 5.3，并且配置了`CONFIG_DEBUG_INFO_BTF=y`内核配置项）的内核，可以直接下载[releases](https://github.com/OpenCloudOS/nettrace/releases)中编译好的`nettrace-xxx-1.btf.x86_64.rpm`、`nettrace-xxx-1.btf.x86_64.deb`安装包进行安装使用，或者下载包含了二进制程序的`nettrace-xxx-1.btf.tar.bz2`压缩包；对于不支持BTF的低版本的内核，需要在对应的系统上手动编译后才能使用。
-
-### 2.2 RPM/DEB安装
-
-对于TencentOS系统，可以直接使用yum命令来进行在线安装：
+对于支持BTF特性（内核版本 >= 5.3，并且配置了`CONFIG_DEBUG_INFO_BTF=y`内核配置项）的内核，可以直接下载[releases](https://github.com/OpenCloudOS/nettrace/releases)中编译好的`nettrace-xxx-1.btf.x86_64.rpm`、`nettrace-xxx-1.btf.x86_64.deb`安装包进行安装使用；对于不支持BTF的低版本的内核，需要在对应的系统上手动编译后才能使用。对于TencentOS系统，可以直接使用yum命令来进行在线安装：
 
 ```shell
 sudo yum install nettrace
@@ -41,26 +37,24 @@ sudo yum install nettrace
 
 也可以直接从[releases](https://github.com/OpenCloudOS/nettrace/releases)中下载对应的RPM/DEB安装包，手动进行安装。
 
-### 2.3 二进制下载
+### 2.2 二进制下载
 
-直接从[releases](https://github.com/OpenCloudOS/nettrace/releases)下载编译好的二进制包也是可以的，[releases](https://github.com/OpenCloudOS/nettrace/releases)中的`tar.bz2`格式的压缩包即为二进制程序。由于里面的工具采用的都是静态编译的方式，因此在内核版本支持的情况下，都是可以直接下载解压后运行的。**再次提醒**：对于不支持BTF的内核版本，最好在对应的环境上编译后使用。
+直接从[releases](https://github.com/OpenCloudOS/nettrace/releases)下载编译好的二进制包也是可以的，[releases](https://github.com/OpenCloudOS/nettrace/releases)中的`tar.bz2`格式的压缩包即为二进制程序。由于里面的工具采用的都是静态编译的方式，因此在内核版本支持的情况下，都是可以直接下载解压后运行的。**再次提醒**：对于不支持BTF的内核版本，需要手动编译才能使用。
 
-### 2.4 手动编译
+### 2.3 手动编译
 
-下面来介绍下如何在Centos、ubuntu等环境上进行nettrace工具的手动编译和安装。本工具目前在4.14/4.15/5.4/5.10/5.18等版本的内核上均进行过适配和测试，更低版本的内核暂未进行适配。
+下面来介绍下如何在Centos、ubuntu等环境上进行nettrace工具的手动编译和安装。本工具目前在4.14/4.15/5.4/5.10/5.18等版本的内核上均进行过适配和测试，更低版本的内核暂未进行适配。对于低版本的发行版，如ubuntu18，建议使用**基于docker**的方式来进行编译。
 
-#### 2.4.1 依赖安装
+#### 2.3.1 依赖安装
 
-本工具在编译的时候依赖于`libelf`、`libbpf`和`bpftool`组件，`clang`和`gcc`编译工具。其中，bpftool二进制程序已经直接预编译好放到源码包的script目录中，因此可以不安装。但是对于版本较高的内核，请尽量从软件仓库安装该工具。
-
-在编译过程中，会优先尝试从`kernel-headers`头文件进行编译。如果头文件不存在（即目录`/lib/modules/$(uname -a)/build`不存在），则会尝试从BTF中构建`vmlinux.h`进行编译。需要注意：nettrace工具（即src目录中的代码）的编译必须要使用`kernel-headers`的方式，因为它用到的一些结构体在内核模块里，BTF中是找不到的。
+本工具在编译的时候依赖于`libelf`、`libbpf`和`bpftool`组件，`clang`和`gcc`编译工具。对于不支持BTF的内核，还需要安装`kernel-headers`头文件，可以通过查看目录`/lib/modules/$(uname -a)/build`是否存在来判断`headers`是否已经被安装了。
 
 ##### ubuntu
 
 对于ubuntu系统，使用以下命令安装依赖：
 
 ```shell
-sudo apt install libelf-dev libbpf-dev linux-headers-`uname -r` clang llvm gcc linux-tools-`uname -r` linux-tools-generic
+sudo apt install libelf-dev libbpf-dev linux-headers-`uname -r` clang llvm gcc linux-tools-`uname -r` linux-tools-generic -y
 ```
 
 注意：如果当前发行版（如ubuntu16,ubuntu18）不支持libbpf-dev，请按照下文提示手动安装libbpf-0.2版本。同时，clang版本要在10+（低版本的测试有问题，暂时还没搞定），ubuntu18+直接安装clang-10 llvm-10即可，ubuntu16需要按照[这里](https://segmentfault.com/a/1190000040827790)的教程安装更新版本的clang。
@@ -70,7 +64,7 @@ sudo apt install libelf-dev libbpf-dev linux-headers-`uname -r` clang llvm gcc l
 对于centos用于，使用以下命令来安装依赖：
 
 ```shell
-sudo yum install elfutils-devel elfutils-devel-static libbpf-devel libbpf-static kernel-headers clang llvm bpftool
+sudo yum install elfutils-devel elfutils-devel-static libbpf-devel libbpf-static kernel-headers kernel-devel clang llvm bpftool -y
 ```
 
 请确保安装的clang版本在10+，如果版本较低请手边编译安装较高版本。在编译过程中，如果因为libbpf导致了编译失败，或者当前发行版没有libbpf可以安装，那么请点击[这里](https://github.com/libbpf/libbpf/releases)下载安装较新版本的libbpf：
@@ -82,7 +76,7 @@ cd libbpf-0.2/src
 make install
 ```
 
-#### 2.4.2 编译
+#### 2.3.2 编译
 
 直接下载nettrace的源码即可进行编译安装：
 
@@ -92,47 +86,42 @@ cd nettrace
 make all
 ```
 
-**注意**：对于不支持BTF的5.X版本的内核，在编译的时候需要加参数`COMPAT=1`，如下所示（4.X版本的内核会自动启用该参数）：
+**注意**：对于不支持BTF的内核（内核版本低于5.3），在编译的时候需要加参数`COMPAT=1`，如下所示：
 
 ```shell
 make COMPAT=1 all
 ```
 
-启用该参数，eBPF程序会以BPF_PROBE_READ的方式来读取数据；否则，eBPF程序会以BPF_CORE_READ的方式来读取。
-
-也可以单独编译其中的某个子工具，例如只编译nettrace命令：
+启用该参数，eBPF程序会以BPF_PROBE_READ的方式来读取数据；否则，eBPF程序会以BPF_CORE_READ的方式来读取。可以使用KERNEL来手动指定要使用的内核源码（内核头文件）：
 
 ```shell
-make -C src all
+make KERNEL=/home/ubuntu/kernel COMPAT=1 all
 ```
 
-可以使用KERNEL来手动指定要使用的内核源码（内核头文件）：
-
-```shell
-make KERNEL=/home/ubuntu/kernel all
-```
-
-对于发行版版本较低，难以安装高版本clang的情况下，可以尝试在高版本上通过指定KERNEL来为低版本的系统编译工具。由于是静态编译，因此编译的二进制是可以在低版本上运行起来的。
-
-也可以使用VMLINUX来指定BTF的源文件（即不使用默认的`/sys/kernel/btf/vmlinux`路径）：
-
-```shell
-make VMLINUX=/home/ubuntu/kernel/vmlinux all
-```
-
-可以手动指定`bpftool`命令的路径：
-```shell
-make BPFTOOL=/usr/lib/linux-tools/5.15.0-43-generic/bpftool all
-```
+对于发行版版本较低，难以安装高版本clang的情况下，可以基于docker来进行代码的编译，具体可参考[2.4](#2.4-基于docker编译)章节来进行安装。
 
 同时，对于`ubuntu 16.04/ubuntu 18.04`系统，其内核似乎存在BUG，即其使用的内核版本实际为4.15.18，uname看到的却是4.15.0。这导致了加载eBPF程序的时候内核版本不一致，无法加载。因此对于这种情况，可以使用KERN_VER参数来手动指定内核版本（计算方式为：`(4<<16) + (15<<8) + 18`）：
 ```shell
-make KERN_VER=266002 all
+make KERN_VER=266002 COMPAT=1 all
 ```
 
-#### 2.4.3 打包
+#### 2.3.3 打包
 
 使用命令`make rpm`可制作rpm包；使用命令`make pack`可制作二进制包（二进制程序打包到压缩包中，默认存放路径为output文件夹）。
+
+### 2.4 基于docker编译
+
+对于**支持BTF**的内核，无需安装任何依赖，可以直接使用以下命令来进行nettrace的编译，其中：`<nettrace path>`要替换成nettrace代码的绝对路径：
+
+```shell
+docker run -it --rm --network=host --privileged -v <nettrace path>:/root/nettrace -v /lib/modules/:/lib/modules/ -v /usr/src/:/usr/src/ imagedong/nettrace-build make -C /root/nettrace/ all
+```
+
+对于**不支持BTF**的系统，这需要先安装`kernel-headers`软件包，如上面的手动编译里面所说的。ubuntu系统使用命令`apt install linux-headers-$(uname -r) -y`进行安装；centos使用命令`yum install kernel-headers kernel-devel -y`进行安装。然后使用下面的命令进行编译：
+
+```shell
+docker run -it --rm --network=host --privileged -v <nettrace path>:/root/nettrace -v /lib/modules/:/lib/modules/ -v /usr/src/:/usr/src/ imagedong/nettrace-build make -C /root/nettrace/ COMPAT=1 all
+```
 
 ## 三、使用方法
 
@@ -572,5 +561,4 @@ begin trace...
 [2025.235953] TCP: 162.241.189.135:46756 -> 172.27.0.6:22 seq:1304582308, ack:1354418612, flags:A, tcp_v4_do_rcv+0x70
 [2025.235967] TCP: 162.241.189.135:46756 -> 172.27.0.6:22 seq:1304582308, ack:1354418612, flags:AP, tcp_v4_do_rcv+0x70
 ```
-
 
