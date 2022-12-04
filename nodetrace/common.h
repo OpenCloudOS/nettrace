@@ -40,15 +40,14 @@ static inline int tc_attach(int prog_fd, char *nic, char *pref,
 		goto err;
 	}
 
-	sprintf(cmd, "tc filter show dev %s %s | grep tc_tmp |"
-		" tail -n 1 | awk '{print $5}'",
-		nic, filter);
-
 	/* get the filter entry that we added. 'pref' of it can be used
 	 * to delete it later.
 	 */
-	FILE *f = popen(cmd, "r");
-	fgets(pref, 16, f);
+	if (execf(pref, "tc filter show dev %s %s | grep tc_tmp |"
+		  " tail -n 1 | awk '{print $5}'", nic,
+		  filter))
+		pr_warn("failed to query pref of tc\n");
+
 	return 0;
 err:
 	return -1;
@@ -57,10 +56,13 @@ err:
 static inline void tc_detach(char *nic, char *pref, bool ingress)
 {
 	char cmd[128], *filter;
+
 	filter = ingress ? "ingress": "egress";
 	snprintf(cmd, sizeof(cmd) - 1,
 		 "tc filter delete dev %s %s pref %s",
 		 nic, filter,
 		 pref);
-	system(cmd);
+
+	if (simple_exec(cmd))
+		pr_warn("failed to detach tc: %s\n", cmd);
 }
