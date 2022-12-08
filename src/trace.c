@@ -179,6 +179,7 @@ static void trace_all_set_ret()
 
 static int trace_prepare_args()
 {
+	trace_t *drop_trace = search_trace_enabled("kfree_skb");
 	trace_args_t *args = &trace_ctx.args;
 	char *traces = args->traces;
 	trace_t *trace;
@@ -195,12 +196,15 @@ static int trace_prepare_args()
 	if (args->intel)
 		trace_ctx.mode = TRACE_MODE_INETL;
 
+	if (args->drop_stack) {
+		if (trace_set_stack(drop_trace))
+			goto err;
+	}
+
 	if (args->drop) {
 		trace_ctx.mode = TRACE_MODE_DROP;
-		traces = "kfree_skb";
-	} else if (args->drop_stack) {
-		pr_err("--drop should be set!\n");
-		goto err;
+		trace_set_enable(drop_trace);
+		goto skip_trace;
 	}
 
 	if (!traces) {
@@ -247,15 +251,11 @@ skip_trace:
 			trace_group_enable("life");
 		break;
 	case TRACE_MODE_BASIC:
+		break;
 	case TRACE_MODE_DROP: {
-		trace_t *drop_trace = search_trace_enabled(traces);
-
 		if (!trace_ctx.drop_reason)
 			pr_warn("skb drop reason is not support by your kernel"
 				", drop reason will not be printed\n");
-
-		if (args->drop_stack && trace_set_stack(drop_trace))
-			goto err;
 		break;
 	}
 	default:
