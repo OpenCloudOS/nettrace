@@ -1,6 +1,8 @@
 #ifndef _H_PROGS_SHARED
 #define _H_PROGS_SHARED
 
+#define MAX_FUNC_STACK 16
+
 #define DEFINE_BPF_ARGS()	\
 	u32  trace_mode;	\
 	u32  pid;		\
@@ -10,7 +12,9 @@
 	bool detail;		\
 	bool hooks;		\
 	bool ready;		\
-	bool nft_high;
+	bool nft_high;		\
+	bool stack;		\
+	u16  stack_funs[MAX_FUNC_STACK];
 
 #include <skb_shared.h>
 
@@ -18,6 +22,9 @@ typedef struct __attribute__((__packed__)) {
 	packet_t	pkt;
 	u64		key;
 	u32		func;
+#ifdef STACK_TRACE
+	u32		stack_id;
+#endif
 } event_t;
 
 typedef struct __attribute__((__packed__)) {

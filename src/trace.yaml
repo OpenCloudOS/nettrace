@@ -200,20 +200,27 @@ children:
     visual: true
     children:
     - ip_rcv:0
+    - ipv6_rcv:0
     - ip_rcv_core:0
+    - ip6_rcv_core:0
     - ip_rcv_finish:2
+    - ip6_rcv_finish:2
     - ip_local_deliver:0
     - ip_local_deliver_finish:2
     - ip_forward:0
+    - ip6_forward:0
     - ip_forward_finish:0
   - name: ip-out
     desc: ip layer of packet out
     visual: true
     children:
     - ip_output:2
+    - ip6_output:2
     - ip_finish_output:2
+    - ip6_finish_output:2
     - ip_finish_output_gso:2
     - ip_finish_output2:2
+    - ip6_finish_output2:2
   - name: ip-route
     desc: ip route for packet in and out
     visual: true
@@ -238,14 +245,24 @@ children:
     visual: true
     children:
     - tcp_v4_rcv:0
+    - tcp_v6_rcv:0
     - tcp_filter:1
     - tcp_child_process:2
     - tcp_v4_send_reset:1
+    - tcp_v6_send_reset:1
     - tcp_v4_do_rcv:1
+    - tcp_v6_do_rcv:1
     - tcp_rcv_established:1
     - tcp_rcv_state_process:1
     - tcp_queue_rcv:1
     - name: __inet_lookup_listener:2
+      analyzer: ret
+      rules:
+      - exp: eq 0
+        level: warn
+        msg: tcp port is not listened
+        adv: check your target tcp port
+    - name: inet6_lookup_listener:2
       analyzer: ret
       rules:
       - exp: eq 0

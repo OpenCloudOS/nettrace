@@ -1,3 +1,5 @@
+#include <parse_sym.h>
+
 #include "trace.h"
 #include "progs/kprobe.skel.h"
 #ifndef COMPAT_MODE
@@ -210,6 +212,28 @@ static void probe_trace_ready()
 	bpf_set_config_field(skel, bss, ready, true);
 }
 
+static void probe_print_stack(int key)
+{
+	int map_fd = bpf_map__fd(skel->maps.m_stack);
+	__u64 ip[PERF_MAX_STACK_DEPTH] = {};
+	struct sym_result *sym;
+	int i = 0;
+
+	if (bpf_map_lookup_elem(map_fd, &key, ip)) {
+		pr_info("Call Stack Error!\n");
+		return;
+	}
+
+	pr_info("Call Stack:\n");
+	for (; i < PERF_MAX_STACK_DEPTH && ip[i]; i++) {
+		sym = parse_sym(ip[i]);
+		if (!sym)
+			break;
+		pr_info("    -> %s\n", sym->desc);
+	}
+	pr_info("\n");
+}
+
 analyzer_t probe_analyzer =  {
 	.mode = TRACE_MODE_INETL_MASK | TRACE_MODE_TIMELINE_MASK,
 	.analy_entry = probe_analy_entry,
@@ -221,5 +245,6 @@ trace_ops_t probe_ops = {
 	.trace_open = probe_trace_open,
 	.trace_close = probe_trace_close,
 	.trace_ready = probe_trace_ready,
+	.print_stack = probe_print_stack,
 	.analyzer = &probe_analyzer,
 };

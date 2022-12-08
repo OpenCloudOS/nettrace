@@ -32,6 +32,7 @@ static struct sym_result *lookup_sym_cache(__u64 pc, bool exact)
 				if (head->pc == pc)
 					return head;
 				sym = head;
+				break;
 			}
 		} else {
 			if (head->start == pc)

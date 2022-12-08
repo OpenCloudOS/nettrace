@@ -142,13 +142,14 @@ static void analy_entry_handle(analy_entry_t *entry)
 {
 	packet_t *pkt = &entry->event->pkt;
 	static char buf[1024], tinfo[128];
+	event_t *e = entry->event;
 	rule_t *rule;
 	trace_t *t;
 
 	t = get_trace_from_analy_entry(entry);
 	pr_debug("output entry(%llx)\n", PTR2X(entry));
 	if (trace_ctx.detail) {
-		detail_event_t *detail = (void *)entry->event;
+		detail_event_t *detail = (void *)e;
 		static char ifbuf[IF_NAMESIZE];
 		char *ifname = detail->ifname;
 
@@ -195,6 +196,8 @@ static void analy_entry_handle(analy_entry_t *entry)
 	}
 out:
 	pr_info("%s\n", buf);
+	if (trace_is_stack(t))
+		trace_ctx.ops->print_stack(e->stack_id);
 }
 
 static void analy_ctx_free(analy_ctx_t *ctx)

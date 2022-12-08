@@ -25,11 +25,15 @@ kprobe_gen_cmd = @make BPF_CFLAGS="$(BPF_CFLAGS) $(1)" \
 		mv progs/kprobe.skel.h progs/$(2).skel.h
 
 ifndef COMPAT
+	CFLAGS += -DSTACK_TRACE
 $(bpf_progs_ext):
 	rm -rf progs/kprobe*.skel.h
 	$(call kprobe_gen_cmd,-DCORE_FULL,kprobe_core)
 	make progs/kprobe.skel.h
 else
+ifneq ($(shell grep -c get_stackid $(HEADERS)/include/uapi/linux/bpf.h),0)
+	CFLAGS += -DSTACK_TRACE
+endif
 $(bpf_progs_ext): %: %.skel.h
 	@:
 endif

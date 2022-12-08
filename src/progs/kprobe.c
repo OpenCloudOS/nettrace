@@ -19,6 +19,15 @@ struct {
 	__uint(max_entries, TRACE_MAX);
 } m_ret SEC(".maps");
 
+#ifdef STACK_TRACE
+struct {
+	__uint(type, BPF_MAP_TYPE_STACK_TRACE);
+	__uint(max_entries, 16384);
+	__uint(key_size, sizeof(__u32));
+	__uint(value_size, sizeof(stack_trace_t));
+} m_stack SEC(".maps");
+#endif
+
 #ifdef KERN_VER
 __u32 kern_ver SEC("version") = KERN_VER;
 #endif
@@ -64,8 +73,38 @@ static try_inline int put_ret(int func)
 	return 0;
 }
 
-static try_inline int handle_entry(void *regs, struct sk_buff *skb, event_t *e,
-			       int size, int func)
+#ifdef STACK_TRACE
+static try_inline void try_trace_stack(void *regs, bpf_args_t *bpf_args,
+				       event_t *e, int func)
+{
+	int i = 0, key;
+	u16 *funcs;
+
+	if (!ARGS_GET(stack))
+		return;
+
+	funcs = ARGS_GET(stack_funs);
+
+#pragma unroll
+	for (; i < MAX_FUNC_STACK; i++) {
+		if (!funcs[i])
+			break;
+		if (funcs[i] == func)
+			goto do_stack;
+	}
+	return;
+
+do_stack:
+	key = bpf_get_stackid(regs, &m_stack, 0);
+	e->stack_id = key;
+}
+#else
+static try_inline void try_trace_stack(void *regs, bpf_args_t *bpf_args,
+				       event_t *e, int func) { }
+#endif
+
+static try_inline int handle_entry(void *regs, struct sk_buff *skb,
+				   event_t *e, int size, int func)
 {
 	packet_t *pkt = &e->pkt;
 	bool *matched;
@@ -111,6 +150,7 @@ skip_life:
 	}
 
 out:
+	try_trace_stack(regs, bpf_args, e, func);
 	pkt->ts = bpf_ktime_get_ns();
 	e->key = (u64)(void *)skb;
 
@@ -129,8 +169,8 @@ static try_inline int handle_destroy(struct sk_buff *skb)
 }
 
 static try_inline int default_handle_entry(struct pt_regs *ctx,
-				       struct sk_buff *skb,
-				       int func)
+					   struct sk_buff *skb,
+					   int func)
 {
 	if (ARGS_GET_CONFIG(detail)) {
 		detail_event_t e = { .func = func };

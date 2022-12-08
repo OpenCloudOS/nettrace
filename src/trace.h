@@ -23,6 +23,7 @@ struct analyzer;
 #define TRACE_ENABLE	(1 << 1)
 #define TRACE_INVALID	(1 << 2)
 #define TRACE_RET	(1 << 3)
+#define TRACE_STACK	(1 << 4)
 
 #define trace_for_each(pos) list_for_each_entry(pos, &trace_list, sibling)
 
@@ -63,6 +64,7 @@ typedef struct trace_args {
 	bool basic;
 	bool drop;
 	bool date;
+	bool drop_stack;
 	char *traces;
 } trace_args_t;
 
@@ -75,6 +77,7 @@ typedef struct {
 	int (*trace_anal)(event_t *e);
 	void (*trace_close)();
 	void (*trace_ready)();
+	void (*print_stack)(int key);
 	struct analyzer *analyzer;
 } trace_ops_t;
 
@@ -134,6 +137,31 @@ static inline void trace_set_ret(trace_t *t)
 static inline bool trace_is_ret(trace_t *t)
 {
 	return t->status & TRACE_RET;
+}
+
+static inline int trace_set_stack(trace_t *t)
+{
+	int i = 0;
+
+	for (; i < MAX_FUNC_STACK; i++) {
+		if (!trace_ctx.bpf_args.stack_funs[i]) {
+			trace_ctx.bpf_args.stack_funs[i] = t->index;
+			break;
+		}
+	}
+	if (i == MAX_FUNC_STACK) {
+		pr_err("stack trace is full!\n");
+		return -1;
+	}
+
+	trace_ctx.bpf_args.stack = true;
+	t->status |= TRACE_STACK;
+	return 0;
+}
+
+static inline bool trace_is_stack(trace_t *t)
+{
+	return t->status & TRACE_STACK;
 }
 
 static inline void trace_stop()
