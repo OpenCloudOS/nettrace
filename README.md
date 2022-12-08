@@ -153,6 +153,7 @@ Usage:
     --diag-keep      don't quit when abnormal packet found
     --hooks          print netfilter hooks if dropping by netfilter
     --drop           skb drop monitor mode, for replace of 'droptrace'
+    --drop-stack     print the kernel function call stack of kfree_skb
 
     -v               show log information
     --debug          show debug information
@@ -171,6 +172,7 @@ Usage:
 - `diag-keep`：持续跟踪。`diag`模式下，默认在跟踪到异常报文后会停止跟踪，使用该参数后，会持续跟踪下去。
 - `hooks`：结合netfilter做的适配，详见下文
 - `drop`：进行系统丢包监控，取代原先的`droptrace`
+- `drop-stack`: 打印kfree_skb内核函数的调用堆栈
 
 下面我们首先来看一下默认模式下的工具使用方法。
 

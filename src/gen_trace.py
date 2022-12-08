@@ -49,7 +49,7 @@ def gen_group_init(group, name):
 
 global_status = {}
 global_names = {}
-global_status['trace_index'] = 0
+global_status['trace_index'] = 1
 
 rule_levels = {
     'info': 'RULE_INFO',
