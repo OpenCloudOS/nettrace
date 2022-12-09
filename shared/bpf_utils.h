@@ -50,13 +50,13 @@ extern long int syscall (long int __sysno, ...);
 	bpf_map_update_elem(fd, &key, args, 0);		\
 } while (0)
 
-void
+int
 perf_output_cond(int fd, perf_buffer_sample_fn cb, perf_buffer_lost_fn lost,
 		 bool *stop);
 
-static inline void perf_output(int fd, perf_buffer_sample_fn fn)
+static inline int perf_output(int fd, perf_buffer_sample_fn fn)
 {
-	perf_output_cond(fd, fn, NULL, NULL);
+	return perf_output_cond(fd, fn, NULL, NULL);
 }
 
 int compat_bpf_attach_kprobe(int fd, char *name, bool ret);
