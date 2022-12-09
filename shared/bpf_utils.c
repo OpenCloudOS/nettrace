@@ -14,27 +14,29 @@
 
 #include "bpf_utils.h"
 
-void
-perf_output_cond(int fd, perf_buffer_sample_fn cb, perf_buffer_lost_fn lost,
+int
+perf_output_cond(int fd, perf_buffer_sample_fn callback,
+		 perf_buffer_lost_fn lost_cb,
 		 bool *stop)
 {
 	struct perf_buffer_opts pb_opts = {
-		.sample_cb = cb,
-		.lost_cb = lost,
+		.sample_cb = callback,
+		.lost_cb = lost_cb,
 	};
 	struct perf_buffer *pb;
-	int ret;
+	int err;
 
 	pb = perf_buffer__new(fd, 1024, &pb_opts);
-	ret = libbpf_get_error(pb);
-	if (ret) {
-		printf("failed to setup perf_buffer: %d\n", ret);
-		return;
+	err = libbpf_get_error(pb);
+	if (err) {
+		printf("failed to setup perf_buffer: %d\n", err);
+		return err;
 	}
 
-	while ((ret = perf_buffer__poll(pb, 1000)) >= 0)
+	while ((err = perf_buffer__poll(pb, 1000)) >= 0)
 		if (stop && *stop)
 			break;
+	return 0;
 }
 
 int compat_bpf_attach_kprobe(int fd, char *name, bool ret)
