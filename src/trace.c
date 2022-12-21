@@ -233,6 +233,13 @@ static int trace_prepare_args()
 	free(tmp);
 
 skip_trace:
+	if (!debugfs_mounted()) {
+		pr_err("debugfs is not mounted! Please mount it with the "
+		       "command: mount -t debugfs debugfs "
+		       "/sys/kernel/debug\n");
+		goto err;
+	}
+
 	if (drop_reason_support()) {
 		trace_ctx.bpf_args.drop_reason = true;
 		trace_ctx.drop_reason = true;

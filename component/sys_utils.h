@@ -18,6 +18,7 @@ int	exec(char *cmd, char *output);
 int	liberate_l();
 bool	fsearch(FILE *f, char *target);
 int	kernel_version();
+bool	debugfs_mounted();
 
 static inline int simple_exec(char *cmd)
 {
