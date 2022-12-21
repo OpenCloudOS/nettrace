@@ -80,3 +80,8 @@ int kernel_version()
 
 	return kv_to_num(major, minor, patch);
 }
+
+bool debugfs_mounted()
+{
+	return simple_exec("mount | grep debugfs") == 0;
+}
