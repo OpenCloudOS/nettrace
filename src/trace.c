@@ -274,7 +274,7 @@ skip_trace:
 		switch (trace_ctx.mode) {
 		case TRACE_MODE_BASIC:
 			pr_err("return value trace is only supported on "
-			       "'timeline' and 'intel' mode\n");
+			       "'timeline' and 'diag' mode\n");
 			goto err;
 		case TRACE_MODE_TIMELINE:
 			trace_all_set_ret();
