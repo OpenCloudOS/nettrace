@@ -5,6 +5,12 @@
 #define MAX_SYM_LENGTH		128
 #define MAX_SYM_ADDR_LENGTH	(MAX_SYM_LENGTH + 8)
 
+enum {
+	SYM_NOT_EXIST,
+	SYM_MODULE,
+	SYM_KERNEL
+};
+
 struct sym_result {
 	char name[MAX_SYM_LENGTH];
 	__u64 start;
@@ -16,3 +22,4 @@ struct sym_result {
 
 struct sym_result *parse_sym_exact(__u64 pc);
 struct sym_result *parse_sym(__u64 pc);
+int check_sym(char *name);
