@@ -144,7 +144,7 @@ int main(int argc, char *argv[])
 		goto err;
 
 	set_trace_ops(&probe_ops);
-	if (trace_bpf_load()) {
+	if (trace_bpf_attach()) {
 		pr_err("failed to load kprobe-based bpf\n");
 		goto err;
 	}

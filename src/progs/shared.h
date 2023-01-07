@@ -89,22 +89,4 @@ typedef enum trace_mode {
 #define TRACE_MODE_INETL_MASK		(1 << TRACE_MODE_INETL)
 #define TRACE_MODE_DROP_MASK		(1 << TRACE_MODE_DROP)
 
-struct _xt_action_param {
-	void *arg1;
-	void *arg2;
-	void *state;
-};
-
-struct _nft_pktinfo {
-	void			*skb;
-	bool			tprot_set;
-	u8			tprot;
-	struct _xt_action_param	xt;
-};
-
-struct _nft_pktinfo_new {
-	void	*skb;
-	void	*state;
-};
-
 #endif

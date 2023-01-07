@@ -6,6 +6,7 @@
 #include <stdbool.h>
 
 #include "parse_sym.h"
+#include "sys_utils.h"
 
 #define SWAP(a, b) { typeof(a) _tmp = (b); (b) = (a); (a) = _tmp; }
 
@@ -120,4 +121,18 @@ struct sym_result *parse_sym_exact(__u64 pc)
 	if (!pc)
 		return NULL;
 	return lookup_sym_cache(pc, true) ?: lookup_sym_proc(pc, true);
+}
+
+int check_sym(char *name)
+{
+	char output[256], m[128];
+	__u64 pc;
+
+	if (execf(output, "grep ' %s[[:space:]]' /proc/kallsyms", name) != 0)
+		return SYM_NOT_EXIST;
+
+	if (sscanf(output, "%llx %*s %*s %s", &pc, m) == 1)
+		return SYM_KERNEL;
+
+	return SYM_MODULE;
 }

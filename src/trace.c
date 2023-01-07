@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <list.h>
 
+#include <parse_sym.h>
+
 #include "nettrace.h"
 #include "trace.h"
 #include "analysis.h"
@@ -125,29 +127,6 @@ int trace_group_enable(char *name)
 	if (!g)
 		return -1;
 	_trace_group_enable(g);
-	return 0;
-}
-
-static int trace_prepare_trace(trace_t *trace)
-{
-	char *if_str = trace->if_str;
-	char cmd[256], cond[4] = {};
-	int kv, ret;
-
-	if (!if_str)
-		return 0;
-
-	if (sscanf(if_str, "kernelVersion %2[><=] %d", cond,
-		   &kv) != 2) {
-		pr_err("if condition error: %s\n", if_str);
-		return -1;
-	}
-
-	sprintf(cmd, "uname -r | awk -F '.' '$1*100+$2%s%d{exit 1}'",
-		cond, kv);
-	ret = simple_exec(cmd);
-	if (ret != 1)
-		trace->status &= ~TRACE_ENABLE;
 	return 0;
 }
 
@@ -274,7 +253,7 @@ skip_trace:
 		switch (trace_ctx.mode) {
 		case TRACE_MODE_BASIC:
 			pr_err("return value trace is only supported on "
-			       "'timeline' and 'intel' mode\n");
+			       "'timeline' and 'diag' mode\n");
 			goto err;
 		case TRACE_MODE_TIMELINE:
 			trace_all_set_ret();
@@ -296,6 +275,35 @@ err:
 	return -1;
 }
 
+static int trace_prepare_traces()
+{
+	int sym_type;
+
+	/* high version kernel (>=5.4) use (struct sk_buff**) */
+	if (kv_compare(5, 4, 0) < 0)
+		trace_set_invalid(&trace___netif_receive_skb_core_pskb);
+	else
+		trace_set_invalid(&trace___netif_receive_skb_core);
+
+	sym_type = check_sym("nft_do_chain");
+	if (sym_type == SYM_NOT_EXIST) {
+		trace_set_invalid(&trace_nft_do_chain_compat);
+		trace_set_invalid(&trace_nft_do_chain);
+	} else if (!kernel_has_config("DEBUG_INFO_BTF_MODULES") &&
+		   sym_type == SYM_MODULE) {
+
+		/* BTF modules is not supported and nft is a modules, we
+		 * need to use compat mode, which will not use CO-RE
+		 * read.
+		 */
+		trace_set_invalid(&trace_nft_do_chain);
+	} else {
+		trace_set_invalid(&trace_nft_do_chain_compat);
+	}
+
+	return 0;
+}
+
 int trace_prepare()
 {
 	trace_t *trace;
@@ -303,16 +311,13 @@ int trace_prepare()
 	if (trace_prepare_args())
 		return -1;
 
-	trace_for_each(trace) {
-		if (!trace_is_enable(trace))
-			continue;
-		if (trace_prepare_trace(trace))
-			return -1;
-	}
+	if (trace_prepare_traces())
+		return -1;
+
 	return 0;
 }
 
-static int trace_bpf_open()
+static int trace_bpf_load()
 {
 	/* skel is already opened */
 	if (trace_ctx.obj)
@@ -321,20 +326,20 @@ static int trace_bpf_open()
 	if (liberate_l())
 		pr_warn("failed to set rlimit\n");
 
-	return trace_ctx.ops->trace_open();
+	return trace_ctx.ops->trace_load();
 }
 
-int trace_bpf_load()
+int trace_bpf_attach()
 {
 	trace_t *trace;
 
-	if (trace_bpf_open())
+	if (trace_bpf_load())
 		goto err;
 
 	trace_for_each(trace) {
-		if (!trace_is_enable(trace))
+		if (!trace_is_enable(trace) || trace_is_invalid(trace))
 			continue;
-		if (trace_ctx.ops->trace_load(trace)) {
+		if (trace_ctx.ops->trace_attach(trace)) {
 			trace_ctx.ops->trace_close();
 			goto err;
 		}

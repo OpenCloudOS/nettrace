@@ -2,9 +2,6 @@
 
 #include "trace.h"
 #include "progs/kprobe.skel.h"
-#ifndef COMPAT_MODE
-#include "progs/kprobe_core.skel.h"
-#endif
 #include "analysis.h"
 #include "nettrace.h"
 #include "analysis.h"
@@ -13,6 +10,7 @@
 
 struct list_head cpus[MAX_CPU_COUNT];
 trace_ops_t probe_ops;
+static struct kprobe *skel;
 
 static int bpf_kprobe_attach(struct bpf_program *prog, char *name, bool ret)
 {
@@ -22,7 +20,7 @@ static int bpf_kprobe_attach(struct bpf_program *prog, char *name, bool ret)
 	return compat_bpf_attach_kprobe(bpf_program__fd(prog), name, ret);
 }
 
-static int probe_trace_load(trace_t *trace)
+static int probe_trace_attach(trace_t *trace)
 {
 	char tmp[128], *regex, _regex[128],
 	     *target = trace->name;
@@ -99,26 +97,39 @@ err:
 	return -1;
 }
 
-#define LOAD_SKEL(name)					\
-	skel = (void *) name##__open();			\
-	if (skel && !name##__load((void *)skel))	\
-		goto load_success;			\
-	pr_warn("failed to load skel: " #name "\n")
+static int probe_trace_pre_load()
+{
+	struct bpf_program *prog;
+	trace_t *trace;
 
-static struct kprobe *skel;
-static int probe_trace_open()
+	trace_for_each(trace) {
+		if (!trace_is_invalid(trace) && trace_is_enable(trace))
+			continue;
+
+		prog = bpf_object__find_program_by_name(skel->obj,
+							trace->prog);
+		if (!prog) {
+			pr_err("prog: %s not founded\n", trace->prog);
+			continue;
+		}
+		bpf_program__set_autoload(prog, false);
+		pr_debug("prog: %s is made no-autoload\n", trace->prog);
+	}
+
+	return 0;
+}
+
+static int probe_trace_load()
 {
 	int i = 0;
 
-#ifndef COMPAT_MODE
-	LOAD_SKEL(kprobe_core);
-#endif
-	LOAD_SKEL(kprobe);
+	skel = kprobe__open();
+	if (!skel || probe_trace_pre_load() || kprobe__load(skel)) {
+		pr_err("failed to load kprobe-based eBPF\n");
+		goto err;
+	}
 
-	pr_err("failed to load kprobe-based eBPF\n");
-	goto err;
-
-load_success:
+	pr_debug("eBPF is opened successfully\n");
 	bpf_set_config(skel, bss, trace_ctx.bpf_args);
 	trace_ctx.obj = skel->obj;
 
@@ -241,8 +252,8 @@ analyzer_t probe_analyzer =  {
 };
 
 trace_ops_t probe_ops = {
+	.trace_attach = probe_trace_attach,
 	.trace_load = probe_trace_load,
-	.trace_open = probe_trace_open,
 	.trace_close = probe_trace_close,
 	.trace_ready = probe_trace_ready,
 	.print_stack = probe_print_stack,

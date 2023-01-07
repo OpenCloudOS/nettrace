@@ -52,10 +52,8 @@ children:
         msg: XDP failed to redirect skb
         adv: check if the target ifindex exist
     - name: __netif_receive_skb_core:0
-      if: kernelVersion < 504
     - name: __netif_receive_skb_core_pskb
       target: __netif_receive_skb_core
-      if: kernelVersion >= 504 # high version kernel use (struct sk_buff**)
   - name: link-out
     desc: link layer (L2) of packet out
     visual: true
@@ -145,8 +143,11 @@ children:
       - exp: eq 1
         level: info
         msg: packet is accepted
-    - name: nft_do_chain
+    - name:
+      - nft_do_chain
+      - nft_do_chain_compat
       analyzer: iptable
+      target: nft_do_chain
       rules:
       - exp: eq 0
         level: error
