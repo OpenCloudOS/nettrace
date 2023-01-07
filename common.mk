@@ -80,7 +80,7 @@ progs/%.o: progs/%.c $(BPF_EXTRA_DEP)
 	@file $@ | grep debug_info > /dev/null || (rm $@ && exit 1)
 
 %.skel.h: %.o
-	$(BPFTOOL) gen skeleton $< $(SKEL_FLAGS) > $@
+	$(BPFTOOL) gen skeleton $< > $@
 
 $(bpf_progs): %: %.skel.h
 	@:

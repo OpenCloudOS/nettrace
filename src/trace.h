@@ -36,9 +36,11 @@ typedef struct trace_group {
 } trace_group_t;
 
 typedef struct trace {
+	/* name of the kernel function this trace targeted */
 	char	*name;
 	char	*desc;
 	char	*msg;
+	/* name of the eBPF program */
 	char	*prog;
 	enum trace_type type;
 	char	*if_str;
@@ -52,6 +54,7 @@ typedef struct trace {
 	u32	status;
 	trace_group_t *parent;
 	struct analyzer *analyzer;
+	/* if this trace should be enabled by default */
 	bool	def;
 } trace_t;
 
@@ -70,9 +73,9 @@ typedef struct trace_args {
 
 typedef struct {
 	/* open and initialize the bpf program */
-	int (*trace_open)();
+	int (*trace_load)();
 	/* load and attach the bpf program */
-	int (*trace_load)(trace_t *trace);
+	int (*trace_attach)(trace_t *trace);
 	void (*trace_poll)(void *ctx, int cpu, void *data, u32 size);
 	int (*trace_anal)(event_t *e);
 	void (*trace_close)();
@@ -107,6 +110,11 @@ extern trace_group_t root_group;
 extern int trace_count;
 extern struct list_head trace_list;
 
+#define FNC(name)		extern trace_t trace_##name;
+#define FN(name, index)		FNC(name)
+#define FN_tp(name, a1, a2, a3) FNC(name)
+_DEFINE_PROBE(FN, FN_tp)
+
 static inline trace_t *get_trace(int index)
 {
 	if (index < 0 || index > TRACE_MAX)
@@ -127,6 +135,18 @@ static inline void trace_set_enable(trace_t *t)
 static inline bool trace_is_enable(trace_t *t)
 {
 	return t->status & TRACE_ENABLE;
+}
+
+static inline void trace_set_invalid(trace_t *t)
+{
+	pr_debug("trace name=%s, prog=%s is made invalid\n", t->name,
+		 t->prog);
+	t->status |= TRACE_INVALID;
+}
+
+static inline bool trace_is_invalid(trace_t *t) 
+{
+	return t->status & TRACE_INVALID;
 }
 
 static inline void trace_set_ret(trace_t *t)
@@ -185,7 +205,7 @@ trace_group_t *search_trace_group(char *name);
 int trace_enable(char *name);
 int trace_group_enable(char *name);
 int trace_prepare();
-int trace_bpf_load();
+int trace_bpf_attach();
 int trace_poll();
 bool trace_analyzer_enabled(struct analyzer *analyzer);
 

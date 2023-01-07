@@ -39,23 +39,6 @@ struct {
 	__uint(value_size, sizeof(u8));
 } m_lookup SEC(".maps");
 
-enum args_status {
-	ARGS_END_OFFSET,
-	ARGS_STACK_OFFSET,
-	ARGS_RET_OFFSET,
-	ARGS_RET_ONLY_OFFSET,
-};
-
-#define ARGS_END	(1 << ARGS_END_OFFSET)
-#define ARGS_STACK	(1 << ARGS_STACK_OFFSET)
-#define ARGS_RET	(1 << ARGS_RET_OFFSET)
-#define ARGS_RET_ONLY	(1 << ARGS_RET_ONLY_OFFSET)
-
-typedef struct {
-	u16	func;
-	u16	status;
-} args_t;
-
 static try_inline void get_ret(int func)
 {
 	int *ref = bpf_map_lookup_elem(&m_ret, &func);
@@ -206,24 +189,29 @@ static try_inline int handle_exit(struct pt_regs *regs, int func)
 	return 0;
 }
 
-#define DEFINE_KPROBE_RAW(name, skb_init)			\
+/* one trace may have more than one implement */
+#define __DEFINE_KPROBE_RAW(name, trace, skb_init)		\
 	static try_inline int fake__##name(struct pt_regs *ctx,	\
 				       struct sk_buff *skb,	\
 				       int func);		\
 	SEC("kretprobe/"#name)					\
 	int BPF_KPROBE(ret__trace_##name)			\
 	{							\
-		return handle_exit(ctx, INDEX_##name);		\
+		return handle_exit(ctx, INDEX_##trace);		\
 	}							\
 	SEC("kprobe/"#name)					\
 	int BPF_KPROBE(__trace_##name)				\
 	{							\
 		struct sk_buff *skb = (void *)skb_init;		\
-		return fake__##name(ctx, skb, INDEX_##name);	\
+		return fake__##name(ctx, skb, INDEX_##trace);	\
 	}							\
 	static try_inline int fake__##name(struct pt_regs *ctx,	\
 				       struct sk_buff *skb,	\
 				       int func)
+
+#define DEFINE_KPROBE_RAW(name, skb_init)			\
+	__DEFINE_KPROBE_RAW(name, name, skb_init)
+
 #define DEFINE_KPROBE(name, skb_index)				\
 	DEFINE_KPROBE_RAW(name, PT_REGS_PARM##skb_index(ctx))
 
@@ -248,6 +236,8 @@ static try_inline int handle_exit(struct pt_regs *regs, int func)
 	{							\
 		return default_handle_entry(ctx, skb, func);	\
 	}
+#define FNC(name)
+
 _DEFINE_PROBE(KPROBE_DEFAULT, TP_DEFAULT)
 
 struct kfree_skb_args {
@@ -346,35 +336,10 @@ out:
 	return 0;
 }
 
-DEFINE_KPROBE_RAW(nft_do_chain, NULL)
-{
-	struct nft_pktinfo *pkt = (void *)PT_REGS_PARM1(ctx);
-	nf_event_t e = { .event = { .func = func, } };
-	struct nf_hook_state *state;
-	struct nft_chain *chain;
-	struct nft_table *table;
+#undef NFT_COMPAT
+#include "nft_do_chain.c"
 
-	skb = (struct sk_buff *)_(pkt->skb);
-	if (handle_entry(ctx, skb, &e.event, 0, func))
-		return 0;
-
-	if (ARGS_GET_CONFIG(nft_high))
-		state = _(((struct _nft_pktinfo_new *)pkt)->state);
-	else
-		state = _(((struct _nft_pktinfo *)pkt)->xt.state);
-
-	chain	= (void *)PT_REGS_PARM2(ctx);
-	table	= _CT(chain, table);
-	e.hook	= _C(state, hook);
-	e.pf	= _C(state, pf);
-
-	bpf_probe_read_kernel_str(e.chain, sizeof(e.chain),
-				  _CT(chain, name));
-	bpf_probe_read_kernel_str(e.table, sizeof(e.table),
-				  _CT(table, name));
-
-	EVENT_OUTPUT(ctx, e);
-	return 0;
-}
+#define NFT_COMPAT
+#include "nft_do_chain.c"
 
 char _license[] SEC("license") = "GPL";
