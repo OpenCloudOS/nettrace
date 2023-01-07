@@ -85,3 +85,9 @@ bool debugfs_mounted()
 {
 	return simple_exec("mount | grep debugfs") == 0;
 }
+
+bool kernel_has_config(char *name)
+{
+	return execf(NULL, "zcat /proc/config.gz | grep 'CONFIG_%s=y'",
+		     name) == 0;
+}
