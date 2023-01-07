@@ -178,6 +178,12 @@ static try_inline bool ipv6_not_equel(u8 *src, u8 *target)
 #define ATTR_IPV6_CHECK()				\
 	(filter && ATTR_OPS(addr, ATTR_IPV6_OPS))
 
+struct ip_esp_hdr {
+	__be32 spi;
+	__be32 seq_no;		/* Sequence number */
+	__u8  enc_data[0];	/* Variable len but >=8. Mind the 64 bit alignment! */
+};
+
 static try_inline int probe_parse_ip(void *ip, parse_ctx_t *ctx)
 {
 	pkt_args_t *bpf_args = ctx->args;
@@ -267,6 +273,14 @@ static try_inline int probe_parse_ip(void *ip, parse_ctx_t *ctx)
 		pkt->l4.icmp.type = _(icmp->type);
 		pkt->l4.icmp.seq = _(icmp->un.echo.sequence);
 		pkt->l4.icmp.id = _(icmp->un.echo.id);
+		break;
+	}
+        case 50: {
+		struct ip_esp_hdr *esp_hdr = l4;
+		if (ATTR_ENABLE(port))
+			goto err;
+		pkt->l4.espheader.seq = _(esp_hdr->seq_no);
+		pkt->l4.espheader.spi = _(esp_hdr->spi);
 		break;
 	}
 	default:
