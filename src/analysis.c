@@ -476,7 +476,7 @@ DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_INETL_MASK |
 	struct sym_result *sym;
 
 	reason = get_drop_reason(event->reason);
-	sym = parse_sym(event->location);
+	sym = sym_parse(event->location);
 	sym_str = sym ? sym->desc : "unknow";
 
 	info = malloc(1024);
@@ -588,7 +588,7 @@ DEFINE_ANALYZER_EXIT(nf, TRACE_MODE_INETL_MASK)
 
 		if (!hook)
 			break;
-		sym = parse_sym_exact(hook);
+		sym = sym_parse_exact(hook);
 		if (sym)
 			sprintf_end(extinfo, "\t%s\n", sym->name);
 		else

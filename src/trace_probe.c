@@ -237,7 +237,7 @@ static void probe_print_stack(int key)
 
 	pr_info("Call Stack:\n");
 	for (; i < PERF_MAX_STACK_DEPTH && ip[i]; i++) {
-		sym = parse_sym(ip[i]);
+		sym = sym_parse(ip[i]);
 		if (!sym)
 			break;
 		pr_info("    -> %s\n", sym->desc);
