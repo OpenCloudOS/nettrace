@@ -141,7 +141,7 @@ static inline void analy_entry_free(analy_entry_t *entry)
 static void analy_entry_handle(analy_entry_t *entry)
 {
 	packet_t *pkt = &entry->event->pkt;
-	static char buf[1024], tinfo[128];
+	static char buf[1024], tinfo[256];
 	event_t *e = entry->event;
 	rule_t *rule;
 	trace_t *t;
