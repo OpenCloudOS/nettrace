@@ -40,6 +40,11 @@ typedef struct __attribute__((__packed__)) {
 		struct {
 			u16	op;
 		} arp_ext;
+		struct
+        	{
+                	u32 spi;
+                	u32 seq;
+        	} espheader;
 #define field_udp l4.udp
 	} l4;
 	u16 proto_l3;

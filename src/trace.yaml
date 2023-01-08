@@ -222,6 +222,25 @@ children:
     - ip_finish_output_gso:2
     - ip_finish_output2:2
     - ip6_finish_output2:2
+    - xfrm4_output:2
+    - xfrm_output:1
+    - xfrm_output2:2
+    - xfrm_output_gso:2
+    - xfrm_output_resume:1
+    - xfrm4_transport_output:1
+    - xfrm4_prepare_output:1
+    - dst_output:2
+    - ah_output:1
+    - esp_output:1
+    - esp_output_tail:1
+    - xfrm4_rcv:0
+    - xfrm4_policy_check:2
+    - xfrm4_rcv:0
+    - xfrm_input:0
+    - ah_input:1
+    - esp_input:1
+    - xfrm4_transport_input:1
+    - xfrm4_rcv_encap_finish:2
   - name: ip-route
     desc: ip route for packet in and out
     visual: true
