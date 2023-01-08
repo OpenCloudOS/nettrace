@@ -1,11 +1,10 @@
-LIBBPF		?= /usr/include/bpf
 COMPONENT	:= $(ROOT)/component
 COMMON_SHARED	:= $(ROOT)/shared/pkt_utils.c $(COMPONENT)/net_utils.c	\
 		   $(COMPONENT)/arg_parse.c $(COMPONENT)/sys_utils.c	\
 		   $(ROOT)/shared/bpf_utils.c
 
 CFLAGS		+= -I./ -I$(ROOT)/shared/bpf/
-BPF_CFLAGS	= $(CFLAGS) -I$(LIBBPF) -Wno-unused-function
+BPF_CFLAGS	= $(CFLAGS) -Wno-unused-function
 HOST_CFLAGS	= \
 		-lbpf -lelf -lz -g -O2 -static $(CFLAGS) \
 		-Wno-deprecated-declarations \
@@ -25,7 +24,8 @@ USERINCLUDE	:= \
 		-I$(HEADERS)/arch/$(SRCARCH)/include/generated/uapi \
 		-I$(HEADERS)/include/uapi \
 		-I$(HEADERS)/include/generated/uapi \
-		-include $(HEADERS)/include/linux/kconfig.h
+		-include $(HEADERS)/include/linux/kconfig.h \
+		-I/usr/include/
 
 LINUXINCLUDE	:= \
 		-I$(HEADERS)/arch/$(SRCARCH)/include \
