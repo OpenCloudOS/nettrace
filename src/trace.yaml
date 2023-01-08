@@ -98,14 +98,6 @@ children:
       analysis: ret
       msg: ebtable in POST_ROUTING
       rules: *rules_nf
-    - name: br_nf_post_routing:1
-      analysis: ret
-      msg: ebtable in POST_ROUTING
-      rules: *rules_nf
-    - name: br_nf_post_routing:1
-      analysis: ret
-      msg: ebtable in POST_ROUTING
-      rules: *rules_nf
   - name: arp
     visual: true
     desc: arp protocol
