@@ -3,17 +3,51 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <stdbool.h>
 
 #include "parse_sym.h"
 #include "sys_utils.h"
 
 #define SWAP(a, b) { typeof(a) _tmp = (b); (b) = (a); (a) = _tmp; }
 
+static char *proc_syms = NULL;
 struct sym_result *result_list;
 struct loc_result *loc_list;
 
-static void add_sym_cache(struct sym_result *result)
+static int sym_init_data()
+{
+	size_t size = 1024 * 1024 * 4; // begin with 4M
+	size_t left = size;
+	char *cur, *tmp;
+	int count;
+	FILE *f;
+
+	if (proc_syms)
+		return 0;
+
+	f = fopen("/proc/kallsyms", "r");
+	if (!f) {
+		pr_err("/proc/kallsyms is not founded!\n");
+		exit(-1);
+	}
+
+	proc_syms = malloc(size);
+	cur = proc_syms;
+	while (true) {
+		count = fread(cur, sizeof(char), size + proc_syms - cur,
+			      f);
+		if (feof(f))
+			break;
+
+		size *= 2;
+		tmp = realloc(proc_syms, size);
+		cur = tmp + (cur - proc_syms) + count;
+		proc_syms = tmp;
+	}
+
+	return 0;
+}
+
+static void sym_add_cache(struct sym_result *result)
 {
 	if (!result_list) {
 		result_list = result;
@@ -24,7 +58,7 @@ static void add_sym_cache(struct sym_result *result)
 	result_list = result;
 }
 
-static struct sym_result *lookup_sym_cache(__u64 pc, bool exact)
+static struct sym_result *sym_lookup_cache(__u64 pc, bool exact)
 {
 	struct sym_result *head = result_list, *sym = NULL;
 	while (head) {
@@ -49,11 +83,11 @@ static struct sym_result *lookup_sym_cache(__u64 pc, bool exact)
 	memcpy(head, sym, sizeof(*head));
 	head->pc = pc;
 	sprintf(head->desc, "%s+0x%llx", head->name, pc - head->start);
-	add_sym_cache(head);
+	sym_add_cache(head);
 	return head;
 }
 
-static struct sym_result *lookup_sym_proc(__u64 pc, bool exact)
+static struct sym_result *sym_lookup_proc(__u64 pc, bool exact)
 {
 	char _cname[MAX_SYM_LENGTH], _pname[MAX_SYM_LENGTH],
 	     *pname = _pname, *cname = _cname, *tmp;
@@ -93,7 +127,7 @@ static struct sym_result *lookup_sym_proc(__u64 pc, bool exact)
 		result->pc = pc;
 		sprintf(result->desc, "%s+0x%llx", result->name,
 			pc - result->start);
-		add_sym_cache(result);
+		sym_add_cache(result);
 		goto ok;
 	}
 
@@ -109,30 +143,50 @@ ok:
 	return result;
 }
 
-struct sym_result *parse_sym(__u64 pc)
+struct sym_result *sym_parse(__u64 pc)
 {
 	if (!pc)
 		return NULL;
-	return lookup_sym_cache(pc, false) ?: lookup_sym_proc(pc, false);
+	return sym_lookup_cache(pc, false) ?: sym_lookup_proc(pc, false);
 }
 
-struct sym_result *parse_sym_exact(__u64 pc)
+struct sym_result *sym_parse_exact(__u64 pc)
 {
 	if (!pc)
 		return NULL;
-	return lookup_sym_cache(pc, true) ?: lookup_sym_proc(pc, true);
+	return sym_lookup_cache(pc, true) ?: sym_lookup_proc(pc, true);
 }
 
-int check_sym(char *name)
+int sym_search_pattern(char *name, char *result, bool partial)
 {
-	char output[256], m[128];
-	__u64 pc;
+	char func[128], module[128], search[128], *target;
+	int count;
 
-	if (execf(output, "grep ' %s[[:space:]]' /proc/kallsyms", name) != 0)
-		return SYM_NOT_EXIST;
+	sym_init_data();
 
-	if (sscanf(output, "%llx %*s %*s %s", &pc, m) == 1)
-		return SYM_KERNEL;
+	sprintf(search, " %s", name);
+	target = proc_syms;
+	while (true) {
+		target = strstr(target, search);
+		if (!target)
+			break;
 
-	return SYM_MODULE;
+		count = sscanf(target, " %s [%[^]]]", func, module);
+		target++;
+
+		if (count <= 0)
+			continue;
+
+		if (partial && strncmp(func, name, strlen(name)) == 0)
+				goto found;
+		if (!partial && strcmp(func, name) == 0)
+				goto found;
+	}
+
+	return SYM_NOT_EXIST;
+found:
+	if (result)
+		strcpy(result, func);
+
+	return count == 2 ? SYM_MODULE : SYM_KERNEL;
 }

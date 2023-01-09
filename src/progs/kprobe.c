@@ -1,8 +1,8 @@
 #define KBUILD_MODNAME ""
 #include <kheaders.h>
-#include <bpf_helpers.h>
-#include <bpf_endian.h>
-#include <bpf_tracing.h>
+#include <bpf/bpf_helpers.h>
+#include <bpf/bpf_endian.h>
+#include <bpf/bpf_tracing.h>
 
 #include "shared.h"
 #include <skb_utils.h>
@@ -190,20 +190,20 @@ static try_inline int handle_exit(struct pt_regs *regs, int func)
 }
 
 /* one trace may have more than one implement */
-#define __DEFINE_KPROBE_RAW(name, trace, skb_init)		\
+#define __DEFINE_KPROBE_RAW(name, func_name, skb_init)		\
 	static try_inline int fake__##name(struct pt_regs *ctx,	\
 				       struct sk_buff *skb,	\
 				       int func);		\
-	SEC("kretprobe/"#name)					\
+	SEC("kretprobe/"#func_name)				\
 	int BPF_KPROBE(ret__trace_##name)			\
 	{							\
-		return handle_exit(ctx, INDEX_##trace);		\
+		return handle_exit(ctx, INDEX_##name);		\
 	}							\
-	SEC("kprobe/"#name)					\
+	SEC("kprobe/"#func_name)				\
 	int BPF_KPROBE(__trace_##name)				\
 	{							\
 		struct sk_buff *skb = (void *)skb_init;		\
-		return fake__##name(ctx, skb, INDEX_##trace);	\
+		return fake__##name(ctx, skb, INDEX_##name);	\
 	}							\
 	static try_inline int fake__##name(struct pt_regs *ctx,	\
 				       struct sk_buff *skb,	\
@@ -238,7 +238,7 @@ static try_inline int handle_exit(struct pt_regs *regs, int func)
 	}
 #define FNC(name)
 
-_DEFINE_PROBE(KPROBE_DEFAULT, TP_DEFAULT)
+_DEFINE_PROBE(KPROBE_DEFAULT, TP_DEFAULT, FNC)
 
 struct kfree_skb_args {
 	u64 pad;
@@ -262,7 +262,7 @@ DEFINE_TP(kfree_skb, skb, kfree_skb, 8)
 	return 0;
 }
 
-DEFINE_KPROBE_RAW(__netif_receive_skb_core_pskb,
+__DEFINE_KPROBE_RAW(__netif_receive_skb_core_pskb, __netif_receive_skb_core,
 		  _(*(void **)(PT_REGS_PARM1(ctx))))
 {
 	return default_handle_entry(ctx, skb, func);

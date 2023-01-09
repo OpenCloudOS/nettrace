@@ -19,11 +19,12 @@ enum trace_type {
 
 struct analyzer;
 
-#define TRACE_LOADED	(1 << 0)
-#define TRACE_ENABLE	(1 << 1)
-#define TRACE_INVALID	(1 << 2)
-#define TRACE_RET	(1 << 3)
-#define TRACE_STACK	(1 << 4)
+#define TRACE_LOADED		(1 << 0)
+#define TRACE_ENABLE		(1 << 1)
+#define TRACE_INVALID		(1 << 2)
+#define TRACE_RET		(1 << 3)
+#define TRACE_STACK		(1 << 4)
+#define TRACE_ATTACH_MANUAL	(1 << 5)
 
 #define trace_for_each(pos) list_for_each_entry(pos, &trace_list, sibling)
 
@@ -37,7 +38,7 @@ typedef struct trace_group {
 
 typedef struct trace {
 	/* name of the kernel function this trace targeted */
-	char	*name;
+	char	name[128];
 	char	*desc;
 	char	*msg;
 	/* name of the eBPF program */
@@ -75,7 +76,7 @@ typedef struct {
 	/* open and initialize the bpf program */
 	int (*trace_load)();
 	/* load and attach the bpf program */
-	int (*trace_attach)(trace_t *trace);
+	int (*trace_attach)();
 	void (*trace_poll)(void *ctx, int cpu, void *data, u32 size);
 	int (*trace_anal)(event_t *e);
 	void (*trace_close)();
@@ -113,7 +114,7 @@ extern struct list_head trace_list;
 #define FNC(name)		extern trace_t trace_##name;
 #define FN(name, index)		FNC(name)
 #define FN_tp(name, a1, a2, a3) FNC(name)
-_DEFINE_PROBE(FN, FN_tp)
+_DEFINE_PROBE(FN, FN_tp, FNC)
 
 static inline trace_t *get_trace(int index)
 {
@@ -182,6 +183,11 @@ static inline int trace_set_stack(trace_t *t)
 static inline bool trace_is_stack(trace_t *t)
 {
 	return t->status & TRACE_STACK;
+}
+
+static inline bool trace_is_func(trace_t *t)
+{
+	return t->type == TRACE_FUNCTION;
 }
 
 static inline void trace_stop()

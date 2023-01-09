@@ -266,9 +266,6 @@ skip_trace:
 
 	trace_ctx.bpf_args.trace_mode = 1 << trace_ctx.mode;
 	trace_ctx.detail = trace_ctx.bpf_args.detail;
-	/* from v5.14, the struct of nft_pktinfo changed */
-	trace_ctx.bpf_args.nft_high = kv_compare(5, 14, 0) >= 0;
-	pr_debug("nft high version: %d\n", trace_ctx.bpf_args.nft_high);
 
 	return 0;
 err:
@@ -277,6 +274,8 @@ err:
 
 static int trace_prepare_traces()
 {
+	char func[128], name[136];
+	trace_t *trace;
 	int sym_type;
 
 	/* high version kernel (>=5.4) use (struct sk_buff**) */
@@ -285,7 +284,13 @@ static int trace_prepare_traces()
 	else
 		trace_set_invalid(&trace___netif_receive_skb_core);
 
-	sym_type = check_sym("nft_do_chain");
+	/* from v5.14, the struct of nft_pktinfo changed */
+	if (kv_compare(5, 14, 0) >= 0) {
+		trace_ctx.bpf_args.nft_high = true;
+		pr_debug("nft high version founded\n");
+	}
+
+	sym_type = sym_get_type("nft_do_chain");
 	if (sym_type == SYM_NOT_EXIST) {
 		trace_set_invalid(&trace_nft_do_chain_compat);
 		trace_set_invalid(&trace_nft_do_chain);
@@ -300,6 +305,31 @@ static int trace_prepare_traces()
 	} else {
 		trace_set_invalid(&trace_nft_do_chain_compat);
 	}
+
+	pr_debug("begin to resolve kernel symbol...\n");
+
+	/* make the programs that target kernel function can't be found
+	 * load manually.
+	 */
+	trace_for_each(trace) {
+		if (trace_is_invalid(trace) || !trace_is_enable(trace))
+			continue;
+		if (!trace_is_func(trace) || sym_get_type(trace->name) != SYM_NOT_EXIST)
+			continue;
+
+		sprintf(name, "%s.", trace->name);
+		if (sym_search_pattern(name, func, true) == SYM_NOT_EXIST) {
+			pr_warn("kernel function %s not founded, skipped\n",
+				trace->name);
+			trace_set_invalid(trace);
+			continue;
+		}
+		trace->status &= TRACE_ATTACH_MANUAL;
+		strcpy(trace->name, func);
+		pr_debug("%s is made manual attach\n", trace->name);
+	}
+
+	pr_debug("finished to resolve kernel symbol\n");
 
 	return 0;
 }
@@ -336,14 +366,12 @@ int trace_bpf_attach()
 	if (trace_bpf_load())
 		goto err;
 
-	trace_for_each(trace) {
-		if (!trace_is_enable(trace) || trace_is_invalid(trace))
-			continue;
-		if (trace_ctx.ops->trace_attach(trace)) {
-			trace_ctx.ops->trace_close();
-			goto err;
-		}
+	pr_debug("begin to attach eBPF program...\n");
+	if (trace_ctx.ops->trace_attach()) {
+		trace_ctx.ops->trace_close();
+		goto err;
 	}
+	pr_debug("eBPF program attached successfully\n");
 
 	if (trace_ctx.ops->trace_ready)
 		trace_ctx.ops->trace_ready();

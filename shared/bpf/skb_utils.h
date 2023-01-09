@@ -5,7 +5,7 @@
  * code.
  */
 
-#include <bpf_core_read.h>
+#include <bpf/bpf_core_read.h>
 
 #include "macro.h"
 #include "skb_shared.h"

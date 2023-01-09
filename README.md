@@ -43,11 +43,23 @@ sudo yum install nettrace
 
 ### 2.3 手动编译
 
-下面来介绍下如何在Centos、ubuntu等环境上进行nettrace工具的手动编译和安装。本工具目前在4.14/4.15/5.4/5.10/5.18等版本的内核上均进行过适配和测试，更低版本的内核暂未进行适配。对于低版本的发行版，如ubuntu18，建议使用**基于docker**的方式来进行编译。
+下面来介绍下如何在Centos、ubuntu等环境上进行nettrace工具的手动编译和安装。本工具目前在4.14/4.15/5.4/5.10/5.18等版本的内核上均进行过适配和测试，更低版本的内核暂未进行适配。由于本工具对于libbpf的版本要求比较高，因此建议使用**基于docker**的方式来进行编译。
 
 #### 2.3.1 依赖安装
 
 本工具在编译的时候依赖于`libelf`、`libbpf`和`bpftool`组件，`clang`和`gcc`编译工具。对于不支持BTF的内核，还需要安装`kernel-headers`头文件，可以通过查看目录`/lib/modules/$(uname -a)/build`是否存在来判断`headers`是否已经被安装了。
+
+**注意事项**：
+1. 请确保libbpf-dev的版本在`1.0.0`以上，如果当前发行版的libbpf库版本达不到要求，可以手动进行libbpf的编译安装：
+
+    ```shell
+    wget https://github.com/libbpf/libbpf/archive/refs/tags/v1.1.0.tar.gz
+    tar -xf v1.1.0.tar.gz
+    cd libbpf-1.1/src
+    make install
+    ```
+
+2. clang版本要在10+
 
 ##### ubuntu
 
@@ -57,23 +69,12 @@ sudo yum install nettrace
 sudo apt install libelf-dev libbpf-dev linux-headers-`uname -r` clang llvm gcc linux-tools-`uname -r` linux-tools-generic -y
 ```
 
-注意：如果当前发行版（如ubuntu16,ubuntu18）不支持libbpf-dev，请按照下文提示手动安装libbpf-0.2版本。同时，clang版本要在10+（低版本的测试有问题，暂时还没搞定），ubuntu18+直接安装clang-10 llvm-10即可，ubuntu16需要按照[这里](https://segmentfault.com/a/1190000040827790)的教程安装更新版本的clang。
-
 ##### centos
 
 对于centos用于，使用以下命令来安装依赖：
 
 ```shell
 sudo yum install elfutils-devel elfutils-devel-static libbpf-devel libbpf-static kernel-headers kernel-devel clang llvm bpftool -y
-```
-
-请确保安装的clang版本在10+，如果版本较低请手边编译安装较高版本。在编译过程中，如果因为libbpf导致了编译失败，或者当前发行版没有libbpf可以安装，那么请点击[这里](https://github.com/libbpf/libbpf/releases)下载安装较新版本的libbpf：
-
-```shell
-wget https://github.com/libbpf/libbpf/archive/refs/tags/v0.2.tar.gz
-tar -xf v0.2.tar.gz
-cd libbpf-0.2/src
-make install
 ```
 
 #### 2.3.2 编译
@@ -101,6 +102,7 @@ make KERNEL=/home/ubuntu/kernel COMPAT=1 all
 对于发行版版本较低，难以安装高版本clang的情况下，可以基于docker来进行代码的编译，具体可参考[2.4](#2.4-基于docker编译)章节来进行安装。
 
 同时，对于`ubuntu 16.04/ubuntu 18.04`系统，其内核似乎存在BUG，即其使用的内核版本实际为4.15.18，uname看到的却是4.15.0。这导致了加载eBPF程序的时候内核版本不一致，无法加载。因此对于这种情况，可以使用KERN_VER参数来手动指定内核版本（计算方式为：`(4<<16) + (15<<8) + 18`）：
+
 ```shell
 make KERN_VER=266002 COMPAT=1 all
 ```
@@ -122,6 +124,8 @@ docker run -it --rm --network=host --privileged -v <nettrace path>:/root/nettrac
 ```shell
 docker run -it --rm --network=host --privileged -v <nettrace path>:/root/nettrace -v /lib/modules/:/lib/modules/ -v /usr/src/:/usr/src/ imagedong/nettrace-build make -C /root/nettrace/ COMPAT=1 all
 ```
+
+**注意：** docker镜像可能会更新，为了使用最新的镜像，建议先试用命令`docker pull imagedong/nettrace-build`来获取最新的容器镜像。
 
 ## 三、使用方法
 

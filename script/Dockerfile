@@ -1,14 +1,12 @@
-FROM ubuntu
+FROM debian:sid
 
-RUN sed -i 's|archive.ubuntu.com|mirrors.tencent.com|g' /etc/apt/sources.list
-RUN sed -i 's|ports.ubuntu.com|mirrors.tencent.com|g' /etc/apt/sources.list
+RUN rm -rf /etc/apt/sources.list.d/
+RUN echo 'deb http://mirrors.tuna.tsinghua.edu.cn/debian/ sid main non-free contrib' > /etc/apt/sources.list
 
-RUN apt update && apt update -y
+RUN apt update && apt upgrade -y
 
-RUN apt install gcc clang llvm libbpf-dev make file linux-tools-virtual -y
+RUN apt install gcc clang llvm -y
+RUN apt install make file bpftool libbpf-dev -y
 RUN apt install rpm zip bzip2 -y
 
-RUN find /usr/lib/linux-tools/ -name bpftool | xargs -I % cp % /usr/bin/
-
-RUN apt purge --auto-remove linux-tools-virtual -y
 RUN apt clean

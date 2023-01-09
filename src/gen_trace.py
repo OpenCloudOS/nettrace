@@ -234,7 +234,7 @@ with open('trace.yaml', 'r', encoding='utf-8') as f:
     if len(sys.argv) > 1 and sys.argv[1] == 'probe':
         print(f'''{all_index_str}
 #define TRACE_MAX {global_status['trace_index']}
-#define _DEFINE_PROBE(FN, FN_tp)\t\t\\
+#define _DEFINE_PROBE(FN, FN_tp, FNC)\t\t\\
 {all_probe_str}
 ''')
     else:

@@ -12,108 +12,80 @@ struct list_head cpus[MAX_CPU_COUNT];
 trace_ops_t probe_ops;
 static struct kprobe *skel;
 
-static int bpf_kprobe_attach(struct bpf_program *prog, char *name, bool ret)
+#define probe_program(obj, name)	\
+	bpf_object__find_program_by_name(obj, name)
+
+static void probe_trace_attach_manual(char *prog_name, char *func,
+				      bool retprobe)
 {
-	if (file_exist("/sys/bus/event_source/devices/kprobe/type"))
-		return libbpf_get_error(bpf_program__attach_kprobe(prog,
-				ret, name));
-	return compat_bpf_attach_kprobe(bpf_program__fd(prog), name, ret);
+	struct bpf_program *prog;
+	void *ret;
+
+	prog = probe_program(skel->obj, prog_name);
+	ret = bpf_program__attach_kprobe(prog, retprobe, func);
+
+	if (libbpf_get_error(ret))
+		pr_err("failed to manually attach program prog=%s, func=%s\n",
+		       prog_name, func);
 }
 
-static int probe_trace_attach(trace_t *trace)
+static int probe_trace_attach()
 {
-	char tmp[128], *regex, _regex[128],
-	     *target = trace->name;
-	struct bpf_program *prog;
+	char kret_name[128];
+	trace_t *trace;
 	int err;
 
-	prog = bpf_object__find_program_by_name(trace_ctx.obj, trace->prog);
-	if (!prog) {
-		pr_err("eBPF program %s not found\n", trace->prog);
-		goto err;
-	}
+	trace_for_each(trace) {
+		if (!(trace->status & TRACE_ATTACH_MANUAL))
+			continue;
 
-	switch (trace->type) {
-	case TRACE_TP:
-		pr_debug("attaching %s\n", trace->prog);
-		err = libbpf_get_error(bpf_program__attach(prog));
-		if (err) {
-			pr_err("failed to attach %s\n", trace->prog);
-			goto err;
-		}
-		return 0;
-	case TRACE_FUNCTION:
-		break;
-	default:
-		return -EINVAL;
-	}
-
-kprobe:
-	regex = trace->regex;
-retry:
-	if (regex) {
-		if (execf(tmp, "awk 'BEGIN{ORS=\"\"}$3~/%s/{print $3;exit 1}' "
-			  "/proc/kallsyms", regex) != 1) {
-			pr_warn("kernel function not found: %s\n", regex);
-			goto on_fail;
-		}
-		target = tmp;
-	}
-
-	pr_debug("attaching %s to %s\n", trace->prog, target);
-	err = bpf_kprobe_attach(prog, target, false);
-	if (err && !regex) {
-		sprintf(_regex, "^%s\\.", trace->name);
-		regex = _regex;
-		goto retry;
-	}
-	if (err) {
-on_fail:
-		pr_warn("failed to attach target: %s\n", target);
-		return 0;
-	}
-
-	pr_verb("attach %s success\n", trace->name);
-	if (trace_is_ret(trace)) {
-		char kret_name[128];
+		probe_trace_attach_manual(trace->prog, trace->name, false);
+		if (!trace_is_ret(trace))
+			continue;
 
 		sprintf(kret_name, "ret%s", trace->prog);
-		prog = bpf_object__find_program_by_name(trace_ctx.obj, kret_name);
-		if (!prog) {
-			pr_warn("failed to find kretprobe program: %s\n",
-				kret_name);
-			return 0;
-		}
-		err = bpf_kprobe_attach(prog, target, true);
-		if (err)
-			pr_warn("failed to attach kretprobe program: %s\n",
-				tmp);
-		else
-			pr_verb("attach kretprobe %s to %s success\n",
-				kret_name, target);
+		probe_trace_attach_manual(trace->prog, kret_name, true);
 	}
-	return 0;
-err:
-	return -1;
+	return kprobe__attach(skel);
 }
 
 static int probe_trace_pre_load()
 {
+	char kret_name[128], regex[128], *func;
 	struct bpf_program *prog;
+	bool manual, autoload;
 	trace_t *trace;
 
+	/* disable all programs that is not enabled or invalid */
 	trace_for_each(trace) {
-		if (!trace_is_invalid(trace) && trace_is_enable(trace))
-			continue;
+		manual   = trace->status & TRACE_ATTACH_MANUAL;
+		autoload = !trace_is_invalid(trace) &&
+			   trace_is_enable(trace) &&
+			   !manual;
 
-		prog = bpf_object__find_program_by_name(skel->obj,
-							trace->prog);
+		if (autoload)
+			goto check_ret;
+
+		prog = probe_program(skel->obj, trace->prog);
 		if (!prog) {
 			pr_err("prog: %s not founded\n", trace->prog);
 			continue;
 		}
 		bpf_program__set_autoload(prog, false);
 		pr_debug("prog: %s is made no-autoload\n", trace->prog);
+
+check_ret:
+		if (!trace_is_func(trace) || (trace_is_ret(trace) &&
+		    autoload))
+			continue;
+
+		sprintf(kret_name, "ret%s", trace->prog);
+		prog = probe_program(skel->obj, kret_name);
+		if (!prog) {
+			pr_err("prog: %s not founded\n", kret_name);
+			continue;
+		}
+		bpf_program__set_autoload(prog, false);
 	}
 
 	return 0;
@@ -124,12 +96,18 @@ static int probe_trace_load()
 	int i = 0;
 
 	skel = kprobe__open();
-	if (!skel || probe_trace_pre_load() || kprobe__load(skel)) {
+	if (!skel) {
+		pr_err("failed to open kprobe-based eBPF\n");
+		goto err;
+	}
+	pr_debug("eBPF is opened successfully\n");
+
+	if (probe_trace_pre_load() || kprobe__load(skel)) {
 		pr_err("failed to load kprobe-based eBPF\n");
 		goto err;
 	}
+	pr_debug("eBPF is loaded successfully\n");
 
-	pr_debug("eBPF is opened successfully\n");
 	bpf_set_config(skel, bss, trace_ctx.bpf_args);
 	trace_ctx.obj = skel->obj;
 
@@ -237,7 +215,7 @@ static void probe_print_stack(int key)
 
 	pr_info("Call Stack:\n");
 	for (; i < PERF_MAX_STACK_DEPTH && ip[i]; i++) {
-		sym = parse_sym(ip[i]);
+		sym = sym_parse(ip[i]);
 		if (!sym)
 			break;
 		pr_info("    -> %s\n", sym->desc);

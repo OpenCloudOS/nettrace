@@ -19,14 +19,10 @@ perf_output_cond(int fd, perf_buffer_sample_fn callback,
 		 perf_buffer_lost_fn lost_cb,
 		 bool *stop)
 {
-	struct perf_buffer_opts pb_opts = {
-		.sample_cb = callback,
-		.lost_cb = lost_cb,
-	};
 	struct perf_buffer *pb;
 	int err;
 
-	pb = perf_buffer__new(fd, 1024, &pb_opts);
+	pb = perf_buffer__new(fd, 1024, callback, lost_cb, NULL, NULL);
 	err = libbpf_get_error(pb);
 	if (err) {
 		printf("failed to setup perf_buffer: %d\n", err);
