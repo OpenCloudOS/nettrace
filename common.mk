@@ -62,7 +62,11 @@ ifndef BPFTOOL
 ifneq ("$(shell bpftool gen help 2>&1 | grep skeleton)","")
 	BPFTOOL		:= bpftool
 else
-	BPFTOOL		:= $(ROOT)/script/bpftool
+ifeq ("$(shell uname -m)","x86_64")
+	BPFTOOL		:= $(ROOT)/script/bpftool-x86
+else
+	BPFTOOL		:= $(ROOT)/script/bpftool-arm
+endif
 endif
 endif
 
