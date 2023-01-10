@@ -6,8 +6,9 @@ COMMON_SHARED	:= $(ROOT)/shared/pkt_utils.c $(COMPONENT)/net_utils.c	\
 CFLAGS		+= -I./ -I$(ROOT)/shared/bpf/
 BPF_CFLAGS	= $(CFLAGS) -Wno-unused-function
 HOST_CFLAGS	= \
-		-lbpf -lelf -lz -g -O2 -static $(CFLAGS) \
-		-Wno-deprecated-declarations \
+		-lbpf -lelf -lz -g -O2 -static $(CFLAGS)		\
+		-Wno-deprecated-declarations -DVERSION=$(VERSION)	\
+		-DRELEASE=$(RELEASE)					\
 		-I$(ROOT)/shared/ -I$(ROOT)/component
 
 REMOTE_ROOT	:= https://raw.githubusercontent.com/xmmgithub/nettrace-eBPF/master/

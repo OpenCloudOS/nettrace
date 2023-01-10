@@ -14,10 +14,10 @@ arg_config_t config = {
 
 static void do_parse_args(int argc, char *argv[])
 {
+	bool show_log = false, debug = false, version = false;
 	trace_args_t *trace_args = &trace_ctx.args;
 	bpf_args_t *bpf_args = &trace_ctx.bpf_args;
 	pkt_args_t *pkt_args = &bpf_args->pkt;
-	bool show_log = false, debug = false;
 	int proto_l = 0;
 	u16 proto;
 
@@ -102,6 +102,12 @@ static void do_parse_args(int argc, char *argv[])
 			.type = OPTION_HELP,
 			.desc = "show help information",
 		},
+		{
+			.lname = "version", .dest = &version,
+			.sname = 'V',
+			.type = OPTION_BOOL,
+			.desc = "show nettrace version",
+		},
 	};
 
 	if (parse_args(argc, argv, &config, opts, ARRAY_SIZE(opts)))
@@ -115,6 +121,11 @@ static void do_parse_args(int argc, char *argv[])
 		libbpf_set_print(NULL);
 	else
 		set_log_level(2);
+
+	if (version) {
+		pr_version();
+		exit(0);
+	}
 
 	switch (proto_l) {
 	case 3:

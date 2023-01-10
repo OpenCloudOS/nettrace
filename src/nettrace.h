@@ -5,4 +5,8 @@
 
 #include <pkt_utils.h>
 
+#define pr_version()		_pr_version(VERSION, RELEASE)
+#define _pr_version(v, r)	__pr_version(v, r)
+#define __pr_version(v, r)	pr_info("version: "#v#r"\n")
+
 #endif
