@@ -152,7 +152,7 @@ static void trace_all_set_ret()
 	trace_t *trace;
 
 	trace_for_each(trace)
-	if (trace->type == TRACE_FUNCTION)
+	if (trace_is_func(trace))
 		trace_set_ret(trace);
 }
 
@@ -274,7 +274,7 @@ err:
 
 static int trace_prepare_traces()
 {
-	char func[128], name[136];
+	char func[128], name[136], *fmt;
 	trace_t *trace;
 	int sym_type;
 
@@ -330,6 +330,20 @@ static int trace_prepare_traces()
 	}
 
 	pr_debug("finished to resolve kernel symbol\n");
+
+	pr_verb("following traces are enabled:\n");
+	trace_for_each(trace) {
+		if (trace_is_func(trace)) {
+			if (trace_is_ret(trace))
+				fmt = "kprobe/kretprobe";
+			else
+				fmt = "kprobe";
+		} else {
+			fmt = "tracepoint";
+		}
+		pr_verb("\t%s: %s, prog: %s\n", fmt, trace->name,
+			trace->prog);
+	}
 
 	return 0;
 }
