@@ -22,11 +22,21 @@ static void probe_trace_attach_manual(char *prog_name, char *func,
 	void *ret;
 
 	prog = probe_program(skel->obj, prog_name);
-	ret = bpf_program__attach_kprobe(prog, retprobe, func);
+	if (!prog) {
+		pr_err("failed to find prog %s\n", prog_name);
+		return;
+	}
 
-	if (libbpf_get_error(ret))
+	bpf_program__set_autoattach(prog, false);
+
+	ret = bpf_program__attach_kprobe(prog, retprobe, func);
+	if (libbpf_get_error(ret)) {
 		pr_err("failed to manually attach program prog=%s, func=%s\n",
 		       prog_name, func);
+		return;
+	}
+
+	pr_verb("manually attach prog %s success\n", prog_name);
 }
 
 static int probe_trace_attach()
@@ -44,7 +54,7 @@ static int probe_trace_attach()
 			continue;
 
 		sprintf(kret_name, "ret%s", trace->prog);
-		probe_trace_attach_manual(trace->prog, kret_name, true);
+		probe_trace_attach_manual(kret_name, trace->name, true);
 	}
 	return kprobe__attach(skel);
 }
@@ -58,10 +68,8 @@ static int probe_trace_pre_load()
 
 	/* disable all programs that is not enabled or invalid */
 	trace_for_each(trace) {
-		manual   = trace->status & TRACE_ATTACH_MANUAL;
 		autoload = !trace_is_invalid(trace) &&
-			   trace_is_enable(trace) &&
-			   !manual;
+			   trace_is_enable(trace);
 
 		if (autoload)
 			goto check_ret;
@@ -86,6 +94,7 @@ check_ret:
 			continue;
 		}
 		bpf_program__set_autoload(prog, false);
+		pr_debug("prog: %s is made no-autoload\n", trace->prog);
 	}
 
 	return 0;

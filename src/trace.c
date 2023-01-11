@@ -324,7 +324,7 @@ static int trace_prepare_traces()
 			trace_set_invalid(trace);
 			continue;
 		}
-		trace->status &= TRACE_ATTACH_MANUAL;
+		trace->status |= TRACE_ATTACH_MANUAL;
 		strcpy(trace->name, func);
 		pr_debug("%s is made manual attach\n", trace->name);
 	}
