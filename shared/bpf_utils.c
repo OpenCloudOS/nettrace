@@ -51,7 +51,7 @@ int compat_bpf_attach_kprobe(int fd, char *name, bool ret)
 {
 	struct perf_event_attr attr = {};
 	char buf[1024], target[128];
-	int id, err;
+	int id, err, i = 0;
 
 	attr.type = PERF_TYPE_TRACEPOINT;
 	attr.sample_type = PERF_SAMPLE_RAW;
@@ -59,8 +59,19 @@ int compat_bpf_attach_kprobe(int fd, char *name, bool ret)
 	attr.wakeup_events = 1;
 
 	sprintf(target, "%s%s", ret ? "ret_" : "", name);
+
+	/* replace '.' with '_' in the event name, as it don't support
+	 * '.' in the kprobe event name.
+	 */
+	while (target[i] != '\0') {
+		if (target[i] == '.')
+			target[i] = '_';
+		i++;
+	}
+
 	sprintf(buf, "/sys/kernel/debug/tracing/events/kprobes/%s/id",
 		target);
+
 	if (file_exist(buf))
 		goto exist;
 
