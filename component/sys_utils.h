@@ -26,7 +26,7 @@ static inline int simple_exec(char *cmd)
 	return exec(cmd, NULL);
 }
 
-static inline bool file_exist(char *path)
+static inline bool file_exist(const char *path)
 {
 	return access(path, F_OK) == 0;
 }

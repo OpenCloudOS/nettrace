@@ -8,6 +8,8 @@
 
 #define MAX_CPU_COUNT 1024
 
+const char *kprobe_type = "/sys/bus/event_source/devices/kprobe/type";
+
 struct list_head cpus[MAX_CPU_COUNT];
 trace_ops_t probe_ops;
 static struct kprobe *skel;
@@ -19,7 +21,7 @@ static void probe_trace_attach_manual(char *prog_name, char *func,
 				      bool retprobe)
 {
 	struct bpf_program *prog;
-	void *ret;
+	int err;
 
 	prog = probe_program(skel->obj, prog_name);
 	if (!prog) {
@@ -29,8 +31,14 @@ static void probe_trace_attach_manual(char *prog_name, char *func,
 
 	bpf_program__set_autoattach(prog, false);
 
-	ret = bpf_program__attach_kprobe(prog, retprobe, func);
-	if (libbpf_get_error(ret)) {
+	if (file_exist(kprobe_type))
+		err = libbpf_get_error(bpf_program__attach_kprobe(prog,
+				       retprobe, func));
+	else
+		err = compat_bpf_attach_kprobe(bpf_program__fd(prog),
+					       func, retprobe);
+
+	if (err) {
 		pr_err("failed to manually attach program prog=%s, func=%s\n",
 		       prog_name, func);
 		return;
