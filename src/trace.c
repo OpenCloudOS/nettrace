@@ -10,6 +10,10 @@
 #include "analysis.h"
 #include "dropreason.h"
 
+const char *cond_pre = "verlte() { [ \"$1\" = \"$2\" ] && echo 0 && return; "
+		       "[  \"$1\" = \"$(echo -e \"$1\\n$2\" | sort -V | head -n1)\" ] "
+		       "&& echo -1 && return; echo 1; }";
+
 trace_context_t trace_ctx = {
 	.mode = TRACE_MODE_TIMELINE,
 };
@@ -272,17 +276,45 @@ err:
 	return -1;
 }
 
+static void trace_exec_cond()
+{
+	trace_t *trace, *sibling;
+	bool mutexed;
+
+	trace_for_each(trace) {
+		if (trace->mutex && (sibling = trace->sibling)) {
+			mutexed = false;
+			while (sibling != trace) {
+				if ((sibling->status & TRACE_CHECKED) &&
+				    !trace_is_invalid(sibling)) {
+					mutexed = true;
+					break;
+				}
+				sibling = sibling->sibling;
+			}
+			if (mutexed) {
+				trace_set_invalid(trace);
+				pr_debug("mutex happens in %s\n", trace->name);
+				goto next;
+			}
+		}
+
+		if (trace->cond) {
+			if (execf(NULL, "%s; %s", cond_pre, trace->cond))
+				trace_set_invalid(trace);
+		}
+next:
+		trace->status |= TRACE_CHECKED;
+	}
+}
+
 static int trace_prepare_traces()
 {
 	char func[128], name[136], *fmt;
 	trace_t *trace;
 	int sym_type;
 
-	/* high version kernel (>=5.4) use (struct sk_buff**) */
-	if (kv_compare(5, 4, 0) < 0)
-		trace_set_invalid(&trace___netif_receive_skb_core_pskb);
-	else
-		trace_set_invalid(&trace___netif_receive_skb_core);
+	trace_exec_cond();
 
 	/* from v5.14, the struct of nft_pktinfo changed */
 	if (kv_compare(5, 14, 0) >= 0) {
@@ -333,6 +365,9 @@ static int trace_prepare_traces()
 
 	pr_verb("following traces are enabled:\n");
 	trace_for_each(trace) {
+		if (trace_is_invalid(trace) || !trace_is_enable(trace))
+			continue;
+
 		if (trace_is_func(trace)) {
 			if (trace_is_ret(trace))
 				fmt = "kprobe/kretprobe";
