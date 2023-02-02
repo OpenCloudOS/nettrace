@@ -322,22 +322,6 @@ static int trace_prepare_traces()
 		pr_debug("nft high version founded\n");
 	}
 
-	sym_type = sym_get_type("nft_do_chain");
-	if (sym_type == SYM_NOT_EXIST) {
-		trace_set_invalid(&trace_nft_do_chain_compat);
-		trace_set_invalid(&trace_nft_do_chain);
-	} else if (!kernel_has_config("DEBUG_INFO_BTF_MODULES") &&
-		   sym_type == SYM_MODULE) {
-
-		/* BTF modules is not supported and nft is a modules, we
-		 * need to use compat mode, which will not use CO-RE
-		 * read.
-		 */
-		trace_set_invalid(&trace_nft_do_chain);
-	} else {
-		trace_set_invalid(&trace_nft_do_chain_compat);
-	}
-
 	pr_debug("begin to resolve kernel symbol...\n");
 
 	/* make the programs that target kernel function can't be found

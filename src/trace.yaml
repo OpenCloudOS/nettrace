@@ -144,10 +144,14 @@ children:
         level: info
         msg: packet is accepted
     - names:
-      - nft_do_chain
+      - name: nft_do_chain
+        cond: >-
+          zcat /proc/config.gz | grep DEBUG_INFO_BTF_MODULES ||
+          cat /proc/kallsyms | grep " nft_do_chain$"
       - nft_do_chain_compat
       analyzer: iptable
       target: nft_do_chain
+      mutex: true
       rules:
       - exp: eq 0
         level: error
