@@ -11,7 +11,7 @@
 #include "dropreason.h"
 
 const char *cond_pre = "verlte() { [ \"$1\" = \"$2\" ] && echo 0 && return; "
-		       "[  \"$1\" = \"$(echo -e \"$1\\n$2\" | sort -V | head -n1)\" ] "
+		       "[ \"$1\" = \"$(/bin/echo -e \"$1\\n$2\" | sort -V | head -n1)\" ] "
 		       "&& echo -1 && return; echo 1; }";
 
 trace_context_t trace_ctx = {

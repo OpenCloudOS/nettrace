@@ -42,6 +42,7 @@ def parse_names(trace, children):
 
         if isinstance(name, str):
             new_child['name'] = name
+            del new_child['cond']
         else:
             new_child['name'] = name['name']
             if 'cond' in name:
