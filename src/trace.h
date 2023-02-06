@@ -25,8 +25,9 @@ struct analyzer;
 #define TRACE_RET		(1 << 3)
 #define TRACE_STACK		(1 << 4)
 #define TRACE_ATTACH_MANUAL	(1 << 5)
+#define TRACE_CHECKED		(1 << 6)
 
-#define trace_for_each(pos) list_for_each_entry(pos, &trace_list, sibling)
+#define trace_for_each(pos) list_for_each_entry(pos, &trace_list, all)
 
 typedef struct trace_group {
 	char	*name;
@@ -44,19 +45,25 @@ typedef struct trace {
 	/* name of the eBPF program */
 	char	*prog;
 	enum trace_type type;
-	char	*if_str;
+	char	*cond;
 	char	*regex;
 	char	*tp;
 	int	skb;
-	struct list_head sibling;
+	/* traces in a global list */
+	struct list_head all;
+	/* traces in the same group */
 	struct list_head list;
+	/* list head of rules that belongs to this trace */
 	struct list_head rules;
+	/* traces that share the same target */
+	struct trace *sibling;
 	int	index;
 	u32	status;
 	trace_group_t *parent;
 	struct analyzer *analyzer;
 	/* if this trace should be enabled by default */
 	bool	def;
+	bool	mutex;
 } trace_t;
 
 typedef struct trace_args {

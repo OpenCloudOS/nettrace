@@ -81,14 +81,14 @@ static try_inline int BPF_NAME(struct pt_regs *ctx, int func)
 }
 
 /* another magical macro definiation */
-#define ___DEFINE_KPROBE_RAW(name, target)	\
-	__DEFINE_KPROBE_RAW(name, target, NULL)
+#define ___DEFINE_KPROBE_INIT(name, target)	\
+	__DEFINE_KPROBE_INIT(name, target, NULL)
 
 /**
  * This function is used to the kernel version that don't support
  * kernel module BTF.
  */
-___DEFINE_KPROBE_RAW(NFT_NAME, nft_do_chain)
+___DEFINE_KPROBE_INIT(NFT_NAME, nft_do_chain)
 {
 	return BPF_NAME(ctx, func);
 }

@@ -51,9 +51,12 @@ children:
       - <<: *rule_ret_err
         msg: XDP failed to redirect skb
         adv: check if the target ifindex exist
-    - name: __netif_receive_skb_core:0
-    - name: __netif_receive_skb_core_pskb
+    - names:
+      - name: __netif_receive_skb_core_pskb
+        cond: '[ ! $(verlte "$(uname -r)" "5.4") -eq -1 ]' # valid when kernel >= 5.4
+      - name: __netif_receive_skb_core:0
       target: __netif_receive_skb_core
+      mutex: true
   - name: link-out
     desc: link layer (L2) of packet out
     visual: true
@@ -125,8 +128,13 @@ children:
     desc: base netfilter entry
     visual: true
     children:
-    - name: ipt_do_table
+    - names:
+      - name: ipt_do_table
+        cond: '[ $(verlte "$(uname -r)" "5.16") -eq -1 ]' # valid when kernel < 5.16
+      - name: ipt_do_table_new
       analyzer: iptable
+      mutex: true
+      target: ipt_do_table
       rules:
       - exp: eq 0
         level: error
@@ -135,11 +143,15 @@ children:
       - exp: eq 1
         level: info
         msg: packet is accepted
-    - name:
-      - nft_do_chain
+    - names:
+      - name: nft_do_chain
+        cond: >-
+          zcat /proc/config.gz | grep DEBUG_INFO_BTF_MODULES ||
+          cat /proc/kallsyms | grep " nft_do_chain$"
       - nft_do_chain_compat
       analyzer: iptable
       target: nft_do_chain
+      mutex: true
       rules:
       - exp: eq 0
         level: error

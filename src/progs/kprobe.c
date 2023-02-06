@@ -190,7 +190,7 @@ static try_inline int handle_exit(struct pt_regs *regs, int func)
 }
 
 /* one trace may have more than one implement */
-#define __DEFINE_KPROBE_RAW(name, func_name, skb_init)		\
+#define __DEFINE_KPROBE_INIT(name, func_name, skb_init)		\
 	static try_inline int fake__##name(struct pt_regs *ctx,	\
 				       struct sk_buff *skb,	\
 				       int func);		\
@@ -209,11 +209,15 @@ static try_inline int handle_exit(struct pt_regs *regs, int func)
 				       struct sk_buff *skb,	\
 				       int func)
 
-#define DEFINE_KPROBE_RAW(name, skb_init)			\
-	__DEFINE_KPROBE_RAW(name, name, skb_init)
+#define DEFINE_KPROBE_INIT(name, skb_init)			\
+	__DEFINE_KPROBE_INIT(name, name, skb_init)
 
 #define DEFINE_KPROBE(name, skb_index)				\
-	DEFINE_KPROBE_RAW(name, PT_REGS_PARM##skb_index(ctx))
+	DEFINE_KPROBE_INIT(name, PT_REGS_PARM##skb_index(ctx))
+
+#define DEFINE_KPROBE_TARGET(name, func_name, skb_index)	\
+	__DEFINE_KPROBE_INIT(name, func_name,			\
+			    PT_REGS_PARM##skb_index(ctx))
 
 #define KPROBE_DEFAULT(name, skb_index)				\
 	DEFINE_KPROBE(name, skb_index)				\
@@ -262,23 +266,37 @@ DEFINE_TP(kfree_skb, skb, kfree_skb, 8)
 	return 0;
 }
 
-__DEFINE_KPROBE_RAW(__netif_receive_skb_core_pskb, __netif_receive_skb_core,
-		  _(*(void **)(PT_REGS_PARM1(ctx))))
+__DEFINE_KPROBE_INIT(__netif_receive_skb_core_pskb, __netif_receive_skb_core,
+		    _(*(void **)(PT_REGS_PARM1(ctx))))
 {
 	return default_handle_entry(ctx, skb, func);
+}
+
+#define bpf_ipt_do_table()						\
+{									\
+	nf_event_t e = {						\
+		.event = { .func = func, },				\
+		.hook = _C(state, hook),				\
+	};								\
+									\
+	bpf_probe_read(e.table, sizeof(e.table) - 1, _C(table, name));	\
+	return handle_entry(ctx, skb, &e.event, sizeof(e), func);	\
 }
 
 DEFINE_KPROBE(ipt_do_table, 1)
 {
 	struct nf_hook_state *state = (void *)PT_REGS_PARM2(ctx);
 	struct xt_table *table = (void *)PT_REGS_PARM3(ctx);
-	nf_event_t e = {
-		.event = { .func = func, },
-		.hook = _C(state, hook),
-	};
 
-	bpf_probe_read(e.table, sizeof(e.table) - 1, _C(table, name));
-	return handle_entry(ctx, skb, &e.event, sizeof(e), func);
+	bpf_ipt_do_table();
+}
+
+DEFINE_KPROBE_TARGET(ipt_do_table_new, ipt_do_table, 2)
+{
+	struct nf_hook_state *state = (void *)PT_REGS_PARM3(ctx);
+	struct xt_table *table = (void *)PT_REGS_PARM1(ctx);
+
+	bpf_ipt_do_table();
 }
 
 DEFINE_KPROBE(nf_hook_slow, 1)
