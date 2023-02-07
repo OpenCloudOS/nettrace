@@ -156,7 +156,7 @@ def gen_trace(trace, group, p_name):
         tp = trace['tp'].split(':')
         skb_str = f'\n\t.tp = "{trace["tp"]}",'
         if 'skb' in trace:
-            probe_str = f'\tFN_tp({name}, {tp[0]}, {tp[1]}, 8)\t\\\n'
+            probe_str = f'\tFN_tp({name}, {tp[0]}, {tp[1]}, {trace["skb"]})\t\\\n'
     else:
         trace_type = 'TRACE_FUNCTION'
         if 'skb' in trace:

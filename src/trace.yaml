@@ -21,6 +21,9 @@ children:
     desc: link layer (L2) of packet in
     visual: true
     children:
+    - name: napi_gro_receive_entry
+      tp: net:napi_gro_receive_entry
+      skb: 24
     - name: dev_gro_receive:1
       rules:
       - exp: eq 4
@@ -314,7 +317,7 @@ children:
       msg: packet is cloned
   - name: consume_skb
     tp: skb:consume_skb
-    skb: 0
+    skb: 8
     analyzer: free
     rules:
     - exp: any
