@@ -21,6 +21,7 @@ static void probe_trace_attach_manual(char *prog_name, char *func,
 				      bool retprobe)
 {
 	struct bpf_program *prog;
+	bool legacy;
 	int err;
 
 	prog = probe_program(skel->obj, prog_name);
@@ -30,13 +31,22 @@ static void probe_trace_attach_manual(char *prog_name, char *func,
 	}
 
 	bpf_program__set_autoattach(prog, false);
+	legacy = !file_exist(kprobe_type);
 
-	if (file_exist(kprobe_type))
+again:
+	if (!legacy)
 		err = libbpf_get_error(bpf_program__attach_kprobe(prog,
 				       retprobe, func));
 	else
 		err = compat_bpf_attach_kprobe(bpf_program__fd(prog),
 					       func, retprobe);
+
+	if (err && !legacy) {
+		pr_warn("retring to attach in legacy mode, prog=%s, func=%s\n",
+			prog_name, func);
+		legacy = true;
+		goto again;
+	}
 
 	if (err) {
 		pr_err("failed to manually attach program prog=%s, func=%s\n",
