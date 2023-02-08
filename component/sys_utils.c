@@ -85,6 +85,6 @@ bool debugfs_mounted()
 
 bool kernel_has_config(char *name)
 {
-	return execf(NULL, "zcat /proc/config.gz | grep 'CONFIG_%s=y'",
+	return execf(NULL, "zgrep 'CONFIG_%s=y' /proc/config.gz 2>/dev/null",
 		     name) == 0;
 }
