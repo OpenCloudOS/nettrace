@@ -149,8 +149,8 @@ children:
     - names:
       - name: nft_do_chain
         cond: >-
-          zcat /proc/config.gz | grep DEBUG_INFO_BTF_MODULES ||
-          cat /proc/kallsyms | grep " nft_do_chain$"
+          zgrep DEBUG_INFO_BTF_MODULES /proc/config.gz 2>/dev/null ||
+          grep " nft_do_chain$" /proc/kallsyms
       - nft_do_chain_compat
       analyzer: iptable
       target: nft_do_chain
