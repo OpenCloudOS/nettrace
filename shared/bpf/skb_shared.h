@@ -52,6 +52,7 @@ typedef struct __attribute__((__packed__)) {
 #define TCP_FLAGS_RST	(1 << 2)
 #define TCP_FLAGS_SYN	(1 << 1)
 
+/* used for packet filter condition */
 typedef struct {
 	u32	saddr;
 	bool	enable_saddr;

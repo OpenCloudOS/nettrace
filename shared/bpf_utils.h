@@ -11,6 +11,9 @@
 
 typedef struct {
 	pkt_args_t pkt;
+#ifdef BPF_DEBUG
+	bool bpf_debug;
+#endif
 #ifdef DEFINE_BPF_ARGS
 	DEFINE_BPF_ARGS();
 #endif

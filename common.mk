@@ -53,7 +53,7 @@ $(error kernel headers not exist in COMPAT mdoe, please install it)
 endif
 	kheaders_cmd	:= ln -s vmlinux_header.h kheaders.h
 	CFLAGS		+= -DCOMPAT_MODE
-	BPF_CFLAGS	+= $(KERNEL_CFLAGS)
+	BPF_CFLAGS	+= $(KERNEL_CFLAGS) -DBPF_NO_GLOBAL_DATA
 else
 	kheaders_cmd	:= ln -s ../shared/bpf/vmlinux.h kheaders.h
 endif
@@ -68,6 +68,10 @@ else
 	BPFTOOL		:= $(ROOT)/script/bpftool-arm
 endif
 endif
+endif
+
+ifdef BPF_DEBUG
+	CFLAGS		+= -DBPF_DEBUG
 endif
 
 kheaders.h:

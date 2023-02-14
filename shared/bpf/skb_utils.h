@@ -12,16 +12,21 @@
 
 typedef struct {
 	pkt_args_t pkt;
+#ifdef BPF_DEBUG
+	bool bpf_debug;
+#endif
 #ifdef DEFINE_BPF_ARGS
 	DEFINE_BPF_ARGS();
 #endif
 } bpf_args_t;
 
+#define MAX_ENTRIES 256
+
 struct {
 	__uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
 	__uint(key_size, sizeof(int));
 	__uint(value_size, sizeof(u32));
-	__uint(max_entries, 64);
+	__uint(max_entries, MAX_ENTRIES);
 } m_event SEC(".maps");
 
 struct {
@@ -62,6 +67,17 @@ struct {
 #else
 #define try_inline inline
 #endif
+
+#ifdef BPF_DEBUG
+#define pr_bpf_deubg(fmt, ...) {				\
+	if (((bpf_args_t *)bpf_args)->bpf_debug)		\
+		bpf_printk("nettrace: "fmt"\n", __VA_ARGS__);	\
+}
+#else
+#define pr_bpf_deubg(fmt, ...)
+#endif
+#define pr_debug_skb(fmt, ...)	\
+	pr_bpf_deubg("skb=%llx, "fmt, (u64)(void *)skb, ##__VA_ARGS__)
 
 #define ARGS_INIT()		bpf_args_t *bpf_args = CONFIG();
 #define ARGS_PKT()		(&bpf_args->pkt)
@@ -291,6 +307,10 @@ static try_inline int probe_parse_skb_cond(parse_ctx_t *ctx)
 	ctx->mac_header = _C(skb, mac_header);
 	ctx->data = _C(skb, head);
 
+	pr_debug_skb("begin to parse, nh=%d mh=%d", ctx->network_header,
+		     ctx->mac_header);
+	pr_debug_skb("th=%d", _C(skb, transport_header));
+
 	if (skb_l2_check(ctx->mac_header)) {
 		/*
 		 * try to parse skb for send path, which means that
@@ -321,6 +341,7 @@ static try_inline int probe_parse_skb_cond(parse_ctx_t *ctx)
 
 	ctx->trans_header = _C(skb, transport_header);
 	pkt->proto_l3 = l3_proto;
+	pr_debug_skb("l3=%d", l3_proto);
 
 	switch (l3_proto) {
 	case ETH_P_IPV6:
