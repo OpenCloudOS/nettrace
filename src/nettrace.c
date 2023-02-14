@@ -96,6 +96,13 @@ static void do_parse_args(int argc, char *argv[])
 			.type = OPTION_BOOL,
 			.desc = "show debug information",
 		},
+#ifdef BPF_DEBUG
+		{
+			.lname = "bpf-debug", .dest = &bpf_args->bpf_debug,
+			.type = OPTION_BOOL,
+			.desc = "show bpf debug information",
+		},
+#endif
 		{
 			.lname = "help",
 			.sname = 'h',

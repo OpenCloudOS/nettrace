@@ -97,6 +97,7 @@ static try_inline int handle_entry(void *regs, struct sk_buff *skb,
 	if (!ARGS_GET(ready))
 		return -1;
 
+	pr_debug_skb("begin to handle, func=%d", func);
 	pid = (u32)bpf_get_current_pid_tgid();
 	if (ARGS_GET(trace_mode) & MODE_SKIP_LIFE_MASK) {
 		if (!probe_parse_skb(skb, pkt))
@@ -133,6 +134,7 @@ skip_life:
 	}
 
 out:
+	pr_debug_skb("pkt matched");
 	try_trace_stack(regs, bpf_args, e, func);
 	pkt->ts = bpf_ktime_get_ns();
 	e->key = (u64)(void *)skb;

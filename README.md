@@ -161,6 +161,7 @@ Usage:
 
     -v               show log information
     --debug          show debug information
+    --bpf-debug      show bpf debug information
     -h, --help       show help information
 ```
 
