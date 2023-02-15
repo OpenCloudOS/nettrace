@@ -20,7 +20,7 @@ trace_context_t trace_ctx = {
 
 static void _print_trace_group(trace_group_t *group, int level)
 {
-	char prefix[32] = {}, buf[32];
+	char prefix[32] = {}, buf[32], *name;
 	trace_group_t *pos;
 	trace_t *trace;
 	int i = 0;
@@ -46,17 +46,22 @@ print_trace:
 
 		buf[0] = '\0';
 		if (status & TRACE_LOADED)
-			sprintf_end(buf, ",loaded");
+			sprintf_end(buf, ",%s", PFMT_EMPH_STR("loaded"));
+#if 0
 		if (trace_is_enable(trace))
-			sprintf_end(buf, ",enable");
+			sprintf_end(buf, ",%s", PFMT_EMPH_STR("enabled"));
+#endif
 		if (status & TRACE_INVALID)
-			sprintf_end(buf, ",invalid");
-		buf[0] = buf[0] ? ' ' : '\0';
+			sprintf_end(buf, ",%s", PFMT_WARN_STR("invalid"));
 
-		if (status)
-			pr_info("%s  - %s:%s\n",  prefix, trace->name, buf);
-		else
-			pr_info("%s  - %s\n",  prefix, trace->name);
+		/* skip the prefix of __trace_ */
+		name = trace->prog + TRACE_PREFIX_LEN;
+		if (buf[0]) {
+			buf[0] = ' ';
+			pr_info("%s  - %s:%s\n",  prefix, name, buf);
+		} else {
+			pr_info("%s  - %s\n",  prefix, name);
+		}
 	}
 }
 
@@ -198,8 +203,8 @@ static int trace_prepare_args()
 	}
 
 	if (strcmp(traces, "?") == 0) {
-		trace_show(&root_group);
-		exit(0);
+		args->show_traces = true;
+		traces = "all";
 	}
 
 	tmp = calloc(strlen(traces) + 1, 1);
@@ -376,6 +381,11 @@ int trace_prepare()
 
 	if (trace_prepare_traces())
 		return -1;
+
+	if (trace_ctx.args.show_traces) {
+		trace_show(&root_group);
+		exit(0);
+	}
 
 	return 0;
 }

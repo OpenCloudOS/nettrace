@@ -76,6 +76,7 @@ typedef struct trace_args {
 	bool drop;
 	bool date;
 	bool drop_stack;
+	bool show_traces;
 	char *traces;
 } trace_args_t;
 
@@ -121,7 +122,7 @@ extern struct list_head trace_list;
 #define FNC(name)		extern trace_t trace_##name;
 #define FN(name, index)		FNC(name)
 #define FN_tp(name, a1, a2, a3) FNC(name)
-_DEFINE_PROBE(FN, FN_tp, FNC)
+DEFINE_ALL_PROBES(FN, FN_tp, FNC)
 
 static inline trace_t *get_trace(int index)
 {

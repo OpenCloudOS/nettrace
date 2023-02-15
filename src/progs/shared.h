@@ -89,4 +89,14 @@ typedef enum trace_mode {
 #define TRACE_MODE_INETL_MASK		(1 << TRACE_MODE_INETL)
 #define TRACE_MODE_DROP_MASK		(1 << TRACE_MODE_DROP)
 
+#define __MACRO_SIZE(macro)	sizeof(#macro)
+#define MACRO_SIZE(macro)	__MACRO_SIZE(macro)
+#define __MACRO_CONCAT(a, b)	a##b
+#define MACRO_CONCAT(a, b)	__MACRO_CONCAT(a, b)
+
+#define TRACE_PREFIX		__trace_
+#define TRACE_RET_PREFIX	ret__trace_
+#define TRACE_PREFIX_LEN	MACRO_SIZE(TRACE_PREFIX)
+#define TRACE_NAME(name)	MACRO_CONCAT(TRACE_PREFIX, name)
+#define TRACE_RET_NAME(name)	MACRO_CONCAT(TRACE_RET_PREFIX, name)
 #endif

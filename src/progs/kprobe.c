@@ -10,7 +10,6 @@
 #include "kprobe_trace.h"
 
 #define MODE_SKIP_LIFE_MASK (TRACE_MODE_BASIC_MASK | TRACE_MODE_DROP_MASK)
-#define TRACE_PREFIX __trace_
 
 struct {
 	__uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
@@ -191,25 +190,27 @@ static try_inline int handle_exit(struct pt_regs *regs, int func)
 	return 0;
 }
 
+#define __BPF_KPROBE(name)	BPF_KPROBE(name)
+
 /* one trace may have more than one implement */
 #define __DEFINE_KPROBE_INIT(name, func_name, skb_init)		\
 	static try_inline int fake__##name(struct pt_regs *ctx,	\
 				       struct sk_buff *skb,	\
 				       int func);		\
 	SEC("kretprobe/"#func_name)				\
-	int BPF_KPROBE(ret__trace_##name)			\
+	int __BPF_KPROBE(TRACE_RET_NAME(name))			\
 	{							\
 		return handle_exit(ctx, INDEX_##name);		\
 	}							\
 	SEC("kprobe/"#func_name)				\
-	int BPF_KPROBE(__trace_##name)				\
+	int __BPF_KPROBE(TRACE_NAME(name))			\
 	{							\
 		struct sk_buff *skb = (void *)skb_init;		\
 		return fake__##name(ctx, skb, INDEX_##name);	\
 	}							\
 	static try_inline int fake__##name(struct pt_regs *ctx,	\
-				       struct sk_buff *skb,	\
-				       int func)
+					   struct sk_buff *skb,	\
+					   int func)
 
 #define DEFINE_KPROBE_INIT(name, skb_init)			\
 	__DEFINE_KPROBE_INIT(name, name, skb_init)
@@ -219,7 +220,7 @@ static try_inline int handle_exit(struct pt_regs *regs, int func)
 
 #define DEFINE_KPROBE_TARGET(name, func_name, skb_index)	\
 	__DEFINE_KPROBE_INIT(name, func_name,			\
-			    PT_REGS_PARM##skb_index(ctx))
+			     PT_REGS_PARM##skb_index(ctx))
 
 #define KPROBE_DEFAULT(name, skb_index)				\
 	DEFINE_KPROBE(name, skb_index)				\
@@ -231,7 +232,7 @@ static try_inline int handle_exit(struct pt_regs *regs, int func)
 	static try_inline int fake_##name(void *ctx, struct sk_buff *skb,	\
 				      int func);		\
 	SEC("tp/"#cata"/"#tp)					\
-	int __trace_##name(void *ctx) {				\
+	int TRACE_NAME(name)(void *ctx) {			\
 		struct sk_buff *skb = *(void **)(ctx + offset);	\
 		return fake_##name(ctx, skb, INDEX_##name);	\
 	}							\
@@ -244,7 +245,7 @@ static try_inline int handle_exit(struct pt_regs *regs, int func)
 	}
 #define FNC(name)
 
-_DEFINE_PROBE(KPROBE_DEFAULT, TP_DEFAULT, FNC)
+DEFINE_ALL_PROBES(KPROBE_DEFAULT, TP_DEFAULT, FNC)
 
 struct kfree_skb_args {
 	u64 pad;
