@@ -1,3 +1,4 @@
+#include <sys/sysinfo.h>
 #include <parse_sym.h>
 
 #include "trace.h"
@@ -128,6 +129,9 @@ static int probe_trace_load()
 		goto err;
 	}
 	pr_debug("eBPF is opened successfully\n");
+
+	/* set the max entries of perf event map to current cpu count */
+	bpf_map__set_max_entries(skel->maps.m_event, get_nprocs_conf());
 
 	if (probe_trace_pre_load() || kprobe__load(skel)) {
 		pr_err("failed to load kprobe-based eBPF\n");
