@@ -194,12 +194,6 @@ static try_inline bool ipv6_not_equel(u8 *src, u8 *target)
 #define ATTR_IPV6_CHECK()				\
 	(filter && ATTR_OPS(addr, ATTR_IPV6_OPS))
 
-struct ip_esp_hdr {
-	__be32 spi;
-	__be32 seq_no;		/* Sequence number */
-	__u8  enc_data[0];	/* Variable len but >=8. Mind the 64 bit alignment! */
-};
-
 static try_inline int probe_parse_ip(void *ip, parse_ctx_t *ctx)
 {
 	pkt_args_t *bpf_args = ctx->args;
