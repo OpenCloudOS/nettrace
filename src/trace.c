@@ -55,7 +55,7 @@ print_trace:
 			sprintf_end(buf, ",%s", PFMT_WARN_STR("invalid"));
 
 		/* skip the prefix of __trace_ */
-		name = trace->prog + TRACE_PREFIX_LEN;
+		name = trace->prog + TRACE_PREFIX_LEN - 1;
 		if (buf[0]) {
 			buf[0] = ' ';
 			pr_info("%s  - %s:%s\n",  prefix, name, buf);
