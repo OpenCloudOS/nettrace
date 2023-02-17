@@ -1,48 +1,33 @@
 
-#define COMMON_PROG_ARGS(args)					\
+#define COMMON_PROG_ARGS_BEGIN()				\
+	u8 addr_buf[16], saddr_buf[16], daddr_buf[16];		\
+	u16 addr_pf = 0, saddr_pf = 0, daddr_pf = 0;		\
+	int proto_l = 0;					\
+	u16 proto;
+
+#define COMMON_PROG_ARGS_DEFINE(args)				\
 	{							\
 		.lname = "saddr",				\
 		.sname = 's',					\
-		.dest = &(args)->saddr,				\
-		.type = OPTION_IPV4,				\
-		.set = &(args)->enable_saddr,			\
-		.desc = "filter source ip address",		\
-	},							\
-	{							\
-		.lname = "saddr6",				\
-		.dest = &(args)->saddr_v6,			\
-		.type = OPTION_IPV6,				\
-		.set = &(args)->enable_saddr_v6,		\
-		.desc = "filter source ip v6 address",		\
+		.dest = saddr_buf,				\
+		.type = OPTION_IPV4ORIPV6,			\
+		.set = &saddr_pf,				\
+		.desc = "filter source ip/ipv6 address",	\
 	},							\
 	{							\
 		.lname = "daddr",				\
 		.sname = 'd',					\
-		.dest = &(args)->daddr,				\
-		.type = OPTION_IPV4,				\
-		.set = &(args)->enable_daddr,			\
-		.desc = "filter dest ip address",		\
-	},							\
-	{							\
-		.lname = "daddr6",				\
-		.dest = &(args)->daddr_v6,			\
-		.type = OPTION_IPV6,				\
-		.set = &(args)->enable_daddr_v6,		\
-		.desc = "filter dest ip v6 address",		\
+		.dest = daddr_buf,				\
+		.type = OPTION_IPV4ORIPV6,			\
+		.set = &daddr_pf,				\
+		.desc = "filter dest ip/ipv6 address",		\
 	},							\
 	{							\
 		.lname = "addr",				\
-		.dest = &(args)->addr,				\
-		.type = OPTION_IPV4,				\
-		.set = &(args)->enable_addr,			\
-		.desc = "filter source or dest ip address",	\
-	},							\
-	{							\
-		.lname = "addr6",				\
-		.dest = &(args)->addr_v6,			\
-		.type = OPTION_IPV6,				\
-		.set = &(args)->enable_addr_v6,			\
-		.desc = "filter source or dest ip v6 address",	\
+		.dest = addr_buf,				\
+		.type = OPTION_IPV4ORIPV6,			\
+		.set = &addr_pf,				\
+		.desc = "filter source or dest ip/ipv6 address",	\
 	},							\
 	{							\
 		.lname = "sport",				\
@@ -76,3 +61,36 @@
 		.set = &proto_l,				\
 		.desc = "filter L3/L4 protocol, such as 'tcp', 'arp'",	\
 	}
+
+/* convert the args to the eBPF pkt_arg struct */
+#define FILL_ADDR_PROTO(name, subfix, args, pf) if (name##_pf == pf) {	\
+	memcpy(&(args)->name##subfix, name##_buf,			\
+	       sizeof((args)->name##subfix));				\
+	(args)->enable_##name##subfix = true;				\
+	if ((args)->enable_l3_proto && (args)->l3_proto != pf) { 	\
+		pr_err("ip" #subfix " protocol is excepted!\n");	\
+		goto err;						\
+	}								\
+	(args)->enable_l3_proto = true;					\
+	(args)->l3_proto = pf;						\
+}
+#define FILL_ADDR(name, args)					\
+	FILL_ADDR_PROTO(name, _v6, args, ETH_P_IPV6)		\
+	FILL_ADDR_PROTO(name, , args, ETH_P_IP)
+
+#define COMMON_PROG_ARGS_END(args)		\
+	switch (proto_l) {			\
+	case 3:					\
+		(args)->enable_l3_proto = true;	\
+		(args)->l3_proto = proto;	\
+		break;				\
+	case 4:					\
+		(args)->enable_l4_proto = true;	\
+		(args)->l4_proto = proto;	\
+		break;				\
+	default:				\
+		break;				\
+	}					\
+	FILL_ADDR(saddr, args)			\
+	FILL_ADDR(daddr, args)			\
+	FILL_ADDR(addr, args)

@@ -57,30 +57,29 @@ typedef struct __attribute__((__packed__)) {
 #define TCP_FLAGS_RST	(1 << 2)
 #define TCP_FLAGS_SYN	(1 << 1)
 
+#define APPLY_DEFINE_FIELD(dummy, a, b, ...)	DEFINE_FIELD_##b
+#define DEFINE_FIELD_STD(type, name)		\
+	type name;				\
+	bool enable_##name;
+#define DEFINE_FIELD_ARRAY(type, name, size)	\
+	type name[size];			\
+	bool enable_##name;
+#define DEFINE_FIELD(type, name, args...)	\
+	APPLY_DEFINE_FIELD(dummy, ##args, ARRAY, STD)(type, name, ##args)
+
 /* used for packet filter condition */
 typedef struct {
-	u32	saddr;
-	bool	enable_saddr;
-	u32	daddr;
-	bool	enable_daddr;
-	u32	addr;
-	bool	enable_addr;
-	u8	saddr_v6[16];
-	bool	enable_saddr_v6;
-	u8	daddr_v6[16];
-	bool	enable_daddr_v6;
-	u8	addr_v6[16];
-	bool	enable_addr_v6;
-	u16	sport;
-	bool	enable_sport;
-	u16	dport;
-	bool	enable_dport;
-	u16	port;
-	bool	enable_port;
-	u16	l3_proto;
-	bool	enable_l3_proto;
-	u8	l4_proto;
-	bool	enable_l4_proto;
+	DEFINE_FIELD(u32, saddr)
+	DEFINE_FIELD(u32, daddr)
+	DEFINE_FIELD(u32, addr)
+	DEFINE_FIELD(u8, saddr_v6, 16)
+	DEFINE_FIELD(u8, daddr_v6, 16)
+	DEFINE_FIELD(u8, addr_v6, 16)
+	DEFINE_FIELD(u16, sport)
+	DEFINE_FIELD(u16, dport)
+	DEFINE_FIELD(u16, port)
+	DEFINE_FIELD(u16, l3_proto)
+	DEFINE_FIELD(u8, l4_proto)
 } pkt_args_t;
 
 #define CONFIG_MAP_SIZE	1024
