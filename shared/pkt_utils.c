@@ -6,6 +6,7 @@
 #include <linux/icmpv6.h>
 #define _LINUX_IN_H
 #include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include "pkt_utils.h"
 
@@ -56,12 +57,16 @@ int ts_print_packet(char *buf, packet_t *pkt, char *minfo,
 
 	switch (pkt->proto_l3) {
 	case ETH_P_IP:
-		i2ip(saddr, pkt->l3.ipv4.saddr);
-		i2ip(daddr, pkt->l3.ipv4.daddr);
+		inet_ntop(AF_INET, (void *)&pkt->l3.ipv4.saddr, saddr,
+			  sizeof(saddr));
+		inet_ntop(AF_INET, (void *)&pkt->l3.ipv4.daddr, daddr,
+			  sizeof(daddr));
 		goto print_ip;
 	case ETH_P_IPV6:
-		i2ipv6(saddr, pkt->l3.ipv6.saddr);
-		i2ipv6(daddr, pkt->l3.ipv6.daddr);
+		inet_ntop(AF_INET6, (void *)pkt->l3.ipv6.saddr, saddr,
+			  sizeof(saddr));
+		inet_ntop(AF_INET6, (void *)pkt->l3.ipv6.daddr, daddr,
+			  sizeof(daddr));
 		goto print_ip;
 	case ETH_P_ARP:
 		goto print_arp;

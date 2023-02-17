@@ -27,36 +27,11 @@ typedef __u64 u64;
 
 extern char *l4_proto_names[];
 
-static inline void i2ip(char *dest, __u32 ip)
-{
-	u8 *t = (u8 *)&ip;
-	sprintf(dest, "%d.%d.%d.%d", t[0], t[1], t[2], t[3]);
-}
-
-static inline int ip2i(char *ip, __u32 *dest)
-{
-	u8 *c = (u8 *)dest;
-	u32 t[4] = {};
-
-	if (sscanf(ip, "%u.%u.%u.%u", t, t + 1, t + 2, t + 3) != 4)
-		return -EINVAL;
-
-#define C(index) c[index] = t[index] 
-	C(0);
-	C(1);
-	C(2);
-	C(3);
-#undef C
-	return 0;
-}
-
 static inline char *i2l4(u8 num)
 {
 	return l4_proto_names[num];
 }
 
 int proto2i(char *proto, int *dest);
-void i2ipv6(char *dest, u8 ip[]);
-int ipv6toi(char *ip, u8 *dest);
 
 #endif
