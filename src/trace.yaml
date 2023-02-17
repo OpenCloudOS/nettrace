@@ -208,27 +208,33 @@ children:
     visual: true
     children:
     - ip_rcv:0
-    - ipv6_rcv:0
     - ip_rcv_core:0
-    - ip6_rcv_core:0
     - ip_rcv_finish:2
-    - ip6_rcv_finish:2
     - ip_local_deliver:0
     - ip_local_deliver_finish:2
     - ip_forward:0
-    - ip6_forward:0
     - ip_forward_finish:0
+    - ip6_forward:0
+    - ip6_rcv_finish:2
+    - ip6_rcv_core:0
+    - ipv6_rcv:0
   - name: ip-out
     desc: ip layer of packet out
     visual: true
     children:
     - ip_output:2
-    - ip6_output:2
     - ip_finish_output:2
-    - ip6_finish_output:2
     - ip_finish_output_gso:2
     - ip_finish_output2:2
+    - ip6_output:2
+    - ip6_finish_output:2
     - ip6_finish_output2:2
+    - ip6_send_skb:0
+    - ip6_local_out:2
+  - name: xfrm
+    desc: xfrm module
+    visual: true
+    children:
     - xfrm4_output:2
     - xfrm_output:1
     - xfrm_output2:2
@@ -236,15 +242,19 @@ children:
     - xfrm_output_resume:1
     - xfrm4_transport_output:1
     - xfrm4_prepare_output:1
-    - ah_output:1
-    - esp_output:1
-    - esp_output_tail:1
     - xfrm4_policy_check:2
     - xfrm4_rcv:0
     - xfrm_input:0
+    - xfrm4_transport_input:1
+  - name: esp
+    desc: ip layer of packet out
+    visual: true
+    children:
+    - ah_output:1
+    - esp_output:1
+    - esp_output_tail:1
     - ah_input:1
     - esp_input:1
-    - xfrm4_transport_input:1
   - name: ip-route
     desc: ip route for packet in and out
     visual: true
@@ -317,6 +327,18 @@ children:
     - icmp_rcv:0
     - icmp_echo:0
     - icmp_reply:1
+    - icmpv6_rcv:0
+    - icmpv6_echo_reply:0
+    - ping_rcv:0
+    - __ping_queue_rcv_skb:1
+    - ping_queue_rcv_skb:1
+    - name: ping_lookup:1
+      analyzer: ret
+      rules:
+      - exp: eq 0
+        level: warn
+        msg: icmp socket is not founded
+        adv: not support
 - name: life
   desc: skb clone and free
   visual: true
