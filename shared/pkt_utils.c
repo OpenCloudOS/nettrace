@@ -3,6 +3,7 @@
 #include <linux/unistd.h>
 #include <linux/kernel.h>
 #include <sys/sysinfo.h>
+#include <linux/icmpv6.h>
 #define _LINUX_IN_H
 #include <netinet/in.h>
 
@@ -81,6 +82,7 @@ print_ip:
 			saddr, ntohs(pkt->l4.min.sport),
 			daddr, ntohs(pkt->l4.min.dport));
 		break;
+	case IPPROTO_ICMPV6:
 	case IPPROTO_ICMP:
 	case IPPROTO_ESP:
 		BUF_FMT("%s -> %s", saddr, daddr);
@@ -102,23 +104,34 @@ print_ip:
 			CONVERT_FLAG(TCP_FLAGS_RST, "R"),
 			CONVERT_FLAG(TCP_FLAGS_PSH, "P"));
 		break;
+	case IPPROTO_ICMPV6:
 	case IPPROTO_ICMP:
 		switch (pkt->l4.icmp.type) {
 		default:
 			BUF_FMT(" type: %u, code: %u, ", pkt->l4.icmp.type,
 				pkt->l4.icmp.code);
 			break;
+		case ICMPV6_ECHO_REQUEST:
 		case ICMP_ECHO:
 			BUF_FMT(" ping request, ");
 			break;
+		case ICMPV6_EXT_ECHO_REQUEST:
+			BUF_FMT(" ping request(ext), ");
+			break;
+		case ICMPV6_ECHO_REPLY:
 		case ICMP_ECHOREPLY:
 			BUF_FMT(" ping reply, ");
 			break;
+		case ICMPV6_EXT_ECHO_REPLY:
+			BUF_FMT(" ping reply(ext), ");
+			break;
 		}
-		BUF_FMT("seq: %u", ntohs(pkt->l4.icmp.seq));
+		BUF_FMT("seq: %u, id: %u", ntohs(pkt->l4.icmp.seq),
+			ntohs(pkt->l4.icmp.id));
 		break;
 	case IPPROTO_ESP:
-		BUF_FMT(" spi:0x%x seq:0x%x", ntohl(pkt->l4.espheader.spi), ntohl(pkt->l4.espheader.seq));
+		BUF_FMT(" spi:0x%x seq:0x%x", ntohl(pkt->l4.espheader.spi),
+			ntohl(pkt->l4.espheader.seq));
 		break;
 	default:
 		break;

@@ -274,6 +274,7 @@ static try_inline int probe_parse_ip(void *ip, parse_ctx_t *ctx)
 		pkt->l4.udp.dport = dport;
 		break;
 	}
+	case IPPROTO_ICMPV6:
 	case IPPROTO_ICMP: {
 		struct icmphdr *icmp = l4;
 
@@ -285,7 +286,7 @@ static try_inline int probe_parse_ip(void *ip, parse_ctx_t *ctx)
 		pkt->l4.icmp.id = _(icmp->un.echo.id);
 		break;
 	}
-        case IPPROTO_ESP: {
+	case IPPROTO_ESP: {
 		struct ip_esp_hdr *esp_hdr = l4;
 		if (ATTR_ENABLE(port))
 			goto err;
