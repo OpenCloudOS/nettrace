@@ -136,12 +136,9 @@ $ nettrace -h
 nettrace: a tool to trace skb in kernel and diagnose network problem
 
 Usage:
-    -s, --saddr      filter source ip address
-    --saddr6         filter source ip v6 address
-    -d, --daddr      filter dest ip address
-    --daddr6         filter dest ip v6 address
-    --addr           filter source or dest ip address
-    --addr6          filter source or dest ip v6 address
+    -s, --saddr      filter source ip/ipv6 address
+    -d, --daddr      filter dest ip/ipv6 address
+    --addr           filter source or dest ip/ipv6 address
     -S, --sport      filter source TCP/UDP port
     -D, --dport      filter dest TCP/UDP port
     -P, --port       filter source or dest TCP/UDP port
@@ -165,7 +162,7 @@ Usage:
     -h, --help       show help information
 ```
 
-其中，参数`s/d/addr/S/D/port/p/pid`用于进行报文的过滤，可以通过IP地址、端口、协议等属性进行过滤。其他参数的用途包括：
+其中，参数`s/d/addr/S/D/port/p/pid`用于进行报文的过滤，可以通过IP地址、端口、协议等属性进行过滤。其中，通过IPv6地址进行过滤目前也已经实现了支持。其他参数的用途包括：
 
 - `t/trace`：要启用的跟踪模块，默认启用所有
 - `ret`：跟踪和显示内核函数的返回值
