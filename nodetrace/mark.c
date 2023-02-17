@@ -31,11 +31,10 @@ static void print_bpf_output(void *ctx, int cpu, void *data, __u32 size)
 
 static int parse_opts(int argc, char *argv[], bpf_args_t *args)
 {
-	int proto_l;
-	u16 proto;
+	COMMON_PROG_ARGS_BEGIN()
 
 	option_item_t opts[] = {
-		COMMON_PROG_ARGS(&args->pkt),
+		COMMON_PROG_ARGS_DEFINE(&args->pkt),
 		{ .type = OPTION_BLANK },
 		{
 			.sname = 'i', .dest = &nic, .type = OPTION_STRING,
@@ -54,11 +53,11 @@ static int parse_opts(int argc, char *argv[], bpf_args_t *args)
 			.desc = "show help information",
 		},
 	};
-#undef E
-#undef R
 
 	if (parse_args(argc, argv, &prog_config, opts, ARRAY_SIZE(opts)))
 		goto err;
+	
+	COMMON_PROG_ARGS_END(&args->pkt)
 	return 0;
 err:
 	return -1;

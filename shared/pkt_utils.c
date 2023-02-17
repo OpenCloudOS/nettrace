@@ -3,8 +3,10 @@
 #include <linux/unistd.h>
 #include <linux/kernel.h>
 #include <sys/sysinfo.h>
+#include <linux/icmpv6.h>
 #define _LINUX_IN_H
 #include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include "pkt_utils.h"
 
@@ -55,12 +57,16 @@ int ts_print_packet(char *buf, packet_t *pkt, char *minfo,
 
 	switch (pkt->proto_l3) {
 	case ETH_P_IP:
-		i2ip(saddr, pkt->l3.ipv4.saddr);
-		i2ip(daddr, pkt->l3.ipv4.daddr);
+		inet_ntop(AF_INET, (void *)&pkt->l3.ipv4.saddr, saddr,
+			  sizeof(saddr));
+		inet_ntop(AF_INET, (void *)&pkt->l3.ipv4.daddr, daddr,
+			  sizeof(daddr));
 		goto print_ip;
 	case ETH_P_IPV6:
-		i2ipv6(saddr, pkt->l3.ipv6.saddr);
-		i2ipv6(daddr, pkt->l3.ipv6.daddr);
+		inet_ntop(AF_INET6, (void *)pkt->l3.ipv6.saddr, saddr,
+			  sizeof(saddr));
+		inet_ntop(AF_INET6, (void *)pkt->l3.ipv6.daddr, daddr,
+			  sizeof(daddr));
 		goto print_ip;
 	case ETH_P_ARP:
 		goto print_arp;
@@ -81,6 +87,7 @@ print_ip:
 			saddr, ntohs(pkt->l4.min.sport),
 			daddr, ntohs(pkt->l4.min.dport));
 		break;
+	case IPPROTO_ICMPV6:
 	case IPPROTO_ICMP:
 	case IPPROTO_ESP:
 		BUF_FMT("%s -> %s", saddr, daddr);
@@ -102,23 +109,34 @@ print_ip:
 			CONVERT_FLAG(TCP_FLAGS_RST, "R"),
 			CONVERT_FLAG(TCP_FLAGS_PSH, "P"));
 		break;
+	case IPPROTO_ICMPV6:
 	case IPPROTO_ICMP:
 		switch (pkt->l4.icmp.type) {
 		default:
 			BUF_FMT(" type: %u, code: %u, ", pkt->l4.icmp.type,
 				pkt->l4.icmp.code);
 			break;
+		case ICMPV6_ECHO_REQUEST:
 		case ICMP_ECHO:
 			BUF_FMT(" ping request, ");
 			break;
+		case ICMPV6_EXT_ECHO_REQUEST:
+			BUF_FMT(" ping request(ext), ");
+			break;
+		case ICMPV6_ECHO_REPLY:
 		case ICMP_ECHOREPLY:
 			BUF_FMT(" ping reply, ");
 			break;
+		case ICMPV6_EXT_ECHO_REPLY:
+			BUF_FMT(" ping reply(ext), ");
+			break;
 		}
-		BUF_FMT("seq: %u", ntohs(pkt->l4.icmp.seq));
+		BUF_FMT("seq: %u, id: %u", ntohs(pkt->l4.icmp.seq),
+			ntohs(pkt->l4.icmp.id));
 		break;
 	case IPPROTO_ESP:
-		BUF_FMT(" spi:0x%x seq:0x%x", ntohl(pkt->l4.espheader.spi), ntohl(pkt->l4.espheader.seq));
+		BUF_FMT(" spi:0x%x seq:0x%x", ntohl(pkt->l4.espheader.spi),
+			ntohl(pkt->l4.espheader.seq));
 		break;
 	default:
 		break;

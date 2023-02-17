@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MulanPSL-2.0
 
+#include <arpa/inet.h>
+
 #include <arg_parse.h>
 #include <common_args.h>
 
@@ -18,11 +20,10 @@ static void do_parse_args(int argc, char *argv[])
 	trace_args_t *trace_args = &trace_ctx.args;
 	bpf_args_t *bpf_args = &trace_ctx.bpf_args;
 	pkt_args_t *pkt_args = &bpf_args->pkt;
-	int proto_l = 0;
-	u16 proto;
+	COMMON_PROG_ARGS_BEGIN()
 
 	option_item_t opts[] = {
-		COMMON_PROG_ARGS(pkt_args),
+		COMMON_PROG_ARGS_DEFINE(pkt_args),
 		{
 			.lname = "pid", .type = OPTION_U32,
 			.dest = &bpf_args->pid, .set = &bpf_args->enable_pid,
@@ -134,18 +135,7 @@ static void do_parse_args(int argc, char *argv[])
 		exit(0);
 	}
 
-	switch (proto_l) {
-	case 3:
-		pkt_args->enable_l3_proto = true;
-		pkt_args->l3_proto = proto;
-		break;
-	case 4:
-		pkt_args->enable_l4_proto = true;
-		pkt_args->l4_proto = proto;
-		break;
-	default:
-		break;
-	}
+	COMMON_PROG_ARGS_END(pkt_args)
 
 	return;
 err:

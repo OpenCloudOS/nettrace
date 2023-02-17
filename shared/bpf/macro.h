@@ -6,6 +6,15 @@
 
 #define ETH_HLEN	14		/* Total octets in header.	 */
 
+#define IPPROTO_ICMPV6		58	/* ICMPv6			*/
+
+#define ICMPV6_ECHO_REQUEST		128
+#define ICMPV6_ECHO_REPLY		129
+
+/* Codes for EXT_ECHO (PROBE) */
+#define ICMPV6_EXT_ECHO_REQUEST		160
+#define ICMPV6_EXT_ECHO_REPLY		161
+
 #define TC_ACT_UNSPEC	(-1)
 #define TC_ACT_OK		0
 #define TC_ACT_RECLASSIFY	1
