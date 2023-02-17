@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #define _LINUX_IN_H
 #include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include "arg_parse.h"
 #include "net_utils.h"
@@ -124,22 +125,33 @@ found:
 			break;
 		}
 		case OPTION_IPV4:
-			if (ip2i(optarg, item->dest)) {
+			if (!inet_pton(AF_INET, optarg, item->dest)) {
 				printf("invalid ip address: %s\n", optarg);
 				goto err;
 			}
 			S_SET(bool, true);
 			break;
 		case OPTION_IPV6:
-			if (ipv6toi(optarg, item->dest)) {
+			if (!inet_pton(AF_INET6, optarg, item->dest)) {
 				printf("invalid ip address: %s\n", optarg);
 				goto err;
 			}
 			S_SET(bool, true);
 			break;
+		case OPTION_IPV4ORIPV6:
+			if (inet_pton(AF_INET, optarg, item->dest)) {
+				S_SET(u16, ETH_P_IP);
+			} else if (inet_pton(AF_INET6, optarg, item->dest)) {
+				S_SET(u16, ETH_P_IPV6);
+			} else {
+				printf("invalid ip address: %s\n", optarg);
+				goto err;
+			}
+			break;
 		case OPTION_HELP:
 			goto help;
 		case OPTION_PROTO: {
+			/* convert string to number in host order */
 			int val, layer = proto2i(optarg, &val);
 			if (!layer) {
 				printf("protocol not found\n");
