@@ -27,7 +27,7 @@ static void probe_trace_attach_manual(char *prog_name, char *func,
 
 	prog = probe_program(skel->obj, prog_name);
 	if (!prog) {
-		pr_err("failed to find prog %s\n", prog_name);
+		pr_warn("failed to find prog %s\n", prog_name);
 		return;
 	}
 
@@ -95,7 +95,7 @@ static int probe_trace_pre_load()
 
 		prog = probe_program(skel->obj, trace->prog);
 		if (!prog) {
-			pr_err("prog: %s not founded\n", trace->prog);
+			pr_warn("prog: %s not founded\n", trace->prog);
 			continue;
 		}
 		bpf_program__set_autoload(prog, false);
@@ -109,7 +109,7 @@ check_ret:
 		sprintf(kret_name, "ret%s", trace->prog);
 		prog = probe_program(skel->obj, kret_name);
 		if (!prog) {
-			pr_err("prog: %s not founded\n", kret_name);
+			pr_warn("prog: %s not founded\n", kret_name);
 			continue;
 		}
 		bpf_program__set_autoload(prog, false);

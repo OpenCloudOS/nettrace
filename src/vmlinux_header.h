@@ -1,10 +1,19 @@
 // SPDX-License-Identifier: MulanPSL-2.0
 
-#include <linux/skbuff.h>
-#include <net/netfilter/nf_tables.h>
+#include <uapi/linux/in.h>
 #include <uapi/linux/ip.h>
 #include <uapi/linux/ipv6.h>
 #include <uapi/linux/tcp.h>
 #include <uapi/linux/udp.h>
 #include <uapi/linux/icmp.h>
 #include <uapi/linux/bpf.h>
+
+#include <linux/skbuff.h>
+#include <linux/netdevice.h>
+#include <linux/netfilter/x_tables.h>
+
+#if defined(CONFIG_NF_TABLES) || defined(CONFIG_NF_TABLES_MODULE)
+#include <net/netfilter/nf_tables.h>
+#else
+#define NT_DISABLE_NFT
+#endif
