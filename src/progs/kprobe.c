@@ -357,10 +357,12 @@ out:
 	return 0;
 }
 
+#ifndef NT_DISABLE_NFT
 #undef NFT_COMPAT
 #include "nft_do_chain.c"
 
 #define NFT_COMPAT
 #include "nft_do_chain.c"
+#endif
 
 char _license[] SEC("license") = "GPL";
