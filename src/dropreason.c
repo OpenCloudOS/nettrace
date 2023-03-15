@@ -18,7 +18,8 @@ static bool drop_reason_inited = false;
 bool drop_reason_support()
 {
 	return simple_exec("cat /sys/kernel/debug/tracing/events/skb/"
-			   "kfree_skb/format | grep NOT_SPECIFIED") == 0;
+			   "kfree_skb/format 2>/dev/null | "
+			   "grep NOT_SPECIFIED") == 0;
 }
 
 static int parse_reason_enum()

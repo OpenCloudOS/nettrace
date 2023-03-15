@@ -375,19 +375,39 @@ static int trace_prepare_traces()
 int trace_prepare()
 {
 	trace_t *trace;
+	int err;
 
-	if (trace_prepare_args())
-		return -1;
+	err = trace_prepare_args();
+	if (err)
+		goto err;
 
-	if (trace_prepare_traces())
-		return -1;
+	err = trace_prepare_traces();
+	if (err)
+		goto err;
 
 	if (trace_ctx.args.show_traces) {
 		trace_show(&root_group);
 		exit(0);
 	}
 
+	if (geteuid() != 0) {
+		pr_err("Please run as root!\n");
+		err = -EPERM;
+		goto err;
+	}
+
+#ifndef COMPAT_MODE
+	if (!file_exist("/sys/kernel/btf/vmlinux")) {
+		pr_err("BTF is not support by your kernel, please compile"
+		       "this tool with \"COMPAT=1\"\n");
+		err = -ENOTSUP;
+		goto err;
+	}
+#endif
+
 	return 0;
+err:
+	return err;
 }
 
 static int trace_bpf_load()
