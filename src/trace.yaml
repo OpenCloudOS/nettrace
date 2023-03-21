@@ -110,6 +110,11 @@ children:
     children:
     - arp_rcv:0
     - arp_process:2
+  - name: bonding
+    visual: true
+    desc: bonding netdevice
+    children:
+    - bond_dev_queue_xmit:1
 - name: packet
   desc: the process of skb of type PF_PACKET
   children:
