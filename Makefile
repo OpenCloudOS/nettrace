@@ -16,9 +16,11 @@ BCOMP		:= ${PREFIX}/usr/share/bash-completion/completions/
 export PREFIX
 SCRIPT		= $(ROOT)/script
 export SCRIPT
+ARCH		:= $(shell uname -m)
 SOURCE_DIR	:= ~/rpmbuild/SOURCES/nettrace-${VERSION}
-PACK_TARGET 	:= nettrace-$(VERSION)-1$(RELEASE)
+PACK_TARGET 	:= nettrace-$(VERSION)-1$(RELEASE).$(ARCH)
 PACK_PATH	:= $(abspath $(PREFIX)/$(PACK_TARGET))
+PACK_NAME	:= $(PACK_TARGET).tar.bz2
 
 all clean:
 	$(call targets-call,$(targets))
@@ -51,7 +53,8 @@ pack:
 	@make clean
 	@rm -rf $(PACK_PATH) && mkdir -p $(PACK_PATH)
 	$(call targets-call,$(targets),PREFIX=$(PACK_PATH))
-	@cd $(PREFIX) && tar -cjf $(PACK_TARGET).tar.bz2 $(PACK_TARGET)
+	@cd $(PREFIX) && tar -cjf $(PACK_NAME) $(PACK_TARGET) &&	\
+		echo "$(PREFIX)/$(PACK_NAME) is generated"
 
 rpm:
 	@make clean
