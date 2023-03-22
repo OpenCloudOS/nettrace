@@ -73,6 +73,7 @@ children:
     - tcf_classify:0
     - cls_bpf_classify:0
     - tcf_bpf_act:0
+    - sch_direct_xmit:0
   - name: ipvaln
     desc: ipvlan network interface
     default: false
