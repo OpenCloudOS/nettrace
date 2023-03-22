@@ -73,6 +73,7 @@ children:
     - tcf_classify:0
     - cls_bpf_classify:0
     - tcf_bpf_act:0
+    - sch_direct_xmit:0
   - name: ipvaln
     desc: ipvlan network interface
     default: false
@@ -110,6 +111,11 @@ children:
     children:
     - arp_rcv:0
     - arp_process:2
+  - name: bonding
+    visual: true
+    desc: bonding netdevice
+    children:
+    - bond_dev_queue_xmit:1
 - name: packet
   desc: the process of skb of type PF_PACKET
   children:
