@@ -57,7 +57,7 @@ struct {
 
 #undef _C
 #ifdef COMPAT_MODE
-#define _C(src, a)	_(src->a)
+#define _C(src, a)	_((src)->a)
 #else
 #define _C(src, a, ...)		BPF_CORE_READ(src, a, ##__VA_ARGS__)
 #endif

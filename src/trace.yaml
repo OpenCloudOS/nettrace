@@ -66,6 +66,18 @@ children:
     children:
     - __dev_queue_xmit:0
     - dev_hard_start_xmit:0
+    - name: dev_qdisc_enqueue
+      analyzer: qdisc
+      rules:
+      - exp: ne 0
+        level: error
+        msg: failed to queue packet to qdisc
+    - name: sch_direct_xmit
+      analyzer: qdisc
+      rules:
+      - exp: eq 0
+        level: error
+        msg: failed to direct xmit
   - name: sched
     desc: TC(traffic control) module
     visual: true
@@ -73,7 +85,6 @@ children:
     - tcf_classify:0
     - cls_bpf_classify:0
     - tcf_bpf_act:0
-    - sch_direct_xmit:0
   - name: ipvaln
     desc: ipvlan network interface
     default: false

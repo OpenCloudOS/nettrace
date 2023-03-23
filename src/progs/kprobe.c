@@ -215,7 +215,7 @@ static try_inline int handle_exit(struct pt_regs *regs, int func)
 #define DEFINE_KPROBE_INIT(name, skb_init)			\
 	__DEFINE_KPROBE_INIT(name, name, skb_init)
 
-#define DEFINE_KPROBE(name, skb_index)				\
+#define DEFINE_KPROBE_SKB(name, skb_index)			\
 	DEFINE_KPROBE_INIT(name, PT_REGS_PARM##skb_index(ctx))
 
 #define DEFINE_KPROBE_TARGET(name, func_name, skb_index)	\
@@ -223,7 +223,7 @@ static try_inline int handle_exit(struct pt_regs *regs, int func)
 			     PT_REGS_PARM##skb_index(ctx))
 
 #define KPROBE_DEFAULT(name, skb_index)				\
-	DEFINE_KPROBE(name, skb_index)				\
+	DEFINE_KPROBE_SKB(name, skb_index)			\
 	{							\
 		return default_handle_entry(ctx, skb, func);	\
 	}
@@ -286,7 +286,7 @@ __DEFINE_KPROBE_INIT(__netif_receive_skb_core_pskb, __netif_receive_skb_core,
 	return handle_entry(ctx, skb, &e.event, sizeof(e), func);	\
 }
 
-DEFINE_KPROBE(ipt_do_table, 1)
+DEFINE_KPROBE_SKB(ipt_do_table, 1)
 {
 	struct nf_hook_state *state = (void *)PT_REGS_PARM2(ctx);
 	struct xt_table *table = (void *)PT_REGS_PARM3(ctx);
@@ -302,9 +302,9 @@ DEFINE_KPROBE_TARGET(ipt_do_table_new, ipt_do_table, 2)
 	bpf_ipt_do_table();
 }
 
-DEFINE_KPROBE(nf_hook_slow, 1)
+DEFINE_KPROBE_SKB(nf_hook_slow, 1)
 {
-	nf_event_t e = { .event = { .func = func, } };
+	nf_event_t e = ext_event_init();
 	struct nf_hook_entries *entries;
 	struct nf_hook_state *state;
 	int num;
@@ -323,7 +323,7 @@ DEFINE_KPROBE(nf_hook_slow, 1)
 
 on_hooks:;
 	entries = (void *)PT_REGS_PARM3(ctx);
-	nf_hooks_event_t hooks_event = { .event = { .func = func, } };
+	nf_hooks_event_t hooks_event = ext_event_init();
 
 	if (handle_entry(ctx, skb, &hooks_event.event, 0, func))
 		return 0;
@@ -364,5 +364,29 @@ out:
 #define NFT_COMPAT
 #include "nft_do_chain.c"
 #endif
+
+DEFINE_KPROBE_SKB(dev_qdisc_enqueue, 1)
+{
+	struct netdev_queue *txq = (void *)PT_REGS_PARM4(ctx);
+	struct Qdisc *q = (void *)PT_REGS_PARM2(ctx);
+	qdisc_event_t e = ext_event_init();
+
+	e.qlen = _C(&(q->q), qlen);
+	e.state = _C(txq, state);
+
+	return handle_entry(ctx, skb, &e.event, sizeof(e), func);
+}
+
+DEFINE_KPROBE_SKB(sch_direct_xmit, 1)
+{
+	struct netdev_queue *txq = (void *)PT_REGS_PARM4(ctx);
+	struct Qdisc *q = (void *)PT_REGS_PARM2(ctx);
+	qdisc_event_t e = ext_event_init();
+
+	e.qlen = _C(&(q->q), qlen);
+	e.state = _C(txq, state);
+
+	return handle_entry(ctx, skb, &e.event, sizeof(e), func);
+}
 
 char _license[] SEC("license") = "GPL";

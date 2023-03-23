@@ -12,6 +12,8 @@
 #include <linux/netdevice.h>
 #include <linux/netfilter/x_tables.h>
 
+#include <net/sch_generic.h>
+
 #if defined(CONFIG_NF_TABLES) || defined(CONFIG_NF_TABLES_MODULE)
 #include <net/netfilter/nf_tables.h>
 #else
