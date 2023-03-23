@@ -626,8 +626,8 @@ DEFINE_ANALYZER_EXIT(qdisc, TRACE_MODE_INETL_MASK)
 	char *msg = malloc(1024);
 
 	msg[0] = '\0';
-	sprintf(msg, PFMT_EMPH_STR(" *queue state: %x, len: %lu*"),
-		event->state, event->qlen);
+	sprintf(msg, PFMT_EMPH_STR(" *queue state: %x, flags: %x, len: %lu*"),
+		event->state, event->flags, event->qlen);
 	entry_set_msg(e->entry, msg);
 
 	rule_run(e->entry, trace, e->event.val);

@@ -64,6 +64,7 @@ typedef struct __attribute__((__packed__)) {
 	};
 	u32 state;
 	u32 qlen;
+	u32 flags;
 } qdisc_event_t;
 
 typedef struct __attribute__((__packed__)) {

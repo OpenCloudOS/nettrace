@@ -385,6 +385,7 @@ DEFINE_KPROBE_SKB(sch_direct_xmit, 1)
 
 	e.qlen = _C(&(q->q), qlen);
 	e.state = _C(txq, state);
+	e.flags = _C(q, flags);
 
 	return handle_entry(ctx, skb, &e.event, sizeof(e), func);
 }
