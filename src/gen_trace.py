@@ -31,7 +31,8 @@ def parse_names(trace, children):
         trace['name'] = first
     else:
         trace['name'] = first['name']
-        trace['cond'] = first['cond'].replace('"', '\\"')
+        if 'cond' in first:
+            trace['cond'] = first['cond'].replace('"', '\\"')
 
     del trace['names']
     prev = trace
@@ -47,7 +48,7 @@ def parse_names(trace, children):
             new_child['name'] = name['name']
             if 'cond' in name:
                 new_child['cond'] = name['cond'].replace('"', '\\"')
-            else:
+            elif 'cond' in new_child:
                 del new_child['cond']
 
         prev['next'] = new_child

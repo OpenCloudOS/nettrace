@@ -619,3 +619,18 @@ DEFINE_ANALYZER_EXIT(iptable, TRACE_MODE_INETL_MASK)
 
 	return RESULT_CONT;
 }
+
+DEFINE_ANALYZER_EXIT(qdisc, TRACE_MODE_INETL_MASK)
+{
+	qdisc_event_t *event = (void *)e->entry->event;
+	char *msg = malloc(1024);
+
+	msg[0] = '\0';
+	sprintf(msg, PFMT_EMPH_STR(" *queue state: %x, len: %lu*"),
+		event->state, event->qlen);
+	entry_set_msg(e->entry, msg);
+
+	rule_run(e->entry, trace, e->event.val);
+
+	return RESULT_CONT;
+}

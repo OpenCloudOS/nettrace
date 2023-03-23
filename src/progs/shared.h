@@ -62,12 +62,23 @@ typedef struct __attribute__((__packed__)) {
 		detail_event_t detail_event;
 		event_t	event;
 	};
+	u32 state;
+	u32 qlen;
+} qdisc_event_t;
+
+typedef struct __attribute__((__packed__)) {
+	union {
+		detail_event_t detail_event;
+		event_t	event;
+	};
 	char table[8];
 	char chain[8];
 	u8 hook;
 	u8 pf;
 	u64 hooks[8];
 } nf_hooks_event_t;
+
+#define ext_event_init() { .event = { .func = func }}
 
 #define MAX_EVENT_SIZE sizeof(nf_hooks_event_t)
 

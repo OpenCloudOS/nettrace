@@ -129,6 +129,7 @@ DECLARE_ANALYZER(clone);
 DECLARE_ANALYZER(ret);
 DECLARE_ANALYZER(iptable);
 DECLARE_ANALYZER(nf);
+DECLARE_ANALYZER(qdisc);
 
 void tl_poll_handler(void *raw_ctx, int cpu, void *data, u32 size);
 void basic_poll_handler(void *ctx, int cpu, void *data, u32 size);
