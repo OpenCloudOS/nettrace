@@ -64,7 +64,12 @@ children:
     desc: link layer (L2) of packet out
     visual: true
     children:
-    - __dev_queue_xmit:0
+    - name: __dev_queue_xmit:0
+      analyzer: ret
+      rules:
+      - <<: *rule_ret_err
+        msg: failed to queue packet to qdisc
+        adv: too complex to say
     - dev_hard_start_xmit:0
     - name: dev_qdisc_enqueue
       analyzer: qdisc
