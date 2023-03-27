@@ -25,7 +25,6 @@ struct analyzer;
 #define TRACE_RET		(1 << 3)
 #define TRACE_STACK		(1 << 4)
 #define TRACE_ATTACH_MANUAL	(1 << 5)
-#define TRACE_CHECKED		(1 << 6)
 
 #define trace_for_each(pos) list_for_each_entry(pos, &trace_list, all)
 
@@ -56,14 +55,15 @@ typedef struct trace {
 	/* list head of rules that belongs to this trace */
 	struct list_head rules;
 	/* traces that share the same target */
-	struct trace *sibling;
+	struct trace *backup;
+	bool	is_backup;
+	bool	probe;
 	int	index;
 	u32	status;
 	trace_group_t *parent;
 	struct analyzer *analyzer;
 	/* if this trace should be enabled by default */
 	bool	def;
-	bool	mutex;
 } trace_t;
 
 typedef struct trace_args {
@@ -90,6 +90,7 @@ typedef struct {
 	void (*trace_close)();
 	void (*trace_ready)();
 	void (*print_stack)(int key);
+	void (*trace_feat_probe)();
 	struct analyzer *analyzer;
 } trace_ops_t;
 
@@ -146,16 +147,30 @@ static inline bool trace_is_enable(trace_t *t)
 	return t->status & TRACE_ENABLE;
 }
 
+static inline void trace_set_invalid_reason(trace_t *t, const char *reason)
+{
+	if (reason)
+		pr_debug("trace name=%s, prog=%s is made invalid for: %s\n",
+			 t->name, t->prog, reason);
+	else
+		pr_debug("trace name=%s, prog=%s is made invalid\n",
+			 t->name, t->prog);
+	t->status |= TRACE_INVALID;
+}
+
 static inline void trace_set_invalid(trace_t *t)
 {
-	pr_debug("trace name=%s, prog=%s is made invalid\n", t->name,
-		 t->prog);
-	t->status |= TRACE_INVALID;
+	trace_set_invalid_reason(t, NULL);
 }
 
 static inline bool trace_is_invalid(trace_t *t) 
 {
 	return t->status & TRACE_INVALID;
+}
+
+static inline bool trace_is_usable(trace_t *t)
+{
+	return trace_is_enable(t) && !trace_is_invalid(t);
 }
 
 static inline void trace_set_ret(trace_t *t)
@@ -219,7 +234,7 @@ trace_group_t *search_trace_group(char *name);
 int trace_enable(char *name);
 int trace_group_enable(char *name);
 int trace_prepare();
-int trace_bpf_attach();
+int trace_bpf_load_and_attach();
 int trace_poll();
 bool trace_analyzer_enabled(struct analyzer *analyzer);
 

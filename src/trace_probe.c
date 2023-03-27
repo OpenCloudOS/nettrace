@@ -161,6 +161,41 @@ err:
 	return -1;
 }
 
+static bool is_trace_supported(trace_t *trace)
+{
+	struct kprobe *tmp = kprobe__open();
+	struct bpf_program *prog;
+	int err;
+
+	bpf_object__for_each_program(prog, tmp->obj) {
+		if (strcmp(trace->prog, bpf_program__name(prog)) != 0)
+			bpf_program__set_autoload(prog, false);
+	}
+	err = kprobe__load(tmp);
+	kprobe__destroy(tmp);
+
+	if (err)
+		pr_warn("kernel feature probe failed for trace: %s\n",
+			trace->prog);
+	else
+		pr_debug("kernel feature probe success for trace: %s\n",
+			 trace->prog);
+
+	return err == 0;
+}
+
+static void probe_trace_feat_probe()
+{
+	trace_t *trace;
+
+	trace_for_each(trace) {
+		if (!trace->probe || !trace_is_usable(trace))
+			continue;
+		if (!is_trace_supported(trace))
+			trace_set_invalid(trace);
+	}
+}
+
 void probe_trace_close()
 {
 	if (skel)
@@ -265,6 +300,7 @@ trace_ops_t probe_ops = {
 	.trace_load = probe_trace_load,
 	.trace_close = probe_trace_close,
 	.trace_ready = probe_trace_ready,
+	.trace_feat_probe = probe_trace_feat_probe,
 	.print_stack = probe_print_stack,
 	.analyzer = &probe_analyzer,
 };

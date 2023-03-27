@@ -1,11 +1,11 @@
 ---
 name: all
 desc: trace the whole kernel network stack
-rules:
-  rule_ret_err: &rule_ret_err
+common_rules:
+  define: &rule_ret_err
     exp: ne 0
     level: error
-  rules_nf: &rules_nf
+  define: &rules_nf
     - exp: eq 0
       level: error
       msg: packet is dropped
@@ -55,11 +55,12 @@ children:
         msg: XDP failed to redirect skb
         adv: check if the target ifindex exist
     - names:
+      - &__netif_receive_skb_core
+        name: __netif_receive_skb_core:0
       - name: __netif_receive_skb_core_pskb
         cond: '[ ! $(verlte "$(uname -r)" "5.4") -eq -1 ]' # valid when kernel >= 5.4
-      - name: __netif_receive_skb_core:0
+        backup: *__netif_receive_skb_core
       target: __netif_receive_skb_core
-      mutex: true
   - name: link-out
     desc: link layer (L2) of packet out
     visual: true
@@ -71,14 +72,27 @@ children:
         msg: failed to queue packet to qdisc
         adv: too complex to say
     - dev_hard_start_xmit:0
-    - name: dev_qdisc_enqueue
+    - names:
+      - &pfifo_enqueue_legacy
+        name: pfifo_enqueue_legacy
+      - name: pfifo_enqueue
+        backup: *pfifo_enqueue_legacy
+        probe: true
       analyzer: qdisc
+      target: pfifo_enqueue
       rules:
       - exp: ne 0
         level: error
         msg: failed to queue packet to qdisc
-    - name: sch_direct_xmit
+    - names:
+      - &sch_direct_xmit_legacy
+        name: sch_direct_xmit_legacy
+        rules: # return value is ambiguous in old kernel
+      - name: sch_direct_xmit
+        backup: *sch_direct_xmit_legacy
+        probe: true
       analyzer: qdisc
+      target: sch_direct_xmit
       rules:
       - exp: eq 0
         level: error
@@ -154,11 +168,12 @@ children:
     visual: true
     children:
     - names:
-      - name: ipt_do_table
+      - &ipt_do_table
+        name: ipt_do_table
+      - name: ipt_do_table_legacy
         cond: '[ $(verlte "$(uname -r)" "5.16") -eq -1 ]' # valid when kernel < 5.16
-      - name: ipt_do_table_new
+        backup: *ipt_do_table
       analyzer: iptable
-      mutex: true
       target: ipt_do_table
       rules:
       - exp: eq 0
@@ -169,14 +184,13 @@ children:
         level: info
         msg: packet is accepted
     - names:
+      - &nft_do_chain_legacy
+        name: nft_do_chain_legacy
       - name: nft_do_chain
-        cond: >-
-          zgrep DEBUG_INFO_BTF_MODULES /proc/config.gz 2>/dev/null ||
-          grep " nft_do_chain$" /proc/kallsyms
-      - nft_do_chain_compat
+        backup: *nft_do_chain_legacy
+        probe: true
       analyzer: iptable
       target: nft_do_chain
-      mutex: true
       rules:
       - exp: eq 0
         level: error

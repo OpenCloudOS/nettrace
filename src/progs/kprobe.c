@@ -193,16 +193,16 @@ static try_inline int handle_exit(struct pt_regs *regs, int func)
 #define __BPF_KPROBE(name)	BPF_KPROBE(name)
 
 /* one trace may have more than one implement */
-#define __DEFINE_KPROBE_INIT(name, func_name, skb_init)		\
+#define __DEFINE_KPROBE_INIT(name, target, skb_init)		\
 	static try_inline int fake__##name(struct pt_regs *ctx,	\
 				       struct sk_buff *skb,	\
 				       int func);		\
-	SEC("kretprobe/"#func_name)				\
+	SEC("kretprobe/"#target)				\
 	int __BPF_KPROBE(TRACE_RET_NAME(name))			\
 	{							\
 		return handle_exit(ctx, INDEX_##name);		\
 	}							\
-	SEC("kprobe/"#func_name)				\
+	SEC("kprobe/"#target)					\
 	int __BPF_KPROBE(TRACE_NAME(name))			\
 	{							\
 		struct sk_buff *skb = (void *)skb_init;		\
@@ -212,15 +212,18 @@ static try_inline int handle_exit(struct pt_regs *regs, int func)
 					   struct sk_buff *skb,	\
 					   int func)
 
-#define DEFINE_KPROBE_INIT(name, skb_init)			\
-	__DEFINE_KPROBE_INIT(name, name, skb_init)
+/* expand name and target sufficiently */
+#define DEFINE_KPROBE_INIT(name, target, skb_init)		\
+	__DEFINE_KPROBE_INIT(name, target, skb_init)
 
+/* init the skb by the index of func args */
 #define DEFINE_KPROBE_SKB(name, skb_index)			\
-	DEFINE_KPROBE_INIT(name, PT_REGS_PARM##skb_index(ctx))
+	DEFINE_KPROBE_INIT(name, name, PT_REGS_PARM##skb_index(ctx))
 
-#define DEFINE_KPROBE_TARGET(name, func_name, skb_index)	\
-	__DEFINE_KPROBE_INIT(name, func_name,			\
-			     PT_REGS_PARM##skb_index(ctx))
+/* the same as DEFINE_KPROBE_SKB(), but can set a different target */
+#define DEFINE_KPROBE_SKB_TARGET(name, target, skb_index)	\
+	DEFINE_KPROBE_INIT(name, target,			\
+			   PT_REGS_PARM##skb_index(ctx))
 
 #define KPROBE_DEFAULT(name, skb_index)				\
 	DEFINE_KPROBE_SKB(name, skb_index)			\
@@ -269,8 +272,8 @@ DEFINE_TP(kfree_skb, skb, kfree_skb, 8)
 	return 0;
 }
 
-__DEFINE_KPROBE_INIT(__netif_receive_skb_core_pskb, __netif_receive_skb_core,
-		    _(*(void **)(PT_REGS_PARM1(ctx))))
+DEFINE_KPROBE_INIT(__netif_receive_skb_core_pskb, __netif_receive_skb_core,
+		   _(*(void **)(PT_REGS_PARM1(ctx))))
 {
 	return default_handle_entry(ctx, skb, func);
 }
@@ -286,7 +289,7 @@ __DEFINE_KPROBE_INIT(__netif_receive_skb_core_pskb, __netif_receive_skb_core,
 	return handle_entry(ctx, skb, &e.event, sizeof(e), func);	\
 }
 
-DEFINE_KPROBE_SKB(ipt_do_table, 1)
+DEFINE_KPROBE_SKB_TARGET(ipt_do_table_legacy, ipt_do_table, 1)
 {
 	struct nf_hook_state *state = (void *)PT_REGS_PARM2(ctx);
 	struct xt_table *table = (void *)PT_REGS_PARM3(ctx);
@@ -294,7 +297,7 @@ DEFINE_KPROBE_SKB(ipt_do_table, 1)
 	bpf_ipt_do_table();
 }
 
-DEFINE_KPROBE_TARGET(ipt_do_table_new, ipt_do_table, 2)
+DEFINE_KPROBE_SKB(ipt_do_table, 2)
 {
 	struct nf_hook_state *state = (void *)PT_REGS_PARM3(ctx);
 	struct xt_table *table = (void *)PT_REGS_PARM1(ctx);
@@ -358,36 +361,15 @@ out:
 }
 
 #ifndef NT_DISABLE_NFT
-#undef NFT_COMPAT
-#include "nft_do_chain.c"
-
-#define NFT_COMPAT
-#include "nft_do_chain.c"
+#define NFT_LEGACY 1
+#include "kprobe_nft.c"
+#undef NFT_LEGACY
+#include "kprobe_nft.c"
 #endif
 
-DEFINE_KPROBE_SKB(dev_qdisc_enqueue, 1)
-{
-	struct netdev_queue *txq = (void *)PT_REGS_PARM4(ctx);
-	struct Qdisc *q = (void *)PT_REGS_PARM2(ctx);
-	qdisc_event_t e = ext_event_init();
-
-	e.qlen = _C(&(q->q), qlen);
-	e.state = _C(txq, state);
-
-	return handle_entry(ctx, skb, &e.event, sizeof(e), func);
-}
-
-DEFINE_KPROBE_SKB(sch_direct_xmit, 1)
-{
-	struct netdev_queue *txq = (void *)PT_REGS_PARM4(ctx);
-	struct Qdisc *q = (void *)PT_REGS_PARM2(ctx);
-	qdisc_event_t e = ext_event_init();
-
-	e.qlen = _C(&(q->q), qlen);
-	e.state = _C(txq, state);
-	e.flags = _C(q, flags);
-
-	return handle_entry(ctx, skb, &e.event, sizeof(e), func);
-}
+#define QDISC_LEGACY 1
+#include "kprobe_qdisc.c"
+#undef QDISC_LEGACY
+#include "kprobe_qdisc.c"
 
 char _license[] SEC("license") = "GPL";

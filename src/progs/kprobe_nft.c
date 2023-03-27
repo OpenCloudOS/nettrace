@@ -31,24 +31,22 @@ struct _nft_pktinfo_new {
 
 #endif
 
-#ifndef NFT_COMPAT
+#ifndef NFT_LEGACY
 #undef _CT
-#undef NFT_NAME
 #define _CT _C
-#define NFT_NAME nft_do_chain
 #else
 #undef _CT
-#undef NFT_NAME
 #define _CT(src, a) _(src->a)
-#define NFT_NAME nft_do_chain_compat
 #endif
 
-/* This definination is a little fantastic */
-#define BPF_NAME			_BPF_NAME(NFT_NAME)
-#define _BPF_NAME(name)			__BPF_NAME(bpf, name)
-#define __BPF_NAME(prefix, name)	prefix##_##name
+#undef FUNC_NAME
+#define FUNC_NAME(name)		\
+	nt_ternary_take(NFT_LEGACY, name##_legacy, name)
 
-static try_inline int BPF_NAME(struct pt_regs *ctx, int func)
+#undef FAKE_FUNC_NAME
+#define FAKE_FUNC_NAME FUNC_NAME(handle_nft_do_chain)
+
+static try_inline int FAKE_FUNC_NAME(struct pt_regs *ctx, int func)
 {
 	struct nft_pktinfo *pkt = (void *)PT_REGS_PARM1(ctx);
 	nf_event_t e = { .event = { .func = func, } };
@@ -80,15 +78,11 @@ static try_inline int BPF_NAME(struct pt_regs *ctx, int func)
 	return 0;
 }
 
-/* another magical macro definiation */
-#define ___DEFINE_KPROBE_INIT(name, target)	\
-	__DEFINE_KPROBE_INIT(name, target, NULL)
-
 /**
  * This function is used to the kernel version that don't support
  * kernel module BTF.
  */
-___DEFINE_KPROBE_INIT(NFT_NAME, nft_do_chain)
+DEFINE_KPROBE_INIT(FUNC_NAME(nft_do_chain), nft_do_chain, NULL)
 {
-	return BPF_NAME(ctx, func);
+	return FAKE_FUNC_NAME(ctx, func);
 }

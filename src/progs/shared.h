@@ -62,6 +62,7 @@ typedef struct __attribute__((__packed__)) {
 		detail_event_t detail_event;
 		event_t	event;
 	};
+	u64 last_update;
 	u32 state;
 	u32 qlen;
 	u32 flags;
@@ -111,4 +112,14 @@ typedef enum trace_mode {
 #define TRACE_PREFIX_LEN	MACRO_SIZE(TRACE_PREFIX)
 #define TRACE_NAME(name)	MACRO_CONCAT(TRACE_PREFIX, name)
 #define TRACE_RET_NAME(name)	MACRO_CONCAT(TRACE_RET_PREFIX, name)
+
+#define __nt_placehold_arg_1		1,
+#define __nt_take_2th(ignored, a, ...)	a
+#define ____nt_ternary_take(a, b, c)	__nt_take_2th(a b, c)
+#define __nt_ternary_take(a, b, c)	\
+	____nt_ternary_take(__nt_placehold_arg_##a, b, c)
+
+/* take b if a is 1; else, take c */
+#define nt_ternary_take(a, b, c) __nt_ternary_take(a, b, c)
+
 #endif
