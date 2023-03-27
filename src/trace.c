@@ -283,41 +283,19 @@ err:
 
 static void trace_exec_cond()
 {
-	trace_t *trace, *sibling;
-	bool mutexed;
+	trace_t *trace;
 
 	trace_for_each(trace) {
-		if (trace->mutex && (sibling = trace->sibling)) {
-			mutexed = false;
-			while (sibling != trace) {
-				if ((sibling->status & TRACE_CHECKED) &&
-				    !trace_is_invalid(sibling)) {
-					mutexed = true;
-					break;
-				}
-				sibling = sibling->sibling;
-			}
-			if (mutexed) {
-				trace_set_invalid(trace);
-				pr_debug("mutex happens in %s\n", trace->name);
-				goto next;
-			}
-		}
-
-		if (trace->cond) {
-			if (execf(NULL, "%s; %s", cond_pre, trace->cond))
-				trace_set_invalid(trace);
-		}
-next:
-		trace->status |= TRACE_CHECKED;
+		if (trace->cond && execf(NULL, "%s; %s", cond_pre,
+					 trace->cond))
+			trace_set_invalid(trace);
 	}
 }
 
 static int trace_prepare_traces()
 {
-	char func[128], name[136], *fmt;
+	char func[128], name[136];
 	trace_t *trace;
-	int sym_type;
 
 	trace_exec_cond();
 
@@ -335,6 +313,7 @@ static int trace_prepare_traces()
 	trace_for_each(trace) {
 		if (trace_is_invalid(trace) || !trace_is_enable(trace))
 			continue;
+
 		if (!trace_is_func(trace) || sym_get_type(trace->name) != SYM_NOT_EXIST)
 			continue;
 
@@ -352,9 +331,49 @@ static int trace_prepare_traces()
 
 	pr_debug("finished to resolve kernel symbol\n");
 
-	pr_verb("following traces are enabled:\n");
+	return 0;
+}
+
+static void trace_prepare_backup()
+{
+	trace_t *trace, *next;
+
 	trace_for_each(trace) {
-		if (trace_is_invalid(trace) || !trace_is_enable(trace))
+		bool hitted = false;
+
+		/* find a enabled leader of a backup chain */
+		if (trace->is_backup || !trace->backup ||
+		    !trace_is_enable(trace))
+			continue;
+
+		next = trace;
+		while (next) {
+			/* keep the first valid trace and make the others
+			 * invalid.
+			 */
+			if (hitted) {
+				trace_set_invalid_reason(next, "backup");
+				goto next_bk;
+			}
+			if (!trace_is_invalid(next)) {
+				pr_debug("backup: valid prog for %s is %s\n",
+					 next->name, next->prog);
+				hitted = true;
+			}
+next_bk:
+			next = next->backup;
+		}
+	}
+}
+
+static void trace_print_enabled()
+{
+	trace_t *trace;
+	char *fmt;
+
+	pr_verb("following traces are enabled and valid:\n");
+	trace_for_each(trace) {
+		if (!trace_is_usable(trace))
 			continue;
 
 		if (trace_is_func(trace)) {
@@ -368,13 +387,10 @@ static int trace_prepare_traces()
 		pr_verb("\t%s: %s, prog: %s\n", fmt, trace->name,
 			trace->prog);
 	}
-
-	return 0;
 }
 
 int trace_prepare()
 {
-	trace_t *trace;
 	int err;
 
 	err = trace_prepare_args();
@@ -395,6 +411,15 @@ int trace_prepare()
 		err = -EPERM;
 		goto err;
 	}
+
+	if (trace_ctx.ops->trace_feat_probe) {
+		pr_debug("kernel feature probe begin\n");
+		trace_ctx.ops->trace_feat_probe();
+		pr_debug("kernel feature probe end\n");
+	}
+
+	trace_prepare_backup();
+	trace_print_enabled();
 
 #ifndef COMPAT_MODE
 	if (!file_exist("/sys/kernel/btf/vmlinux")) {
@@ -422,7 +447,7 @@ static int trace_bpf_load()
 	return trace_ctx.ops->trace_load();
 }
 
-int trace_bpf_attach()
+int trace_bpf_load_and_attach()
 {
 	trace_t *trace;
 

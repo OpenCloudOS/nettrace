@@ -148,11 +148,11 @@ int main(int argc, char *argv[])
 
 	init_trace_group();
 	do_parse_args(argc, argv);
-	if (trace_prepare())
-		goto err;
 
 	set_trace_ops(&probe_ops);
-	if (trace_bpf_attach()) {
+	if (trace_prepare())
+		goto err;
+	if (trace_bpf_load_and_attach()) {
 		pr_err("failed to load kprobe-based bpf\n");
 		goto err;
 	}

@@ -24,38 +24,21 @@ rule_types = {
 
 
 def parse_names(trace, children):
+    children.remove(trace)
     names = trace['names']
-    first = names[0]
-    prev = None
-    if isinstance(first, str):
-        trace['name'] = first
-    else:
-        trace['name'] = first['name']
-        if 'cond' in first:
-            trace['cond'] = first['cond'].replace('"', '\\"')
-
     del trace['names']
-    prev = trace
 
-    for index in range(1, len(names)):
-        name = names[index]
-        new_child = dict(trace)
-
+    for name in names:
         if isinstance(name, str):
-            new_child['name'] = name
-            del new_child['cond']
-        else:
-            new_child['name'] = name['name']
-            if 'cond' in name:
-                new_child['cond'] = name['cond'].replace('"', '\\"')
-            elif 'cond' in new_child:
-                del new_child['cond']
+            name = {'name': name}
 
-        prev['next'] = new_child
-        prev = new_child
-        children.append(new_child)
+        tmp = dict(trace)
+        tmp.update(name)
+        name.update(tmp)
+        if 'cond' in name:
+            name['cond'] = name['cond'].replace('"', '\\"')
 
-    prev['next'] = trace
+        children.append(name)
 
 
 def parse_group(group):
@@ -66,11 +49,14 @@ def parse_group(group):
     i = 0
     while i < len(children):
         child = children[i]
+        if 'backup' in child:
+            child['backup']['is_backup'] = True
         if not isinstance(child, str):
             parse_group(child)
-            i += 1
             if 'names' in child:
                 parse_names(child, children)
+                continue
+            i += 1
             name_split = child['name'].split(':')
             if len(name_split) > 1:
                 child['name'] = name_split[0]
@@ -171,7 +157,7 @@ def gen_trace(trace, group, p_name):
     else:
         analyzer = ''
 
-    if 'rules' in trace:
+    if 'rules' in trace and trace['rules']:
         rules = trace['rules']
         (rule_str, _init_str) = gen_rules(rules, trace_name)
         init_str += _init_str
@@ -187,18 +173,21 @@ def gen_trace(trace, group, p_name):
     default = 'true' if default else 'false'
     default = f'\n\t.def = {default},'
     target = trace.get('target') or trace['name']
+    is_backup = 'true' if trace.get('is_backup') else 'false'
     define_str = f'''trace_t {trace_name} = {{
 \t.name = "{target}",
 \t.desc = "{trace.get('desc') or ''}",{skb_str}{cond_str}{default}
 \t.type = {trace_type},{reg_str}{analyzer}{msg_str}
 \t.index = INDEX_{name},
 \t.prog = "__trace_{name}",
+\t.is_backup = {is_backup},
+\t.probe = {'true' if trace.get('probe') else 'false'},
 \t.parent = &{p_name},
 \t.rules =  LIST_HEAD_INIT({trace_name}.rules),
-\t.mutex = {'true' if trace.get('mutex') else 'false'},
 }};
 {rule_str}
 '''
+
     init_str += f'''\tlist_add_tail(&{trace_name}.list, &{p_name}.traces);
 \tall_traces[INDEX_{name}] = &{trace_name};
 \tlist_add_tail(&{trace_name}.all, &trace_list);
@@ -251,14 +240,14 @@ def gen_group(group, is_root=False):
     for child in group['children']:
         if 'children' in child:
             continue
-        sibling = 'NULL'
-        if 'next' in child:
-            sibling = f"&trace_{child['next']['define_name']}"
-        result['init_str'] += f"\ttrace_{child['define_name']}.sibling = {sibling};\n"
+        backup = 'NULL'
+        if 'backup' in child:
+            backup = f"&trace_{child['backup']['define_name']}"
+        result['init_str'] += f"\ttrace_{child['define_name']}.backup = {backup};\n"
     return result
 
 
-with open('trace.yaml', 'r', encoding='utf-8') as f:
+with open('/home/xm/github/nettrace/src/trace.yaml', 'r', encoding='utf-8') as f:
     content = f.read()
     root = yaml.load(content, yaml.SafeLoader)
     parse_group(root)
