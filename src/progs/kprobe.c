@@ -62,10 +62,10 @@ static try_inline void try_trace_stack(void *regs, bpf_args_t *bpf_args,
 	int i = 0, key;
 	u16 *funcs;
 
-	if (!ARGS_GET(stack))
+	if (!bpf_args->stack)
 		return;
 
-	funcs = ARGS_GET(stack_funs);
+	funcs = bpf_args->stack_funs;
 
 #pragma unroll
 	for (; i < MAX_FUNC_STACK; i++) {
@@ -88,17 +88,17 @@ static try_inline void try_trace_stack(void *regs, bpf_args_t *bpf_args,
 static try_inline int handle_entry(void *regs, struct sk_buff *skb,
 				   event_t *e, int size, int func)
 {
+	bpf_args_t *bpf_args = CONFIG();
 	packet_t *pkt = &e->pkt;
 	bool *matched;
-	ARGS_INIT();
 	u32 pid;
 
-	if (!ARGS_GET(ready))
+	if (!bpf_args->ready)
 		return -1;
 
 	pr_debug_skb("begin to handle, func=%d", func);
 	pid = (u32)bpf_get_current_pid_tgid();
-	if (ARGS_GET(trace_mode) & MODE_SKIP_LIFE_MASK) {
+	if (bpf_args->trace_mode & MODE_SKIP_LIFE_MASK) {
 		if (!probe_parse_skb(skb, pkt))
 			goto skip_life;
 		return -1;
@@ -107,7 +107,7 @@ static try_inline int handle_entry(void *regs, struct sk_buff *skb,
 	matched = bpf_map_lookup_elem(&m_matched, &skb);
 	if (matched && *matched) {
 		probe_parse_skb_no_filter(skb, pkt);
-	} else if (!ARGS_CHECK(pid, pid) && !probe_parse_skb(skb, pkt)) {
+	} else if (!ARGS_CHECK(bpf_args, pid, pid) && !probe_parse_skb(skb, pkt)) {
 		bool _matched = true;
 		bpf_map_update_elem(&m_matched, &skb, &_matched, 0);
 	} else {
@@ -115,7 +115,7 @@ static try_inline int handle_entry(void *regs, struct sk_buff *skb,
 	}
 
 skip_life:
-	if (!ARGS_GET(detail))
+	if (!bpf_args->detail)
 		goto out;
 
 	/* store more (detail) information about net or task. */

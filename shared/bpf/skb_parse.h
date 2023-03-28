@@ -72,7 +72,7 @@ struct {
 
 #ifdef BPF_DEBUG
 #define pr_bpf_deubg(fmt, ...) {				\
-	if (((bpf_args_t *)bpf_args)->bpf_debug)		\
+	if (ARGS_GET_CONFIG(bpf_debug))				\
 		bpf_printk("nettrace: "fmt"\n", __VA_ARGS__);	\
 }
 #else
@@ -81,16 +81,14 @@ struct {
 #define pr_debug_skb(fmt, ...)	\
 	pr_bpf_deubg("skb=%llx, "fmt, (u64)(void *)skb, ##__VA_ARGS__)
 
-#define ARGS_INIT()		bpf_args_t *bpf_args = CONFIG();
-#define ARGS_PKT()		(&bpf_args->pkt)
 
-#define ARGS_ENABLED(name)	bpf_args->enable_##name
-#define ARGS_GET(name)		bpf_args->name
-#define ARGS_GET_CONFIG(name)	((bpf_args_t *)CONFIG())->name
-#define ARGS_CHECK(name, val)	\
-	(ARGS_ENABLED(name) && bpf_args->name != (val))
-#define ARGS_CHECK_OPS(name, value, ops) \
-	(ARGS_ENABLED(name) && ops(bpf_args->name, value))
+#define ARGS_GET_CONFIG(name)		((bpf_args_t *)CONFIG())->name
+#define ARGS_ENABLED(args, name)	args->enable_##name
+#define ARGS_GET(args, name)		(args)->name
+#define ARGS_CHECK(args, name, value)		\
+	(ARGS_ENABLED(args, name) && args->name != (value))
+#define ARGS_CHECK_OPS(args, name, value, ops)	\
+	(ARGS_ENABLED(args, name) && ops(args->name, value))
 
 typedef struct {
 	u64 pad;
@@ -165,6 +163,7 @@ void *load_l4_hdr(struct __sk_buff *skb, struct iphdr *ip, void *dst,
 	return l4;
 }
 
+/* check if the skb contains L2 head (mac head) */
 static try_inline bool skb_l2_check(u16 header)
 {
 	return !header || header == (u16)~0U;
@@ -175,31 +174,40 @@ static try_inline bool skb_l4_check(u16 l4, u16 l3)
 	return l4 == 0xFFFF || l4 <= l3;
 }
 
-static try_inline bool ipv6_not_equel(u8 *src, u8 *target)
-{
-	return *(u64 *)src != *(u64 *)target ||
-	       *(u64 *)(src + 8) != *(u64 *)(target + 8);
-}
-
-#define ATTR_OPS(attr, ops)				\
-	((ops(attr, d##attr) && ops(attr, s##attr)) ||	\
-	 ops(s##attr, s##attr) ||			\
-	 ops(d##attr, d##attr))
-#define ATTR_ENABLE_OPS(name, value)			\
-	ARGS_ENABLED(name)
-#define ATTR_ENABLE(attr)				\
-	(filter && ATTR_OPS(attr, ATTR_ENABLE_OPS))
-#define ATTR_CHECK(attr)				\
-	(filter && ATTR_OPS(attr, ARGS_CHECK))
-#define ATTR_IPV6_OPS(attr, value)			\
-	ARGS_CHECK_OPS(attr##_v6, pkt->l3.ipv6.value, ipv6_not_equel)
-#define ATTR_IPV6_CHECK()				\
-	(filter && ATTR_OPS(addr, ATTR_IPV6_OPS))
+/* used to iter some filter args, such as saddr/daddr/addr and
+ * sport/dport/port
+ */
+#define FILTER_ITER_OPS(args, attr, svalue, dvalue, ops)	\
+	((ops(args, attr, (dvalue)) && ops(args, attr,		\
+					 (svalue))) ||		\
+	 ops(args, s##attr, (svalue)) ||			\
+	 ops(args, d##attr, (dvalue)))
+#define FILTER_OPS_ENABLED(args, name, value)		\
+	ARGS_ENABLED(args, name)
+#define FILTER_ITER_ENABLED(ctx, attr)			\
+	(ctx->filter && FILTER_ITER_OPS(ctx->args, attr, , , FILTER_OPS_ENABLED))
+#define FILTER_ITER_CHECK(ctx, attr, svalue, dvalue)	\
+	(ctx->filter && FILTER_ITER_OPS(ctx->args, attr, svalue, dvalue, ARGS_CHECK))
+#define FILTER_OPS_IPV6_EQUEL(args, name, value) ({		\
+	int rc = 0;						\
+	if (ARGS_ENABLED(args, name)) {				\
+		u8 *__src = args->name;				\
+		u8 *__target = value;				\
+		rc = *(u64 *)__src != *(u64 *)__target ||	\
+		     *(u64 *)(__src + 8) != *(u64 *)(__target + 8); \
+	}							\
+	rc;							\
+})
+#define FILTER_ITER_IPV6(ctx, svalue, dvalue)			\
+	(ctx->filter && FILTER_ITER_OPS(ctx->args, addr_v6, svalue,	\
+		dvalue, FILTER_OPS_IPV6_EQUEL))
+#define FILTER_CHECK(ctx, attr, value)			\
+	(ctx->filter && ARGS_CHECK(ctx->args, attr, value))
+#define FILTER_ENABLED(ctx, attr)			\
+	(ctx->filter && ARGS_ENABLED(ctx->args, attr))
 
 static try_inline int probe_parse_ip(void *ip, parse_ctx_t *ctx)
 {
-	pkt_args_t *bpf_args = ctx->args;
-	bool filter = ctx->filter;
 	packet_t *pkt = ctx->pkt;
 	void *l4 = NULL;
 
@@ -210,7 +218,7 @@ static try_inline int probe_parse_ip(void *ip, parse_ctx_t *ctx)
 		struct ipv6hdr *ipv6 = ip;
 
 		/* ipv4 address is set, skip ipv6 */
-		if (ATTR_ENABLE(addr))
+		if (FILTER_ITER_ENABLED(ctx, addr))
 			goto err;
 
 		bpf_probe_read_kernel(pkt->l3.ipv6.saddr,
@@ -220,7 +228,8 @@ static try_inline int probe_parse_ip(void *ip, parse_ctx_t *ctx)
 				      sizeof(ipv6->daddr),
 				      &ipv6->daddr);
 
-		if (ATTR_IPV6_CHECK())
+		if (FILTER_ITER_IPV6(ctx, pkt->l3.ipv6.saddr,
+				     pkt->l3.ipv6.daddr))
 			goto err;
 
 		pkt->proto_l4 = _(ipv6->nexthdr);
@@ -230,14 +239,14 @@ static try_inline int probe_parse_ip(void *ip, parse_ctx_t *ctx)
 		u32 saddr, daddr;
 
 		/* skip ipv4 if ipv6 is set */
-		if (ATTR_ENABLE(addr_v6))
+		if (FILTER_ITER_ENABLED(ctx, addr_v6))
 			goto err;
 
 		l4 = l4 ?: ip + get_ip_header_len(_(((u8 *)ip)[0]));
 		saddr = _(ipv4->saddr);
 		daddr = _(ipv4->daddr);
 
-		if (ATTR_CHECK(addr))
+		if (FILTER_ITER_CHECK(ctx, addr, saddr, daddr))
 			goto err;
 
 		pkt->proto_l4 = _(ipv4->protocol);
@@ -245,7 +254,7 @@ static try_inline int probe_parse_ip(void *ip, parse_ctx_t *ctx)
 		pkt->l3.ipv4.daddr = daddr;
 	}
 
-	if (ARGS_CHECK(l4_proto, pkt->proto_l4))
+	if (FILTER_CHECK(ctx, l4_proto, pkt->proto_l4))
 		goto err;
 
 	switch (pkt->proto_l4) {
@@ -254,7 +263,7 @@ static try_inline int probe_parse_ip(void *ip, parse_ctx_t *ctx)
 		u16 sport = _(tcp->source);
 		u16 dport = _(tcp->dest);
 
-		if (ATTR_CHECK(port))
+		if (FILTER_ITER_CHECK(ctx, port, sport, dport))
 			goto err;
 
 		pkt->l4.tcp.sport = sport;
@@ -269,7 +278,7 @@ static try_inline int probe_parse_ip(void *ip, parse_ctx_t *ctx)
 		u16 sport = _(udp->source);
 		u16 dport = _(udp->dest);
 	
-		if (ATTR_CHECK(port))
+		if (FILTER_ITER_CHECK(ctx, port, sport, dport))
 			goto err;
 
 		pkt->l4.udp.sport = sport;
@@ -280,7 +289,7 @@ static try_inline int probe_parse_ip(void *ip, parse_ctx_t *ctx)
 	case IPPROTO_ICMP: {
 		struct icmphdr *icmp = l4;
 
-		if (ATTR_ENABLE(port))
+		if (FILTER_ITER_ENABLED(ctx, port))
 			goto err;
 		pkt->l4.icmp.code = _(icmp->code);
 		pkt->l4.icmp.type = _(icmp->type);
@@ -290,14 +299,14 @@ static try_inline int probe_parse_ip(void *ip, parse_ctx_t *ctx)
 	}
 	case IPPROTO_ESP: {
 		struct ip_esp_hdr *esp_hdr = l4;
-		if (ATTR_ENABLE(port))
+		if (FILTER_ITER_ENABLED(ctx, port))
 			goto err;
 		pkt->l4.espheader.seq = _(esp_hdr->seq_no);
 		pkt->l4.espheader.spi = _(esp_hdr->spi);
 		break;
 	}
 	default:
-		if (ATTR_ENABLE(port))
+		if (FILTER_ITER_ENABLED(ctx, port))
 			goto err;
 	}
 	return 0;
@@ -307,9 +316,7 @@ err:
 
 static try_inline int probe_parse_skb_cond(parse_ctx_t *ctx)
 {
-	pkt_args_t *bpf_args = ctx->args;
 	struct sk_buff *skb = ctx->skb;
-	bool filter = ctx->filter;
 	packet_t *pkt = ctx->pkt;
 	u16 l3_proto;
 	void *l3;
@@ -347,7 +354,7 @@ static try_inline int probe_parse_skb_cond(parse_ctx_t *ctx)
 		l3_proto = bpf_ntohs(_(eth->h_proto));
 	}
 
-	if (filter && ARGS_CHECK(l3_proto, l3_proto))
+	if (FILTER_CHECK(ctx, l3_proto, l3_proto))
 		goto err;
 
 	ctx->trans_header = _C(skb, transport_header);
@@ -359,7 +366,7 @@ static try_inline int probe_parse_skb_cond(parse_ctx_t *ctx)
 	case ETH_P_IP:
 		return probe_parse_ip(l3, ctx);
 	default:
-		if (filter && ARGS_ENABLED(l4_proto))
+		if (FILTER_ENABLED(ctx, l4_proto))
 			goto err;
 		return 0;
 	}
@@ -399,16 +406,16 @@ static try_inline int direct_parse_skb(struct __sk_buff *skb, packet_t *pkt,
 	if ((void *)ip > SKB_END(skb))
 		goto err;
 
-	if (bpf_args && (ARGS_CHECK(l3_proto, eth->h_proto)))
+	if (bpf_args && (ARGS_CHECK(bpf_args, l3_proto, eth->h_proto)))
 		goto err;
 
 	pkt->proto_l3 = bpf_ntohs(eth->h_proto);
 	if (SKB_CHECK_IP(skb))
 		goto err;
 
-	if (bpf_args && (ARGS_CHECK(l4_proto, ip->protocol) ||
-		       ARGS_CHECK(saddr, ip->saddr) ||
-		       ARGS_CHECK(daddr, ip->daddr)))
+	if (bpf_args && (ARGS_CHECK(bpf_args, l4_proto, ip->protocol) ||
+		       ARGS_CHECK(bpf_args, saddr, ip->saddr) ||
+		       ARGS_CHECK(bpf_args, daddr, ip->daddr)))
 		goto err;
 
 	l4_min_t *l4_p = (void *)(ip + 1);
@@ -443,8 +450,8 @@ fill_port:
 		goto out;
 	}
 
-	if (bpf_args && (ARGS_CHECK(sport, l4_p->sport) ||
-		       ARGS_CHECK(dport, l4_p->dport)))
+	if (bpf_args && (ARGS_CHECK(bpf_args, sport, l4_p->sport) ||
+		       ARGS_CHECK(bpf_args, dport, l4_p->dport)))
 		return 1;
 
 	pkt->l3.ipv4.saddr = ip->saddr;
