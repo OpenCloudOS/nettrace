@@ -2,9 +2,9 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
 
-#include <macro.h>
+#include <skb_macro.h>
 #include "shared.h"
-#include <skb_utils.h>
+#include <skb_parse.h>
 
 #define MARK_TOS_VALUE	0xe0
 

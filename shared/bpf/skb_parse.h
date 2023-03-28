@@ -1,13 +1,15 @@
+/* 
+ * The common part of parse skb and filter skb by specified condition.
+ *
+ * NOTE: This file can only be used in BPF program, can't be used in user
+ * space code.
+ */
 #ifndef _H_BPF_SKB_UTILS
 #define _H_BPF_SKB_UTILS
 
-/* This file can only be used in eBPF program, can't be used in user space
- * code.
- */
-
 #include <bpf/bpf_core_read.h>
 
-#include "macro.h"
+#include "skb_macro.h"
 #include "skb_shared.h"
 
 typedef struct {
