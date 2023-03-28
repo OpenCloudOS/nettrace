@@ -1,5 +1,20 @@
+/* 
+ * This file define the struct that we use both in BPF and use space, such
+ * as the perf event data.
+ */
 #ifndef _H_BPF_SKB_SHARED
 #define _H_BPF_SKB_SHARED
+
+#define nt_take_2th(ignored, a, ...)	a
+#define nt_take_3th(ignored, a, b, ...)	b
+
+#define __nt_placehold_arg_1		1,
+#define ____nt_ternary_take(a, b, c)	nt_take_2th(a b, c)
+#define __nt_ternary_take(a, b, c)	\
+	____nt_ternary_take(__nt_placehold_arg_##a, b, c)
+
+/* take b if a is 1; else, take c */
+#define nt_ternary_take(a, b, c) __nt_ternary_take(a, b, c)
 
 typedef struct {
 	u16	sport;
@@ -57,15 +72,15 @@ typedef struct __attribute__((__packed__)) {
 #define TCP_FLAGS_RST	(1 << 2)
 #define TCP_FLAGS_SYN	(1 << 1)
 
-#define APPLY_DEFINE_FIELD(dummy, a, b, ...)	DEFINE_FIELD_##b
 #define DEFINE_FIELD_STD(type, name)		\
 	type name;				\
 	bool enable_##name;
 #define DEFINE_FIELD_ARRAY(type, name, size)	\
 	type name[size];			\
 	bool enable_##name;
-#define DEFINE_FIELD(type, name, args...)	\
-	APPLY_DEFINE_FIELD(dummy, ##args, ARRAY, STD)(type, name, ##args)
+#define DEFINE_FIELD(type, name, args...)		\
+	nt_take_3th(dummy, ##args, DEFINE_FIELD_ARRAY,	\
+		    DEFINE_FIELD_STD)(type, name, ##args)
 
 /* used for packet filter condition */
 typedef struct {
