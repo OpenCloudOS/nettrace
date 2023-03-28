@@ -11,6 +11,10 @@
 
 #define MODE_SKIP_LIFE_MASK (TRACE_MODE_BASIC_MASK | TRACE_MODE_DROP_MASK)
 
+#ifdef KERN_VER
+__u32 kern_ver SEC("version") = KERN_VER;
+#endif
+
 struct {
 	__uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
 	__uint(key_size, sizeof(int));
@@ -27,16 +31,12 @@ struct {
 } m_stack SEC(".maps");
 #endif
 
-#ifdef KERN_VER
-__u32 kern_ver SEC("version") = KERN_VER;
-#endif
-
 struct {
 	__uint(type, BPF_MAP_TYPE_LRU_HASH);
 	__uint(max_entries, 102400);
 	__uint(key_size, sizeof(u64));
 	__uint(value_size, sizeof(u8));
-} m_lookup SEC(".maps");
+} m_matched SEC(".maps");
 
 static try_inline void get_ret(int func)
 {
@@ -104,12 +104,12 @@ static try_inline int handle_entry(void *regs, struct sk_buff *skb,
 		return -1;
 	}
 
-	matched = bpf_map_lookup_elem(&m_lookup, &skb);
+	matched = bpf_map_lookup_elem(&m_matched, &skb);
 	if (matched && *matched) {
 		probe_parse_skb_no_filter(skb, pkt);
 	} else if (!ARGS_CHECK(pid, pid) && !probe_parse_skb(skb, pkt)) {
 		bool _matched = true;
-		bpf_map_update_elem(&m_lookup, &skb, &_matched, 0);
+		bpf_map_update_elem(&m_matched, &skb, &_matched, 0);
 	} else {
 		return -1;
 	}
@@ -148,7 +148,7 @@ out:
 static try_inline int handle_destroy(struct sk_buff *skb)
 {
 	if (!(ARGS_GET_CONFIG(trace_mode) & MODE_SKIP_LIFE_MASK))
-		bpf_map_delete_elem(&m_lookup, &skb);
+		bpf_map_delete_elem(&m_matched, &skb);
 	return 0;
 }
 
@@ -183,7 +183,7 @@ static try_inline int handle_exit(struct pt_regs *regs, int func)
 
 	if (func == INDEX_skb_clone) {
 		bool matched = true;
-		bpf_map_update_elem(&m_lookup, &event.val, &matched, 0);
+		bpf_map_update_elem(&m_matched, &event.val, &matched, 0);
 	}
 
 	EVENT_OUTPUT(regs, event);
