@@ -226,10 +226,15 @@ void analy_ctx_handle(analy_ctx_t *ctx)
 	fake_analy_ctx_t *fake;
 	rule_t *rule = NULL;
 	trace_t *trace;
+	u32 lifetime;
 	int i = 0;
 
 	if (trace_mode_intel() && trace_ctx.args.intel_quiet &&
 	    !ctx->status)
+		goto free_ctx;
+
+	lifetime = trace_ctx.args.lifetime;
+	if (lifetime && get_lifetime_ms(ctx) < lifetime)
 		goto free_ctx;
 
 	keys[0] = '\0';

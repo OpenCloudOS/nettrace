@@ -154,6 +154,16 @@ static inline void put_analy_ctx(analy_ctx_t *ctx)
 	ctx->refs--;
 }
 
+static inline u32 get_lifetime_ms(analy_ctx_t *ctx)
+{
+	analy_entry_t *first, *last;
+
+	first = list_first_entry(&ctx->entries, analy_entry_t, list);
+	last = list_last_entry(&ctx->entries, analy_entry_t, list);
+
+	return (last->event->pkt.ts - first->event->pkt.ts) / 1000000;
+}
+
 static inline void get_fake_analy_ctx(fake_analy_ctx_t *ctx)
 {
 	/* the case of new created fake_ctx */

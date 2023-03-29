@@ -91,6 +91,11 @@ static void do_parse_args(int argc, char *argv[])
 			.desc = "print the kernel function call stack of kfree_skb",
 		},
 #endif
+		{
+			.lname = "lifetime", .dest = &trace_args->lifetime,
+			.type = OPTION_U32,
+			.desc = "the minial time to live of the skb",
+		},
 		{ .type = OPTION_BLANK },
 		{
 			.sname = 'v', .dest = &show_log,

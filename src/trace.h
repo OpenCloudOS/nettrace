@@ -83,6 +83,7 @@ typedef struct trace_args {
 	bool drop_stack;
 	bool show_traces;
 	bool sock;
+	u32  lifetime;
 	char *traces;
 } trace_args_t;
 
