@@ -101,6 +101,7 @@ typedef struct {
 typedef struct {
 	void *data;
 	struct sk_buff *skb;
+	struct sock *sk;
 	pkt_args_t *args;
 	packet_t *pkt;
 	bool filter;
@@ -314,12 +315,71 @@ err:
 	return -1;
 }
 
-static try_inline int probe_parse_skb_cond(parse_ctx_t *ctx)
+static try_inline int probe_parse_sk(parse_ctx_t *ctx)
+{
+	struct sock *sk = ctx->sk;
+	struct sock_common *skc;
+	packet_t *pkt = ctx->pkt;
+	u16 l3_proto;
+	u8 l4_proto;
+
+	skc = (struct sock_common *)sk;
+	switch (_C(skc, skc_family)) {
+	case AF_INET:
+		l3_proto = ETH_P_IP;
+		pkt->l3.ipv4.saddr = _C(skc, skc_rcv_saddr);
+		pkt->l3.ipv4.daddr = _C(skc, skc_daddr);
+		if (FILTER_ITER_CHECK(ctx, addr, pkt->l3.ipv4.saddr,
+				      pkt->l3.ipv4.daddr))
+			goto err;
+		break;
+	case AF_INET6:
+		l3_proto = ETH_P_IPV6;
+		break;
+	default:
+		/* shouldn't happen, as we only use sk for IP and 
+		 * IPv6
+		 */
+		goto err;
+	}
+	if (FILTER_CHECK(ctx, l3_proto, l3_proto))
+		goto err;
+
+	l4_proto = _C(sk, sk_protocol);
+	if (FILTER_CHECK(ctx, l4_proto, l4_proto))
+		goto err;
+
+	switch (l4_proto) {
+	case IPPROTO_TCP:
+	case IPPROTO_UDP:
+		pkt->l4.tcp.sport = bpf_htons(_C(skc, skc_num));
+		pkt->l4.tcp.dport = _C(skc, skc_dport);
+		break;
+	default:
+		goto err;
+	}
+
+	if (FILTER_ITER_CHECK(ctx, port, pkt->l4.tcp.sport,
+			      pkt->l4.tcp.dport))
+		goto err;
+
+	pkt->proto_l3 = l3_proto;
+	pkt->proto_l4 = l4_proto;
+
+	return 0;
+err:
+	return -1;
+}
+
+static try_inline int __probe_parse_skb(parse_ctx_t *ctx)
 {
 	struct sk_buff *skb = ctx->skb;
 	packet_t *pkt = ctx->pkt;
 	u16 l3_proto;
 	void *l3;
+
+	if (ctx->sk)
+		return probe_parse_sk(ctx);
 
 	ctx->network_header = _C(skb, network_header);
 	ctx->mac_header = _C(skb, mac_header);
@@ -374,27 +434,31 @@ err:
 	return -1;
 }
 
-static try_inline int probe_parse_skb(struct sk_buff *skb, packet_t *pkt)
+static try_inline int probe_parse_skb(struct sk_buff *skb, struct sock *sk,
+				      packet_t *pkt)
 {
 	parse_ctx_t ctx = {
 		.args = (void *)CONFIG(),
 		.filter = true,
 		.skb = skb,
+		.sk = sk,
 		.pkt = pkt,
 	};
-	return probe_parse_skb_cond(&ctx);
+	return __probe_parse_skb(&ctx);
 }
 
-static try_inline int probe_parse_skb_no_filter(struct sk_buff *skb,
-						packet_t *pkt)
+static try_inline int probe_parse_skb_always(struct sk_buff *skb,
+					     struct sock *sk,
+					     packet_t *pkt)
 {
 	parse_ctx_t ctx = {
 		.args = (void *)CONFIG(),
 		.filter = false,
 		.skb = skb,
+		.sk = sk,
 		.pkt = pkt,
 	};
-	return probe_parse_skb_cond(&ctx);
+	return __probe_parse_skb(&ctx);
 }
 
 static try_inline int direct_parse_skb(struct __sk_buff *skb, packet_t *pkt,

@@ -149,7 +149,8 @@ def gen_trace(trace, group, p_name):
         if 'skb' in trace:
             skb_index = int(trace["skb"]) + 1
             skb_str = f'\n\t.skb = {skb_index},'
-            probe_str = f'\tFN({name}, {skb_index})\t\\\n'
+            sk_index = f', {int(trace["sock"]) + 1}' if 'sock' in trace else ''
+            probe_str = f'\tFN({name}, {skb_index}{sk_index})\t\\\n'
         else:
             probe_str = f'\tFNC({name})\t\\\n'
     if 'analyzer' in trace:
