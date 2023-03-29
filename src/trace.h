@@ -26,7 +26,11 @@ struct analyzer;
 #define TRACE_STACK		(1 << 4)
 #define TRACE_ATTACH_MANUAL	(1 << 5)
 
-#define trace_for_each(pos) list_for_each_entry(pos, &trace_list, all)
+#define trace_for_each(pos)		\
+	list_for_each_entry(pos, &trace_list, all)
+#define trace_for_each_cond(pos, cond)	\
+	trace_for_each(pos) 		\
+		if (cond)
 
 typedef struct trace_group {
 	char	*name;
@@ -48,6 +52,7 @@ typedef struct trace {
 	char	*regex;
 	char	*tp;
 	int	skb;
+	int	sk;
 	/* traces in a global list */
 	struct list_head all;
 	/* traces in the same group */
@@ -77,6 +82,7 @@ typedef struct trace_args {
 	bool date;
 	bool drop_stack;
 	bool show_traces;
+	bool sock;
 	char *traces;
 } trace_args_t;
 

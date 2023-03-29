@@ -79,6 +79,11 @@ static void do_parse_args(int argc, char *argv[])
 			.type = OPTION_BOOL,
 			.desc = "skb drop monitor mode, for replace of 'droptrace'",
 		},
+		{
+			.lname = "sock", .dest = &trace_args->sock,
+			.type = OPTION_BOOL,
+			.desc = "enable the traces that based on socket",
+		},
 #ifdef STACK_TRACE
 		{
 			.lname = "drop-stack", .dest = &trace_args->drop_stack,

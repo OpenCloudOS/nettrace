@@ -137,6 +137,7 @@ def gen_trace(trace, group, p_name):
     index_str = f'#define INDEX_{name} {global_status["trace_index"]}\n'
     rule_str = ''
     init_str = ''
+    sk_index = 0
 
     if 'tp' in trace:
         trace_type = 'TRACE_TP'
@@ -149,8 +150,12 @@ def gen_trace(trace, group, p_name):
         if 'skb' in trace:
             skb_index = int(trace["skb"]) + 1
             skb_str = f'\n\t.skb = {skb_index},'
-            sk_index = f', {int(trace["sock"]) + 1}' if 'sock' in trace else ''
-            probe_str = f'\tFN({name}, {skb_index}{sk_index})\t\\\n'
+            if 'sock' in trace:
+                sk_index = int(trace["sock"]) + 1
+                sk_str = f', {sk_index}'
+            else:
+                sk_str = ''
+            probe_str = f'\tFN({name}, {skb_index}{sk_str})\t\\\n'
         else:
             probe_str = f'\tFNC({name})\t\\\n'
     if 'analyzer' in trace:
@@ -184,6 +189,7 @@ def gen_trace(trace, group, p_name):
 \t.is_backup = {is_backup},
 \t.probe = {'true' if trace.get('probe') else 'false'},
 \t.parent = &{p_name},
+\t.sk = {sk_index},
 \t.rules =  LIST_HEAD_INIT({trace_name}.rules),
 }};
 {rule_str}

@@ -273,6 +273,11 @@ skip_trace:
 		}
 	}
 
+	if (!args->sock) {
+		trace_for_each_cond(trace, trace->sk)
+			trace_set_invalid(trace);
+	}
+
 	trace_ctx.bpf_args.trace_mode = 1 << trace_ctx.mode;
 	trace_ctx.detail = trace_ctx.bpf_args.detail;
 
