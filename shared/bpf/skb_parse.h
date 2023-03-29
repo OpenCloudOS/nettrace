@@ -71,15 +71,15 @@ struct {
 #endif
 
 #ifdef BPF_DEBUG
-#define pr_bpf_deubg(fmt, ...) {				\
+#define pr_bpf_debug(fmt, args...) {				\
 	if (ARGS_GET_CONFIG(bpf_debug))				\
-		bpf_printk("nettrace: "fmt"\n", __VA_ARGS__);	\
+		bpf_printk("nettrace: "fmt"\n", ##args);	\
 }
 #else
-#define pr_bpf_deubg(fmt, ...)
+#define pr_bpf_debug(fmt, ...)
 #endif
 #define pr_debug_skb(fmt, ...)	\
-	pr_bpf_deubg("skb=%llx, "fmt, (u64)(void *)skb, ##__VA_ARGS__)
+	pr_bpf_debug("skb=%llx, "fmt, (u64)(void *)skb, ##__VA_ARGS__)
 
 
 #define ARGS_GET_CONFIG(name)		((bpf_args_t *)CONFIG())->name
@@ -345,13 +345,27 @@ static try_inline int probe_parse_sk(parse_ctx_t *ctx)
 	if (FILTER_CHECK(ctx, l3_proto, l3_proto))
 		goto err;
 
+#ifdef SK_PRPTOCOL_LEGACY
+	u32 flags = _(((u32 *)(&sk->__sk_flags_offset))[0]);
+#ifdef CONFIG_CPU_BIG_ENDIAN
+	l4_proto = (flags << 8) >> 24;
+#else
+	l4_proto = (flags << 16) >> 24;
+#endif
+#else
 	l4_proto = _C(sk, sk_protocol);
+#endif
+
+	if (l4_proto == IPPROTO_IP)
+		l4_proto = IPPROTO_TCP;
+
 	if (FILTER_CHECK(ctx, l4_proto, l4_proto))
 		goto err;
 
 	switch (l4_proto) {
 	case IPPROTO_TCP:
 	case IPPROTO_UDP:
+	case IPPROTO_IP:
 		pkt->l4.tcp.sport = bpf_htons(_C(skc, skc_num));
 		pkt->l4.tcp.dport = _C(skc, skc_dport);
 		break;
