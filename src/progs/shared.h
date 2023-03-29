@@ -80,8 +80,6 @@ typedef struct __attribute__((__packed__)) {
 	u64 hooks[8];
 } nf_hooks_event_t;
 
-#define ext_event_init() { .event = { .func = func }}
-
 #define MAX_EVENT_SIZE sizeof(nf_hooks_event_t)
 
 typedef struct __attribute__((__packed__)) {

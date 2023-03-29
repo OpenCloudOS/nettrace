@@ -8,8 +8,7 @@
 #include <skb_parse.h>
 
 #include "kprobe_trace.h"
-
-#define MODE_SKIP_LIFE_MASK (TRACE_MODE_BASIC_MASK | TRACE_MODE_DROP_MASK)
+#include "kprobe.h"
 
 #ifdef KERN_VER
 __u32 kern_ver SEC("version") = KERN_VER;
@@ -56,58 +55,60 @@ static try_inline int put_ret(int func)
 }
 
 #ifdef STACK_TRACE
-static try_inline void try_trace_stack(void *regs, bpf_args_t *bpf_args,
-				       event_t *e, int func)
+static try_inline void try_trace_stack(context_t *ctx)
 {
 	int i = 0, key;
 	u16 *funcs;
 
-	if (!bpf_args->stack)
+	if (!ctx->args->stack)
 		return;
 
-	funcs = bpf_args->stack_funs;
+	funcs = ctx->args->stack_funs;
 
 #pragma unroll
 	for (; i < MAX_FUNC_STACK; i++) {
 		if (!funcs[i])
 			break;
-		if (funcs[i] == func)
+		if (funcs[i] == ctx->func)
 			goto do_stack;
 	}
 	return;
 
 do_stack:
-	key = bpf_get_stackid(regs, &m_stack, 0);
-	e->stack_id = key;
+	key = bpf_get_stackid(ctx->regs, &m_stack, 0);
+	ctx->e->stack_id = key;
 }
 #else
-static try_inline void try_trace_stack(void *regs, bpf_args_t *bpf_args,
-				       event_t *e, int func) { }
+static try_inline void try_trace_stack(context_t *ctx) { }
 #endif
 
-static try_inline int handle_entry(void *regs, struct sk_buff *skb,
-				   event_t *e, int size, int func)
+static try_inline int handle_entry(context_t *ctx)
 {
-	bpf_args_t *bpf_args = CONFIG();
-	packet_t *pkt = &e->pkt;
-	bool *matched;
+	bpf_args_t *args = (void *)ctx->args;
+	struct sk_buff *skb = ctx->skb;
+	bool *matched, skip_life;
+	event_t *e = ctx->e;
+	packet_t *pkt;
 	u32 pid;
 
-	if (!bpf_args->ready)
+	if (!args->ready)
 		return -1;
 
-	pr_debug_skb("begin to handle, func=%d", func);
+	pr_debug_skb("begin to handle, func=%d", ctx->func);
+	skip_life = args->trace_mode & MODE_SKIP_LIFE_MASK;
 	pid = (u32)bpf_get_current_pid_tgid();
-	if (bpf_args->trace_mode & MODE_SKIP_LIFE_MASK) {
-		if (!probe_parse_skb(skb, pkt))
+	pkt = &e->pkt;
+	if (skip_life) {
+		if (!probe_parse_skb(skb, ctx->sk, pkt))
 			goto skip_life;
 		return -1;
 	}
 
 	matched = bpf_map_lookup_elem(&m_matched, &skb);
 	if (matched && *matched) {
-		probe_parse_skb_no_filter(skb, pkt);
-	} else if (!ARGS_CHECK(bpf_args, pid, pid) && !probe_parse_skb(skb, pkt)) {
+		probe_parse_skb_always(skb, ctx->sk, pkt);
+	} else if (!ARGS_CHECK(args, pid, pid) &&
+		   !probe_parse_skb(skb, ctx->sk, pkt)) {
 		bool _matched = true;
 		bpf_map_update_elem(&m_matched, &skb, &_matched, 0);
 	} else {
@@ -115,7 +116,7 @@ static try_inline int handle_entry(void *regs, struct sk_buff *skb,
 	}
 
 skip_life:
-	if (!bpf_args->detail)
+	if (!args->detail)
 		goto out;
 
 	/* store more (detail) information about net or task. */
@@ -134,38 +135,46 @@ skip_life:
 
 out:
 	pr_debug_skb("pkt matched");
-	try_trace_stack(regs, bpf_args, e, func);
+	try_trace_stack(ctx);
 	pkt->ts = bpf_ktime_get_ns();
 	e->key = (u64)(void *)skb;
+	e->func = ctx->func;
 
-	if (size)
-		bpf_perf_event_output(regs, &m_event, BPF_F_CURRENT_CPU,
-				      e, size);
-	get_ret(func);
+	if (ctx->size)
+		bpf_perf_event_output(ctx->regs, &m_event, BPF_F_CURRENT_CPU,
+				      e, ctx->size);
+	if (!skip_life)
+		get_ret(ctx->func);
 	return 0;
 }
 
-static try_inline int handle_destroy(struct sk_buff *skb)
+static try_inline int handle_destroy(context_t *ctx)
 {
-	if (!(ARGS_GET_CONFIG(trace_mode) & MODE_SKIP_LIFE_MASK))
-		bpf_map_delete_elem(&m_matched, &skb);
+	if (!(ctx->args->trace_mode & MODE_SKIP_LIFE_MASK))
+		bpf_map_delete_elem(&m_matched, &ctx->skb);
 	return 0;
 }
 
-static try_inline int default_handle_entry(struct pt_regs *ctx,
-					   struct sk_buff *skb,
-					   int func)
+static try_inline int default_handle_entry(context_t *ctx)
 {
-	if (ARGS_GET_CONFIG(detail)) {
-		detail_event_t e = { .func = func };
-		handle_entry(ctx, skb, (void *)&e, sizeof(e), func);
+	if (ctx->args->detail) {
+		detail_event_t e = { };
+		ctx_event(ctx, e);
+		handle_entry(ctx);
 	} else {
-		event_t e = { .func = func };
-		handle_entry(ctx, skb, &e, sizeof(e), func);
+		event_t e = {  };
+		ctx_event(ctx, e);
+		handle_entry(ctx);
 	}
 
-	if (func == INDEX_consume_skb || func == INDEX___kfree_skb)
-		handle_destroy(skb);
+	switch (ctx->func) {
+	case INDEX_consume_skb:
+	case INDEX___kfree_skb:
+		handle_destroy(ctx);
+		break;
+	default:
+		break;
+	}
 
 	return 0;
 }
@@ -190,63 +199,16 @@ static try_inline int handle_exit(struct pt_regs *regs, int func)
 	return 0;
 }
 
-#define __BPF_KPROBE(name)	BPF_KPROBE(name)
 
-/* one trace may have more than one implement */
-#define __DEFINE_KPROBE_INIT(name, target, skb_init)		\
-	static try_inline int fake__##name(struct pt_regs *ctx,	\
-				       struct sk_buff *skb,	\
-				       int func);		\
-	SEC("kretprobe/"#target)				\
-	int __BPF_KPROBE(TRACE_RET_NAME(name))			\
-	{							\
-		return handle_exit(ctx, INDEX_##name);		\
-	}							\
-	SEC("kprobe/"#target)					\
-	int __BPF_KPROBE(TRACE_NAME(name))			\
-	{							\
-		struct sk_buff *skb = (void *)skb_init;		\
-		return fake__##name(ctx, skb, INDEX_##name);	\
-	}							\
-	static try_inline int fake__##name(struct pt_regs *ctx,	\
-					   struct sk_buff *skb,	\
-					   int func)
-
-/* expand name and target sufficiently */
-#define DEFINE_KPROBE_INIT(name, target, skb_init)		\
-	__DEFINE_KPROBE_INIT(name, target, skb_init)
-
-/* init the skb by the index of func args */
-#define DEFINE_KPROBE_SKB(name, skb_index)			\
-	DEFINE_KPROBE_INIT(name, name, PT_REGS_PARM##skb_index(ctx))
-
-/* the same as DEFINE_KPROBE_SKB(), but can set a different target */
-#define DEFINE_KPROBE_SKB_TARGET(name, target, skb_index)	\
-	DEFINE_KPROBE_INIT(name, target,			\
-			   PT_REGS_PARM##skb_index(ctx))
-
-#define KPROBE_DEFAULT(name, skb_index)				\
-	DEFINE_KPROBE_SKB(name, skb_index)			\
-	{							\
-		return default_handle_entry(ctx, skb, func);	\
-	}
-
-#define DEFINE_TP(name, cata, tp, offset)			\
-	static try_inline int fake_##name(void *ctx, struct sk_buff *skb,	\
-				      int func);		\
-	SEC("tp/"#cata"/"#tp)					\
-	int TRACE_NAME(name)(void *ctx) {			\
-		struct sk_buff *skb = *(void **)(ctx + offset);	\
-		return fake_##name(ctx, skb, INDEX_##name);	\
-	}							\
-	static try_inline int fake_##name(void *ctx, struct sk_buff *skb,	\
-				  int func)
-#define TP_DEFAULT(name, cata, tp, offset)			\
-	DEFINE_TP(name, cata, tp, offset)			\
-	{							\
-		return default_handle_entry(ctx, skb, func);	\
-	}
-#define FNC(name)
+/**********************************************************************
+ * 
+ * Following is the definntion of all kind of BPF program.
+ * 
+ * DEFINE_ALL_PROBES() will define all the default implement of BPF
+ * program, and the customize handle of kernel function or tracepoint
+ * is defined following.
+ * 
+ **********************************************************************/
 
 DEFINE_ALL_PROBES(KPROBE_DEFAULT, TP_DEFAULT, FNC)
 
@@ -260,75 +222,80 @@ struct kfree_skb_args {
 
 DEFINE_TP(kfree_skb, skb, kfree_skb, 8)
 {
-	drop_event_t e = { .event = { .func = func } };
-	struct kfree_skb_args *args = ctx;
+	struct kfree_skb_args *args = ctx->regs;
+	drop_event_t e = { };
 
 	e.location = (unsigned long)args->location;
 	if (ARGS_GET_CONFIG(drop_reason))
 		e.reason = _(args->reason);
 
-	handle_entry(ctx, skb, &e.event, sizeof(e), func);
-	handle_destroy(skb);
+	ctx_event(ctx, e);
+	handle_entry(ctx);
+	handle_destroy(ctx);
 	return 0;
 }
 
-DEFINE_KPROBE_INIT(__netif_receive_skb_core_pskb, __netif_receive_skb_core,
-		   _(*(void **)(PT_REGS_PARM1(ctx))))
+DEFINE_KPROBE_INIT(__netif_receive_skb_core_pskb,
+		   __netif_receive_skb_core,
+		   .skb = _(*(void **)(nt_regs(regs, 1))))
 {
-	return default_handle_entry(ctx, skb, func);
+	return default_handle_entry(ctx);
 }
 
-#define bpf_ipt_do_table()						\
-{									\
-	nf_event_t e = {						\
-		.event = { .func = func, },				\
-		.hook = _C(state, hook),				\
-	};								\
-									\
-	bpf_probe_read(e.table, sizeof(e.table) - 1, _C(table, name));	\
-	return handle_entry(ctx, skb, &e.event, sizeof(e), func);	\
+static try_inline int bpf_ipt_do_table(context_t *ctx, struct xt_table *table,
+				       struct nf_hook_state *state)
+{
+	nf_event_t e = {
+		.hook = _C(state, hook),
+	};
+
+	bpf_probe_read(e.table, sizeof(e.table) - 1, _C(table, name));
+	ctx_event(ctx, e);
+	return handle_entry(ctx);
 }
 
 DEFINE_KPROBE_SKB_TARGET(ipt_do_table_legacy, ipt_do_table, 1)
 {
-	struct nf_hook_state *state = (void *)PT_REGS_PARM2(ctx);
-	struct xt_table *table = (void *)PT_REGS_PARM3(ctx);
+	struct nf_hook_state *state = nt_regs_ctx(ctx, 2);
+	struct xt_table *table = nt_regs_ctx(ctx, 3);
 
-	bpf_ipt_do_table();
+	return bpf_ipt_do_table(ctx, table, state);
 }
 
 DEFINE_KPROBE_SKB(ipt_do_table, 2)
 {
-	struct nf_hook_state *state = (void *)PT_REGS_PARM3(ctx);
-	struct xt_table *table = (void *)PT_REGS_PARM1(ctx);
+	struct nf_hook_state *state = nt_regs_ctx(ctx, 3);
+	struct xt_table *table = nt_regs_ctx(ctx, 1);
 
-	bpf_ipt_do_table();
+	return bpf_ipt_do_table(ctx, table, state);
 }
 
 DEFINE_KPROBE_SKB(nf_hook_slow, 1)
 {
-	nf_event_t e = ext_event_init();
 	struct nf_hook_entries *entries;
 	struct nf_hook_state *state;
+	nf_event_t e = { };
 	int num;
 
-	state = (void *)PT_REGS_PARM2(ctx);
-	if (ARGS_GET_CONFIG(hooks))
+	state = nt_regs_ctx(ctx, 2);
+	if (ctx->args->hooks)
 		goto on_hooks;
 
-	if (handle_entry(ctx, skb, &e.event, 0, func))
+	ctx_event_null(ctx, e);
+	if (handle_entry(ctx))
 		return 0;
 
 	e.hook = _C(state, hook);
 	e.pf = _C(state, pf);
-	EVENT_OUTPUT(ctx, e);
+	EVENT_OUTPUT(ctx->regs, e);
 	return 0;
 
 on_hooks:;
-	entries = (void *)PT_REGS_PARM3(ctx);
-	nf_hooks_event_t hooks_event = ext_event_init();
+	entries = nt_regs_ctx(ctx, 3);
+	nf_hooks_event_t hooks_event = { };
 
-	if (handle_entry(ctx, skb, &hooks_event.event, 0, func))
+	ctx_event_null(ctx, hooks_event);
+	if (handle_entry(ctx))
 		return 0;
 
 	hooks_event.hook = _C(state, hook);
@@ -356,7 +323,7 @@ on_hooks:;
 	 * 		COPY_HOOK(i);
 	 */
 out:
-	EVENT_OUTPUT(ctx, hooks_event);
+	EVENT_OUTPUT(ctx->regs, hooks_event);
 	return 0;
 }
 

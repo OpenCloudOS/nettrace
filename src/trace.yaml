@@ -339,6 +339,17 @@ children:
         level: warn
         msg: tcp port is not listened
         adv: check your target tcp port
+  - name: tcp-out
+    desc: tcp layer of packet out
+    visiual: true
+    children:
+    - name: __tcp_transmit_skb
+      sock: 0
+      skb: 1
+      rules:
+      - exp: ne 0
+        level: warn
+        msg: failed to xmit skb to ip layer
 - name: udp
   desc: udp protocol layer (L4) of the network stack
   children:

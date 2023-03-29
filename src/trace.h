@@ -121,7 +121,7 @@ extern int trace_count;
 extern struct list_head trace_list;
 
 #define FNC(name)		extern trace_t trace_##name;
-#define FN(name, index)		FNC(name)
+#define FN(name, index, ...)	FNC(name)
 #define FN_tp(name, a1, a2, a3) FNC(name)
 DEFINE_ALL_PROBES(FN, FN_tp, FNC)
 

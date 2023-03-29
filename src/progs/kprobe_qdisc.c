@@ -17,10 +17,10 @@
 
 
 static try_inline int
-FAKE_FUNC_NAME(void *ctx, struct sk_buff *skb, int func, struct Qdisc *q)
+FAKE_FUNC_NAME(context_t *ctx, struct Qdisc *q)
 {
-	qdisc_event_t e = ext_event_init();
 	struct netdev_queue *txq;
+	qdisc_event_t e = { };
 
 	txq = _C(q, dev_queue);
 
@@ -36,13 +36,14 @@ FAKE_FUNC_NAME(void *ctx, struct sk_buff *skb, int func, struct Qdisc *q)
 	e.state = _C(txq, state);
 	e.flags = _C(q, flags);
 
-	return handle_entry(ctx, skb, &e.event, sizeof(e), func);
+	ctx_event(ctx, e);
+	return handle_entry(ctx);
 }
 
 #define DEFINE_QDISC(name)				\
 DEFINE_KPROBE_SKB_TARGET(FUNC_NAME(name), name, 1) {	\
-	struct Qdisc *q = (void *)PT_REGS_PARM2(ctx);	\
-	return FAKE_FUNC_NAME(ctx, skb, func, q);	\
+	struct Qdisc *q = nt_regs_ctx(ctx, 2);		\
+	return FAKE_FUNC_NAME(ctx, q);			\
 }
 
 DEFINE_QDISC(sch_direct_xmit)
