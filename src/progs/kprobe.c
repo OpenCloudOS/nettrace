@@ -313,8 +313,6 @@ on_hooks:;
 	COPY_HOOK(3);
 	COPY_HOOK(4);
 	COPY_HOOK(5);
-	COPY_HOOK(6);
-	COPY_HOOK(7);
 
 	/* following code can't unroll, don't know why......:
 	 * 

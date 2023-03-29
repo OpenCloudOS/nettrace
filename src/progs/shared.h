@@ -73,11 +73,11 @@ typedef struct __attribute__((__packed__)) {
 		detail_event_t detail_event;
 		event_t	event;
 	};
+	u64 hooks[6];
 	char table[8];
 	char chain[8];
 	u8 hook;
 	u8 pf;
-	u64 hooks[8];
 } nf_hooks_event_t;
 
 #define MAX_EVENT_SIZE sizeof(nf_hooks_event_t)
