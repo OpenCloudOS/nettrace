@@ -25,60 +25,68 @@ typedef struct __attribute__((__packed__)) {
 #ifdef STACK_TRACE
 	u32		stack_id;
 #endif
+	int		__event_filed[0];
 } event_t;
 
 typedef struct __attribute__((__packed__)) {
 	packet_t	pkt;
 	u64		key;
 	u32		func;
+#ifdef STACK_TRACE
+	u32		stack_id;
+#endif
 	u32		pid;
 	char		task[16];
 	char		ifname[16];
 	u32		ifindex;
+	int		__event_filed[0];
 } detail_event_t;
 
-typedef struct __attribute__((__packed__)) {
-	union {
-		detail_event_t detail_event;
-		event_t	event;
-	};
-	u64	location;
-	u32	reason;
-} drop_event_t;
+typedef struct {
+} pure_event_t;
 
-typedef struct __attribute__((__packed__)) {
-	union {
-		detail_event_t detail_event;
-		event_t	event;
-	};
-	char table[8];
-	char chain[8];
-	u8 hook;
-	u8 pf;
-} nf_event_t;
+#define DEFINE_EVENT(name, fields...)		\
+typedef struct __attribute__((__packed__)) {	\
+	event_t event;				\
+	int __event_filed[0];			\
+	fields					\
+} name;						\
+typedef struct __attribute__((__packed__)) {	\
+	detail_event_t event;			\
+	int __event_filed[0];			\
+	fields					\
+} detail_##name;				\
+typedef struct __attribute__((__packed__)) {	\
+	fields					\
+} pure_##name;
+#define event_field(type, name) type name;
 
-typedef struct __attribute__((__packed__)) {
-	union {
-		detail_event_t detail_event;
-		event_t	event;
-	};
-	u64 last_update;
-	u32 state;
-	u32 qlen;
-	u32 flags;
-} qdisc_event_t;
+DEFINE_EVENT(drop_event_t,
+	event_field(u64, location)
+	event_field(u32, reason)
+)
 
-typedef struct __attribute__((__packed__)) {
-	union {
-		detail_event_t detail_event;
-		event_t	event;
-	};
-	u64 hooks[6];
-	char table[8];
-	char chain[8];
-	u8 hook;
-	u8 pf;
-} nf_hooks_event_t;
+DEFINE_EVENT(nf_event_t,
+	event_field(char, table[8])
+	event_field(char, chain[8])
+	event_field(u8, hook)
+	event_field(u8, pf)
+)
+
+DEFINE_EVENT(nf_hooks_event_t,
+	event_field(char, table[8])
+	event_field(char, chain[8])
+	event_field(u8, hook)
+	event_field(u8, pf)
+	event_field(u64, hooks[6])
+)
+
+DEFINE_EVENT(qdisc_event_t,
+	event_field(u64, last_update)
+	event_field(u32, state)
+	event_field(u32, qlen)
+	event_field(u32, flags)
+)
 
 #define MAX_EVENT_SIZE sizeof(nf_hooks_event_t)
 

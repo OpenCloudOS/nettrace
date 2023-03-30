@@ -5,10 +5,10 @@ typedef struct {
 	void *regs;
 	struct sk_buff *skb;
 	struct sock *sk;
-	int func;
 	event_t *e;
-	size_t size;
 	bpf_args_t *args;
+	size_t size;
+	u16 func;
 } context_t;
 
 #define MODE_SKIP_LIFE_MASK (TRACE_MODE_BASIC_MASK | TRACE_MODE_DROP_MASK)
@@ -91,6 +91,25 @@ typedef struct {
 		return default_handle_entry(ctx);		\
 	}
 #define FNC(name)
+
+#define __DECLARE_EVENT(prefix, type, name, init...)	\
+	pure_##type __attribute__((__unused__)) *name;	\
+	if (ctx->args->detail)				\
+		goto prefix##_detail;			\
+	type _##name = { init };			\
+	ctx_event(ctx, _##name);			\
+	name = (void *)ctx->e +				\
+	       offsetof(type, __event_filed);		\
+	goto prefix##_handle;				\
+prefix##_detail:;					\
+	detail_##type __##name = { init };		\
+	ctx_event(ctx, __##name);			\
+	name = (void *)ctx->e +				\
+	       offsetof(detail_##type, __event_filed);	\
+prefix##_handle:;
+
+#define DECLARE_EVENT(type, name, init...)		\
+	__DECLARE_EVENT(basic, type, name, init)
 
 #define ctx_event_null(ctx, event)				\
 	ctx->e = (void *)&(event);				\

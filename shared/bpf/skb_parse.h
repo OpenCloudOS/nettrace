@@ -46,9 +46,11 @@ struct {
 	(bpf_args_t*)_v;					\
 })
 
-#define EVENT_OUTPUT(ctx, data)					\
+#define EVENT_OUTPUT_PTR(ctx, data, size)			\
 	bpf_perf_event_output(ctx, &m_event, BPF_F_CURRENT_CPU,	\
-			      &(data), sizeof(data))
+			      data, size)
+#define EVENT_OUTPUT(ctx, data)					\
+	EVENT_OUTPUT_PTR(ctx, &data, sizeof(data))
 
 #define _(src)							\
 ({								\
@@ -104,10 +106,10 @@ typedef struct {
 	struct sock *sk;
 	pkt_args_t *args;
 	packet_t *pkt;
-	bool filter;
 	u16 mac_header;
 	u16 network_header;
 	u16 trans_header;
+	bool filter;
 } parse_ctx_t;
 
 #define TCP_H_LEN	(sizeof(struct tcphdr))
@@ -370,7 +372,7 @@ static try_inline int probe_parse_sk(parse_ctx_t *ctx)
 		pkt->l4.tcp.dport = _C(skc, skc_dport);
 		break;
 	default:
-		goto err;
+		break;
 	}
 
 	if (FILTER_ITER_CHECK(ctx, port, pkt->l4.tcp.sport,

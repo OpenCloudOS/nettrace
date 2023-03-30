@@ -141,8 +141,8 @@ out:
 	e->func = ctx->func;
 
 	if (ctx->size)
-		bpf_perf_event_output(ctx->regs, &m_event, BPF_F_CURRENT_CPU,
-				      e, ctx->size);
+		EVENT_OUTPUT_PTR(ctx->regs, ctx->e, ctx->size);
+
 	if (!skip_life)
 		get_ret(ctx->func);
 	return 0;
@@ -157,16 +157,9 @@ static try_inline int handle_destroy(context_t *ctx)
 
 static try_inline int default_handle_entry(context_t *ctx)
 {
-	if (ctx->args->detail) {
-		detail_event_t e = { };
-		ctx_event(ctx, e);
-		handle_entry(ctx);
-	} else {
-		event_t e = {  };
-		ctx_event(ctx, e);
-		handle_entry(ctx);
-	}
+	DECLARE_EVENT(event_t, e)
 
+	handle_entry(ctx);
 	switch (ctx->func) {
 	case INDEX_consume_skb:
 	case INDEX___kfree_skb:
@@ -223,13 +216,12 @@ struct kfree_skb_args {
 DEFINE_TP(kfree_skb, skb, kfree_skb, 8)
 {
 	struct kfree_skb_args *args = ctx->regs;
-	drop_event_t e = { };
+	DECLARE_EVENT(drop_event_t, e)
 
-	e.location = (unsigned long)args->location;
+	e->location = (unsigned long)args->location;
 	if (ARGS_GET_CONFIG(drop_reason))
-		e.reason = _(args->reason);
+		e->reason = _(args->reason);
 
-	ctx_event(ctx, e);
 	handle_entry(ctx);
 	handle_destroy(ctx);
 	return 0;
@@ -245,12 +237,9 @@ DEFINE_KPROBE_INIT(__netif_receive_skb_core_pskb,
 static try_inline int bpf_ipt_do_table(context_t *ctx, struct xt_table *table,
 				       struct nf_hook_state *state)
 {
-	nf_event_t e = {
-		.hook = _C(state, hook),
-	};
+	DECLARE_EVENT(nf_event_t, e, .hook = _C(state, hook))
 
-	bpf_probe_read(e.table, sizeof(e.table) - 1, _C(table, name));
-	ctx_event(ctx, e);
+	bpf_probe_read(e->table, sizeof(e->table) - 1, _C(table, name));
 	return handle_entry(ctx);
 }
 
@@ -272,39 +261,42 @@ DEFINE_KPROBE_SKB(ipt_do_table, 2)
 
 DEFINE_KPROBE_SKB(nf_hook_slow, 1)
 {
-	struct nf_hook_entries *entries;
 	struct nf_hook_state *state;
-	nf_event_t e = { };
+	size_t size;
 	int num;
 
 	state = nt_regs_ctx(ctx, 2);
 	if (ctx->args->hooks)
 		goto on_hooks;
 
-	ctx_event_null(ctx, e);
+	DECLARE_EVENT(nf_event_t, e)
+
+	size = ctx->size;
+	ctx->size = 0;
 	if (handle_entry(ctx))
 		return 0;
 
-	e.hook = _C(state, hook);
-	e.pf = _C(state, pf);
-	EVENT_OUTPUT(ctx->regs, e);
+	e->hook = _C(state, hook);
+	e->pf = _C(state, pf);
+	EVENT_OUTPUT_PTR(ctx->regs, ctx->e, size);
 	return 0;
 
 on_hooks:;
-	entries = nt_regs_ctx(ctx, 3);
-	nf_hooks_event_t hooks_event = { };
+	struct nf_hook_entries *entries = nt_regs_ctx(ctx, 3);
+	__DECLARE_EVENT(hooks, nf_hooks_event_t, hooks_event)
 
-	ctx_event_null(ctx, hooks_event);
+	size = ctx->size;
+	ctx->size = 0;
 	if (handle_entry(ctx))
 		return 0;
 
-	hooks_event.hook = _C(state, hook);
-	hooks_event.pf = _C(state, pf);
+	hooks_event->hook = _C(state, hook);
+	hooks_event->pf = _C(state, pf);
 	num = _(entries->num_hook_entries);
 
 #define COPY_HOOK(i) do {					\
 	if (i >= num) goto out;					\
-	hooks_event.hooks[i] = (u64)_(entries->hooks[i].hook);	\
+	hooks_event->hooks[i] = (u64)_(entries->hooks[i].hook);	\
 } while (0)
 
 	COPY_HOOK(0);
@@ -321,7 +313,7 @@ on_hooks:;
 	 * 		COPY_HOOK(i);
 	 */
 out:
-	EVENT_OUTPUT(ctx->regs, hooks_event);
+	EVENT_OUTPUT_PTR(ctx->regs, ctx->e, size);
 	return 0;
 }
 

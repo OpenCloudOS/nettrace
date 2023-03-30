@@ -476,7 +476,7 @@ out:
 DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_INETL_MASK |
 			    TRACE_MODE_DROP_MASK)
 {
-	drop_event_t *event = (void *)e->event;
+	define_pure_event(drop_event_t, event, e->event);
 	char *reason = NULL, *sym_str, *info;
 	struct sym_result *sym;
 
@@ -572,7 +572,7 @@ const char *pf_names[] = {
 DEFINE_ANALYZER_EXIT(nf, TRACE_MODE_INETL_MASK)
 {
 	analy_entry_t *entry = e->entry;
-	nf_hooks_event_t *event = (void *)entry->event;
+	define_pure_event(nf_hooks_event_t, event, entry->event);
 	char *msg = malloc(1024), *extinfo;
 	struct sym_result *sym;
 	int i = 0;
@@ -608,7 +608,7 @@ out:
 DEFINE_ANALYZER_EXIT(iptable, TRACE_MODE_INETL_MASK)
 {
 	analy_entry_t *entry = e->entry;
-	nf_event_t *event = (void *)entry->event;
+	define_pure_event(nf_event_t, event, entry->event);
 	char *msg = malloc(1024);
 	const char *chain;
 
@@ -627,7 +627,7 @@ DEFINE_ANALYZER_EXIT(iptable, TRACE_MODE_INETL_MASK)
 
 DEFINE_ANALYZER_EXIT(qdisc, TRACE_MODE_INETL_MASK)
 {
-	qdisc_event_t *event = (void *)e->entry->event;
+	define_pure_event(qdisc_event_t, event, e->entry->event);
 	char *msg = malloc(1024);
 
 	msg[0] = '\0';

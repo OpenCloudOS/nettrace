@@ -53,10 +53,12 @@ static try_inline int FAKE_FUNC_NAME(context_t *ctx)
 	struct nf_hook_state *state;
 	struct nft_chain *chain;
 	struct nft_table *table;
-	nf_event_t e = { };
+	size_t size;
+	DECLARE_EVENT(nf_event_t, e)
 
 	ctx->skb = (struct sk_buff *)_(pkt->skb);
-	ctx_event_null(ctx, e);
+	size = ctx->size;
+	ctx->size = 0;
 	if (handle_entry(ctx))
 		return 0;
 
@@ -67,15 +69,15 @@ static try_inline int FAKE_FUNC_NAME(context_t *ctx)
 
 	chain	= nt_regs_ctx(ctx, 2);
 	table	= _CT(chain, table);
-	e.hook	= _C(state, hook);
-	e.pf	= _C(state, pf);
+	e->hook	= _C(state, hook);
+	e->pf	= _C(state, pf);
 
-	bpf_probe_read_kernel_str(e.chain, sizeof(e.chain),
+	bpf_probe_read_kernel_str(e->chain, sizeof(e->chain),
 				  _CT(chain, name));
-	bpf_probe_read_kernel_str(e.table, sizeof(e.table),
+	bpf_probe_read_kernel_str(e->table, sizeof(e->table),
 				  _CT(table, name));
 
-	EVENT_OUTPUT(ctx->regs, e);
+	EVENT_OUTPUT_PTR(ctx->regs, ctx->e, size);
 	return 0;
 }
 

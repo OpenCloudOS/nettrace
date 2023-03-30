@@ -20,7 +20,7 @@ static try_inline int
 FAKE_FUNC_NAME(context_t *ctx, struct Qdisc *q)
 {
 	struct netdev_queue *txq;
-	qdisc_event_t e = { };
+	DECLARE_EVENT(qdisc_event_t, e)
 
 	txq = _C(q, dev_queue);
 
@@ -29,14 +29,13 @@ FAKE_FUNC_NAME(context_t *ctx, struct Qdisc *q)
 
 	start = _C(txq, trans_start);
 	if (start)
-		e.last_update = bpf_jiffies64() - start;
+		e->last_update = bpf_jiffies64() - start;
 #endif
 
-	e.qlen = _C(&(q->q), qlen);
-	e.state = _C(txq, state);
-	e.flags = _C(q, flags);
+	e->qlen = _C(&(q->q), qlen);
+	e->state = _C(txq, state);
+	e->flags = _C(q, flags);
 
-	ctx_event(ctx, e);
 	return handle_entry(ctx);
 }
 
