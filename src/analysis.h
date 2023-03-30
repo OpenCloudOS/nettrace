@@ -131,12 +131,17 @@ DECLARE_ANALYZER(iptable);
 DECLARE_ANALYZER(nf);
 DECLARE_ANALYZER(qdisc);
 
+#ifndef COMPAT_MODE
 #define define_pure_event(type, name, data)			\
 	pure_##type *name =					\
 		(!trace_ctx.detail ? (void *)(data) +		\
 			offsetof(type, __event_filed) :		\
 			(void *)(data) +			\
 			offsetof(detail_##type, __event_filed))
+#else
+#define define_pure_event(type, name, data)			\
+	detail_##type *name = (void *)(data)
+#endif
 
 void tl_poll_handler(void *raw_ctx, int cpu, void *data, u32 size);
 void basic_poll_handler(void *ctx, int cpu, void *data, u32 size);

@@ -92,6 +92,7 @@ typedef struct {
 	}
 #define FNC(name)
 
+#ifndef COMPAT_MODE
 #define __DECLARE_EVENT(prefix, type, name, init...)	\
 	pure_##type __attribute__((__unused__)) *name;	\
 	if (ctx->args->detail)				\
@@ -110,6 +111,16 @@ prefix##_handle:;
 
 #define DECLARE_EVENT(type, name, init...)		\
 	__DECLARE_EVENT(basic, type, name, init)
+#else
+#define __DECLARE_EVENT(prefix, type, name, init...)	\
+	DECLARE_EVENT(type, name, init)
+#define DECLARE_EVENT(type, name, init...)		\
+	detail_##type __attribute__((__unused__)) *name; \
+	detail_##type __##name = { init };		\
+	ctx_event(ctx, __##name);			\
+	name = &__##name;
+
+#endif
 
 #define ctx_event_null(ctx, event)				\
 	ctx->e = (void *)&(event);				\

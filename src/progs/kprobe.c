@@ -157,9 +157,21 @@ static try_inline int handle_destroy(context_t *ctx)
 
 static try_inline int default_handle_entry(context_t *ctx)
 {
+#ifdef COMPAT_MODE
+	if (ctx->args->detail) {
+		detail_event_t e = { };
+		ctx_event(ctx, e);
+		handle_entry(ctx);
+	} else {
+		event_t e = { };
+		ctx_event(ctx, e);
+		handle_entry(ctx);
+	}
+#else
 	DECLARE_EVENT(event_t, e)
-
 	handle_entry(ctx);
+#endif
+
 	switch (ctx->func) {
 	case INDEX_consume_skb:
 	case INDEX___kfree_skb:
