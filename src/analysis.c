@@ -140,7 +140,6 @@ static inline void analy_entry_free(analy_entry_t *entry)
 
 static void analy_entry_handle(analy_entry_t *entry)
 {
-	packet_t *pkt = &entry->event->pkt;
 	static char buf[1024], tinfo[256];
 	event_t *e = entry->event;
 	rule_t *rule;
@@ -165,7 +164,10 @@ static void analy_entry_handle(analy_entry_t *entry)
 		sprintf(tinfo, "[%-20s] ", t->name);
 	}
 
-	ts_print_packet(buf, pkt, tinfo, trace_ctx.args.date);
+	if (!t->sk)
+		ts_print_packet(buf, &e->pkt, tinfo, trace_ctx.args.date);
+	else
+		ts_print_sock(buf, &e->ske, tinfo, trace_ctx.args.date);
 
 	if (trace_ctx.mode == TRACE_MODE_BASIC)
 		goto out;

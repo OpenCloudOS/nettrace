@@ -99,16 +99,21 @@ static try_inline int handle_entry(context_t *ctx)
 	pid = (u32)bpf_get_current_pid_tgid();
 	pkt = &e->pkt;
 	if (skip_life) {
-		if (!probe_parse_skb(skb, ctx->sk, pkt))
-			goto skip_life;
+		if (args->trace_mode == TRACE_MODE_SOCK_MASK) {
+			if (!probe_parse_sk(ctx->sk, &e->ske))
+				goto skip_life;
+		} else {
+			if (!probe_parse_skb(skb, pkt))
+				goto skip_life;
+		}
 		return -1;
 	}
 
 	matched = bpf_map_lookup_elem(&m_matched, &skb);
 	if (matched && *matched) {
-		probe_parse_skb_always(skb, ctx->sk, pkt);
+		probe_parse_skb_always(skb, pkt);
 	} else if (!ARGS_CHECK(args, pid, pid) &&
-		   !probe_parse_skb(skb, ctx->sk, pkt)) {
+		   !probe_parse_skb(skb, pkt)) {
 		bool _matched = true;
 		bpf_map_update_elem(&m_matched, &skb, &_matched, 0);
 	} else {

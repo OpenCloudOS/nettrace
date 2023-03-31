@@ -148,6 +148,7 @@ static int probe_trace_load()
 	switch (trace_ctx.mode) {
 	case TRACE_MODE_BASIC:
 	case TRACE_MODE_DROP:
+	case TRACE_MODE_SOCK:
 		probe_ops.trace_poll = basic_poll_handler;
 		break;
 	case TRACE_MODE_DIAG:

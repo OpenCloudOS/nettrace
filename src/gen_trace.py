@@ -60,7 +60,11 @@ def parse_group(group):
             name_split = child['name'].split(':')
             if len(name_split) > 1:
                 child['name'] = name_split[0]
-                child['skb'] = name_split[1]
+                child['skb'] = int(name_split[1])
+                if len(name_split) > 2:
+                    child['sock'] = int(name_split[2])
+                    if child['skb'] < 0:
+                        del child['skb']
             continue
         children.remove(child)
         data = child.split(':')
@@ -73,6 +77,10 @@ def parse_group(group):
                 "name": data[0],
                 "skb": int(data[1])
             }
+            if len(data) > 2:
+                child['sock'] = int(data[2])
+                if child['skb'] < 0:
+                    del child['skb']
         children.insert(i, child)
         i += 1
 
@@ -137,6 +145,7 @@ def gen_trace(trace, group, p_name):
     index_str = f'#define INDEX_{name} {global_status["trace_index"]}\n'
     rule_str = ''
     init_str = ''
+    skb_index = 0
     sk_index = 0
 
     if 'tp' in trace:
@@ -147,15 +156,13 @@ def gen_trace(trace, group, p_name):
             probe_str = f'\tFN_tp({name}, {tp[0]}, {tp[1]}, {trace["skb"]})\t\\\n'
     else:
         trace_type = 'TRACE_FUNCTION'
-        if 'skb' in trace:
-            skb_index = int(trace["skb"]) + 1
-            skb_str = f'\n\t.skb = {skb_index},'
+        if 'skb' in trace or 'sock' in trace:
+            if 'skb' in trace:
+                skb_index = int(trace["skb"]) + 1
+                skb_str = f'\n\t.skb = {skb_index},'
             if 'sock' in trace:
                 sk_index = int(trace["sock"]) + 1
-                sk_str = f', {sk_index}'
-            else:
-                sk_str = ''
-            probe_str = f'\tFN({name}, {skb_index}{sk_str})\t\\\n'
+            probe_str = f'\tFN({name}, {skb_index}, {sk_index})\t\\\n'
         else:
             probe_str = f'\tFNC({name})\t\\\n'
     if 'analyzer' in trace:

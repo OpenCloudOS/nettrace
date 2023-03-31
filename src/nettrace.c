@@ -82,7 +82,7 @@ static void do_parse_args(int argc, char *argv[])
 		{
 			.lname = "sock", .dest = &trace_args->sock,
 			.type = OPTION_BOOL,
-			.desc = "enable the traces that based on socket",
+			.desc = "enable 'sock' mode",
 		},
 #ifdef STACK_TRACE
 		{

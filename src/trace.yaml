@@ -345,11 +345,12 @@ children:
     children:
     - name: __tcp_transmit_skb
       sock: 0
-      skb: 1
       rules:
       - exp: ne 0
         level: warn
         msg: failed to xmit skb to ip layer
+    - tcp_retransmit_timer:-1:0
+    - tcp_sendmsg_locked:-1:0
 - name: udp
   desc: udp protocol layer (L4) of the network stack
   children:

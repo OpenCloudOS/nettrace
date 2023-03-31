@@ -173,7 +173,7 @@ static int trace_prepare_args()
 	trace_t *trace;
 	char *tmp, *cur;
 
-	if (args->basic + args->intel + args->drop > 1) {
+	if (args->basic + args->intel + args->drop + args->sock > 1) {
 		pr_err("multi-mode specified!\n");
 		goto err;
 	}
@@ -183,6 +183,9 @@ static int trace_prepare_args()
 
 	if (args->intel)
 		trace_ctx.mode = TRACE_MODE_DIAG;
+
+	if (args->sock)
+		trace_ctx.mode = TRACE_MODE_SOCK;
 
 	if (args->drop_stack) {
 		if (trace_set_stack(drop_trace))
@@ -231,6 +234,7 @@ skip_trace:
 	if (drop_reason_support()) {
 		trace_ctx.bpf_args.drop_reason = true;
 		trace_ctx.drop_reason = true;
+		get_drop_reason(1);
 	}
 
 	switch (trace_ctx.mode) {
@@ -253,10 +257,18 @@ skip_trace:
 				", drop reason will not be printed\n");
 		break;
 	}
+	case TRACE_MODE_SOCK:
+		break;
 	default:
+		pr_err("mode not supported!\n");
 		goto err;
 	}
-	get_drop_reason(1);
+
+	/* disable skb trace in SOCK_MODE, and disable sock trace in
+	 * !SOCK_MODE.
+	*/
+	trace_for_each_cond(trace, args->sock ^ !!trace->sk)
+			trace_set_invalid(trace);
 
 	if (args->ret) {
 		switch (trace_ctx.mode) {
@@ -271,11 +283,6 @@ skip_trace:
 		default:
 			break;
 		}
-	}
-
-	if (!args->sock) {
-		trace_for_each_cond(trace, trace->sk)
-			trace_set_invalid(trace);
 	}
 
 	trace_ctx.bpf_args.trace_mode = 1 << trace_ctx.mode;

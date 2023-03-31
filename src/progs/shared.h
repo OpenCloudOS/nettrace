@@ -19,7 +19,10 @@
 #include <skb_shared.h>
 
 typedef struct __attribute__((__packed__)) {
-	packet_t	pkt;
+	union {
+		packet_t	pkt;
+		sock_t		ske;
+	};
 	u64		key;
 	u32		func;
 #ifdef STACK_TRACE
@@ -101,12 +104,14 @@ typedef enum trace_mode {
 	TRACE_MODE_DROP,
 	TRACE_MODE_TIMELINE,
 	TRACE_MODE_DIAG,
+	TRACE_MODE_SOCK,
 } trace_mode_t;
 
 #define TRACE_MODE_BASIC_MASK		(1 << TRACE_MODE_BASIC)
 #define TRACE_MODE_TIMELINE_MASK	(1 << TRACE_MODE_TIMELINE)
 #define TRACE_MODE_DIAG_MASK		(1 << TRACE_MODE_DIAG)
 #define TRACE_MODE_DROP_MASK		(1 << TRACE_MODE_DROP)
+#define TRACE_MODE_SOCK_MASK		(1 << TRACE_MODE_SOCK)
 
 #define __MACRO_SIZE(macro)	sizeof(#macro)
 #define MACRO_SIZE(macro)	__MACRO_SIZE(macro)

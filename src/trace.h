@@ -127,10 +127,8 @@ extern trace_group_t root_group;
 extern int trace_count;
 extern struct list_head trace_list;
 
-#define FNC(name)		extern trace_t trace_##name;
-#define FN(name, index, ...)	FNC(name)
-#define FN_tp(name, a1, a2, a3) FNC(name)
-DEFINE_ALL_PROBES(FN, FN_tp, FNC)
+#define DECLARE_TRACES(name, ...) extern trace_t trace_##name;
+DEFINE_ALL_PROBES(DECLARE_TRACES, DECLARE_TRACES, DECLARE_TRACES)
 
 static inline trace_t *get_trace(int index)
 {

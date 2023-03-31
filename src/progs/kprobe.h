@@ -11,7 +11,9 @@ typedef struct {
 	u16 func;
 } context_t;
 
-#define MODE_SKIP_LIFE_MASK (TRACE_MODE_BASIC_MASK | TRACE_MODE_DROP_MASK)
+#define MODE_SKIP_LIFE_MASK (TRACE_MODE_BASIC_MASK |	\
+			     TRACE_MODE_DROP_MASK |	\
+			     TRACE_MODE_SOCK_MASK)
 
 #define nt_regs(regs, index) (void *)PT_REGS_PARM##index((struct pt_regs*)regs)
 #define nt_regs_ctx(ctx, index) nt_regs(ctx->regs, index)
@@ -59,15 +61,22 @@ typedef struct {
 
 #define DEFINE_KPROBE_SKB_SK(name, skb_index, sk_index)		\
 	DEFINE_KPROBE_INIT(name, name,				\
-			   .skb = nt_regs(regs, skb_index),	\
+		.skb = nt_ternary_take(skb_index,		\
+				       nt_regs(regs, skb_index),\
+				       NULL),			\
+		.sk = nt_ternary_take(sk_index,			\
+				      nt_regs(regs, sk_index),	\
+				      NULL))
+
+#define DEFINE_KPROBE_SK(name, ignored, sk_index)		\
+	DEFINE_KPROBE_INIT(name, name,				\
 			   .sk = nt_regs(regs, sk_index))
 
 /* the args here can be sk_index. Therefore, DEFINE_KPROBE_SKB_SK
  * will be used when the 3th arg offered.
  */
-#define KPROBE_DEFAULT(name, skb_index, args...)		\
-	nt_take_3th(dummy, ##args, DEFINE_KPROBE_SKB_SK,	\
-		    DEFINE_KPROBE_SKB)(name, skb_index, ##args)	\
+#define KPROBE_DEFAULT(name, skb_index, sk_index)		\
+	DEFINE_KPROBE_SKB_SK(name, skb_index, sk_index)		\
 	{							\
 		return default_handle_entry(ctx);		\
 	}

@@ -9,12 +9,24 @@
 #define nt_take_3th(ignored, a, b, ...)	b
 
 #define __nt_placehold_arg_1		1,
+#define __nt_placehold_arg_2		2,
+#define __nt_placehold_arg_3		3,
+#define __nt_placehold_arg_4		4,
+#define __nt_placehold_arg_5		5,
+
 #define ____nt_ternary_take(a, b, c)	nt_take_2th(a b, c)
 #define __nt_ternary_take(a, b, c)	\
 	____nt_ternary_take(__nt_placehold_arg_##a, b, c)
 
-/* take b if a is 1; else, take c */
+/* take b if a >= 1; else, take c */
 #define nt_ternary_take(a, b, c) __nt_ternary_take(a, b, c)
+
+#define ICSK_TIME_RETRANS	1
+#define ICSK_TIME_DACK		2
+#define ICSK_TIME_PROBE0	3
+#define ICSK_TIME_EARLY_RETRANS 4
+#define ICSK_TIME_LOSS_PROBE	5
+#define ICSK_TIME_REO_TIMEOUT	6
 
 typedef struct {
 	u16	sport;
@@ -66,6 +78,35 @@ typedef struct __attribute__((__packed__)) {
 	u8 proto_l4;
 	u8 pad;
 } packet_t;
+
+typedef struct __attribute__((__packed__)) {
+	u64	ts;
+	union {
+		struct {
+			u32	saddr;
+			u32	daddr;
+		} ipv4;
+		struct {
+			u8	saddr[16];
+			u8	daddr[16];
+		} ipv6;
+	} l3;
+	union {
+		struct {
+			u16	sport;
+			u16	dport;
+		} tcp;
+		struct {
+			u16	sport;
+			u16	dport;
+		} udp;
+		l4_min_t min;
+	} l4;
+	u32 timer_out;
+	u16 proto_l3;
+	u8 proto_l4;
+	u8 timer_pending;
+} sock_t;
 
 #define TCP_FLAGS_ACK	(1 << 4)
 #define TCP_FLAGS_PSH	(1 << 3)
