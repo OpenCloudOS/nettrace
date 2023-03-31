@@ -247,7 +247,7 @@ def gen_group(group, is_root=False):
     return result
 
 
-with open('/home/xm/github/nettrace/src/trace.yaml', 'r', encoding='utf-8') as f:
+with open('trace.yaml', 'r', encoding='utf-8') as f:
     content = f.read()
     root = yaml.load(content, yaml.SafeLoader)
     parse_group(root)
