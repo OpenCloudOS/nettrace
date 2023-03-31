@@ -264,10 +264,12 @@ skip_trace:
 		goto err;
 	}
 
-	/* disable skb trace in SOCK_MODE, and disable sock trace in
-	 * !SOCK_MODE.
-	*/
-	trace_for_each_cond(trace, args->sock ^ !!trace->sk)
+	/* disable traces that don't support sk in SOCK_MODE, and disable
+	 * traces that don't support skb in !SOCK_MODE.
+	 */
+	trace_for_each_cond(trace, (!args->sock && trace->sk &&
+				    !trace->skb) ||
+				   (args->sock && !trace->sk))
 			trace_set_invalid(trace);
 
 	if (args->ret) {
