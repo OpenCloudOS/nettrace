@@ -232,7 +232,7 @@ static inline bool trace_mode_timeline()
 
 static inline bool trace_mode_intel()
 {
-	return trace_ctx.mode == TRACE_MODE_INETL;
+	return trace_ctx.mode == TRACE_MODE_DIAG;
 }
 
 void trace_show(trace_group_t *group);

@@ -461,7 +461,7 @@ static inline void rule_run(analy_entry_t *entry, trace_t *trace, int ret)
 	}
 }
 
-DEFINE_ANALYZER_ENTRY(free, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_INETL_MASK)
+DEFINE_ANALYZER_ENTRY(free, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_DIAG_MASK)
 {
 	put_fake_analy_ctx(e->fake_ctx);
 	hlist_del(&e->fake_ctx->hash);
@@ -473,7 +473,7 @@ out:
 	return RESULT_CONT;
 }
 
-DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_INETL_MASK |
+DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_DIAG_MASK |
 			    TRACE_MODE_DROP_MASK)
 {
 	define_pure_event(drop_event_t, event, e->event);
@@ -511,7 +511,7 @@ out:
 	return RESULT_CONT;
 }
 
-DEFINE_ANALYZER_EXIT(clone, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_INETL_MASK)
+DEFINE_ANALYZER_EXIT(clone, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_DIAG_MASK)
 {
 	analy_entry_t *entry = e->entry;
 
@@ -528,7 +528,7 @@ out:
 	return RESULT_CONSUME;
 }
 
-DEFINE_ANALYZER_EXIT(ret, TRACE_MODE_INETL_MASK)
+DEFINE_ANALYZER_EXIT(ret, TRACE_MODE_DIAG_MASK)
 {
 	int ret = (int) e->event.val;
 
@@ -569,7 +569,7 @@ const char *pf_names[] = {
 	[NFPROTO_IPV6]		= "ipv6",
 	[NFPROTO_DECNET]	= "decnet",
 };
-DEFINE_ANALYZER_EXIT(nf, TRACE_MODE_INETL_MASK)
+DEFINE_ANALYZER_EXIT(nf, TRACE_MODE_DIAG_MASK)
 {
 	analy_entry_t *entry = e->entry;
 	define_pure_event(nf_hooks_event_t, event, entry->event);
@@ -605,7 +605,7 @@ out:
 	return RESULT_CONT;
 }
 
-DEFINE_ANALYZER_EXIT(iptable, TRACE_MODE_INETL_MASK)
+DEFINE_ANALYZER_EXIT(iptable, TRACE_MODE_DIAG_MASK)
 {
 	analy_entry_t *entry = e->entry;
 	define_pure_event(nf_event_t, event, entry->event);
@@ -625,7 +625,7 @@ DEFINE_ANALYZER_EXIT(iptable, TRACE_MODE_INETL_MASK)
 	return RESULT_CONT;
 }
 
-DEFINE_ANALYZER_EXIT(qdisc, TRACE_MODE_INETL_MASK)
+DEFINE_ANALYZER_EXIT(qdisc, TRACE_MODE_DIAG_MASK)
 {
 	define_pure_event(qdisc_event_t, event, e->entry->event);
 	char *msg = malloc(1024);

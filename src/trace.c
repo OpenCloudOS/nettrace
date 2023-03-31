@@ -182,7 +182,7 @@ static int trace_prepare_args()
 		trace_ctx.mode = TRACE_MODE_BASIC;
 
 	if (args->intel)
-		trace_ctx.mode = TRACE_MODE_INETL;
+		trace_ctx.mode = TRACE_MODE_DIAG;
 
 	if (args->drop_stack) {
 		if (trace_set_stack(drop_trace))
@@ -234,7 +234,7 @@ skip_trace:
 	}
 
 	switch (trace_ctx.mode) {
-	case TRACE_MODE_INETL:
+	case TRACE_MODE_DIAG:
 		trace_all_set_ret();
 	case TRACE_MODE_TIMELINE:
 		/* enable skb clone trace */
@@ -267,7 +267,7 @@ skip_trace:
 		case TRACE_MODE_TIMELINE:
 			trace_all_set_ret();
 			break;
-		case TRACE_MODE_INETL:
+		case TRACE_MODE_DIAG:
 		default:
 			break;
 		}
