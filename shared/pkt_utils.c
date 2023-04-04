@@ -8,6 +8,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#include <sys_utils.h>
+
 #include "pkt_utils.h"
 
 static time_t time_offset;
@@ -161,8 +163,8 @@ int ts_print_sock(char *buf, sock_t *ske, char *minfo, bool date_format)
 {
 	static char saddr[MAX_ADDR_LENGTH], daddr[MAX_ADDR_LENGTH];
 	u64 ts = ske->ts;
+	int pos = 0, hz;
 	struct tm *p;
-	int pos = 0;
 	u8 l4;
 
 	if (date_format) {
@@ -220,11 +222,16 @@ print_ip:
 
 	switch (l4) {
 	case IPPROTO_TCP:
+		BUF_FMT(" info:(%u %u)", ske->l4.tcp.packets_out,
+			ske->l4.tcp.retrans_out);
 	case IPPROTO_UDP:
+		hz = kernel_hz();
+		hz = hz > 0 ? hz : 1;
 		if (ske->timer_pending)
-			BUF_FMT(" timer:(%s, %u)",
+			BUF_FMT(" timer:(%s, %ld.%03lds)",
 				timer_name[ske->timer_pending],
-				ske->timer_out);
+				ske->timer_out / hz,
+				((ske->timer_out * 1000) / hz) % 1000);
 		break;
 	default:
 		break;

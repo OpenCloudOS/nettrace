@@ -102,7 +102,7 @@ typedef struct __attribute__((__packed__)) {
 		} udp;
 		l4_min_t min;
 	} l4;
-	u32 timer_out;
+	long timer_out;
 	u16 proto_l3;
 	u8 proto_l4;
 	u8 timer_pending;
