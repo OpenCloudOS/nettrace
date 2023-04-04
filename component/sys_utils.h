@@ -20,6 +20,7 @@ bool	fsearch(FILE *f, char *target);
 int	kernel_version();
 bool	debugfs_mounted();
 bool	kernel_has_config(char *name);
+int	kernel_hz();
 
 static inline int simple_exec(char *cmd)
 {

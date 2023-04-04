@@ -79,6 +79,11 @@ static void do_parse_args(int argc, char *argv[])
 			.type = OPTION_BOOL,
 			.desc = "skb drop monitor mode, for replace of 'droptrace'",
 		},
+		{
+			.lname = "sock", .dest = &trace_args->sock,
+			.type = OPTION_BOOL,
+			.desc = "enable 'sock' mode",
+		},
 #ifdef STACK_TRACE
 		{
 			.lname = "drop-stack", .dest = &trace_args->drop_stack,
@@ -86,6 +91,11 @@ static void do_parse_args(int argc, char *argv[])
 			.desc = "print the kernel function call stack of kfree_skb",
 		},
 #endif
+		{
+			.lname = "lifetime", .dest = &trace_args->lifetime,
+			.type = OPTION_U32,
+			.desc = "the minial time to live of the skb in ms",
+		},
 		{ .type = OPTION_BLANK },
 		{
 			.sname = 'v', .dest = &show_log,

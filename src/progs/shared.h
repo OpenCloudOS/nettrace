@@ -19,68 +19,77 @@
 #include <skb_shared.h>
 
 typedef struct __attribute__((__packed__)) {
-	packet_t	pkt;
+	union {
+		packet_t	pkt;
+		sock_t		ske;
+	};
 	u64		key;
 	u32		func;
 #ifdef STACK_TRACE
 	u32		stack_id;
 #endif
+	int		__event_filed[0];
 } event_t;
 
 typedef struct __attribute__((__packed__)) {
 	packet_t	pkt;
 	u64		key;
 	u32		func;
+#ifdef STACK_TRACE
+	u32		stack_id;
+#endif
 	u32		pid;
 	char		task[16];
 	char		ifname[16];
 	u32		ifindex;
+	int		__event_filed[0];
 } detail_event_t;
 
-typedef struct __attribute__((__packed__)) {
-	union {
-		detail_event_t detail_event;
-		event_t	event;
-	};
-	u64	location;
-	u32	reason;
-} drop_event_t;
+typedef struct {
+} pure_event_t;
 
-typedef struct __attribute__((__packed__)) {
-	union {
-		detail_event_t detail_event;
-		event_t	event;
-	};
-	char table[8];
-	char chain[8];
-	u8 hook;
-	u8 pf;
-} nf_event_t;
+#define DEFINE_EVENT(name, fields...)		\
+typedef struct __attribute__((__packed__)) {	\
+	event_t event;				\
+	int __event_filed[0];			\
+	fields					\
+} name;						\
+typedef struct __attribute__((__packed__)) {	\
+	detail_event_t event;			\
+	int __event_filed[0];			\
+	fields					\
+} detail_##name;				\
+typedef struct __attribute__((__packed__)) {	\
+	fields					\
+} pure_##name;
+#define event_field(type, name) type name;
 
-typedef struct __attribute__((__packed__)) {
-	union {
-		detail_event_t detail_event;
-		event_t	event;
-	};
-	u64 last_update;
-	u32 state;
-	u32 qlen;
-	u32 flags;
-} qdisc_event_t;
+DEFINE_EVENT(drop_event_t,
+	event_field(u64, location)
+	event_field(u32, reason)
+)
 
-typedef struct __attribute__((__packed__)) {
-	union {
-		detail_event_t detail_event;
-		event_t	event;
-	};
-	char table[8];
-	char chain[8];
-	u8 hook;
-	u8 pf;
-	u64 hooks[8];
-} nf_hooks_event_t;
+DEFINE_EVENT(nf_event_t,
+	event_field(char, table[8])
+	event_field(char, chain[8])
+	event_field(u8, hook)
+	event_field(u8, pf)
+)
 
-#define ext_event_init() { .event = { .func = func }}
+DEFINE_EVENT(nf_hooks_event_t,
+	event_field(char, table[8])
+	event_field(char, chain[8])
+	event_field(u8, hook)
+	event_field(u8, pf)
+	event_field(u64, hooks[6])
+)
+
+DEFINE_EVENT(qdisc_event_t,
+	event_field(u64, last_update)
+	event_field(u32, state)
+	event_field(u32, qlen)
+	event_field(u32, flags)
+)
 
 #define MAX_EVENT_SIZE sizeof(nf_hooks_event_t)
 
@@ -94,13 +103,15 @@ typedef enum trace_mode {
 	TRACE_MODE_BASIC,
 	TRACE_MODE_DROP,
 	TRACE_MODE_TIMELINE,
-	TRACE_MODE_INETL,
+	TRACE_MODE_DIAG,
+	TRACE_MODE_SOCK,
 } trace_mode_t;
 
 #define TRACE_MODE_BASIC_MASK		(1 << TRACE_MODE_BASIC)
 #define TRACE_MODE_TIMELINE_MASK	(1 << TRACE_MODE_TIMELINE)
-#define TRACE_MODE_INETL_MASK		(1 << TRACE_MODE_INETL)
+#define TRACE_MODE_DIAG_MASK		(1 << TRACE_MODE_DIAG)
 #define TRACE_MODE_DROP_MASK		(1 << TRACE_MODE_DROP)
+#define TRACE_MODE_SOCK_MASK		(1 << TRACE_MODE_SOCK)
 
 #define __MACRO_SIZE(macro)	sizeof(#macro)
 #define MACRO_SIZE(macro)	__MACRO_SIZE(macro)
@@ -112,14 +123,5 @@ typedef enum trace_mode {
 #define TRACE_PREFIX_LEN	MACRO_SIZE(TRACE_PREFIX)
 #define TRACE_NAME(name)	MACRO_CONCAT(TRACE_PREFIX, name)
 #define TRACE_RET_NAME(name)	MACRO_CONCAT(TRACE_RET_PREFIX, name)
-
-#define __nt_placehold_arg_1		1,
-#define __nt_take_2th(ignored, a, ...)	a
-#define ____nt_ternary_take(a, b, c)	__nt_take_2th(a b, c)
-#define __nt_ternary_take(a, b, c)	\
-	____nt_ternary_take(__nt_placehold_arg_##a, b, c)
-
-/* take b if a is 1; else, take c */
-#define nt_ternary_take(a, b, c) __nt_ternary_take(a, b, c)
 
 #endif

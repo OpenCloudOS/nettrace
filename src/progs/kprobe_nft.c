@@ -4,9 +4,10 @@
 #include <bpf/bpf_tracing.h>
 
 #include "shared.h"
-#include <skb_utils.h>
+#include <skb_parse.h>
 
 #include "kprobe_trace.h"
+#include "kprobe.h"
 
 #ifndef ST_NFT_DO_CHAIN
 #define ST_NFT_DO_CHAIN
@@ -46,35 +47,37 @@ struct _nft_pktinfo_new {
 #undef FAKE_FUNC_NAME
 #define FAKE_FUNC_NAME FUNC_NAME(handle_nft_do_chain)
 
-static try_inline int FAKE_FUNC_NAME(struct pt_regs *ctx, int func)
+static try_inline int FAKE_FUNC_NAME(context_t *ctx)
 {
-	struct nft_pktinfo *pkt = (void *)PT_REGS_PARM1(ctx);
-	nf_event_t e = { .event = { .func = func, } };
+	struct nft_pktinfo *pkt = nt_regs_ctx(ctx, 1);
 	struct nf_hook_state *state;
 	struct nft_chain *chain;
 	struct nft_table *table;
-        struct sk_buff *skb;
+	size_t size;
+	DECLARE_EVENT(nf_event_t, e)
 
-	skb = (struct sk_buff *)_(pkt->skb);
-	if (handle_entry(ctx, skb, &e.event, 0, func))
+	ctx->skb = (struct sk_buff *)_(pkt->skb);
+	size = ctx->size;
+	ctx->size = 0;
+	if (handle_entry(ctx))
 		return 0;
 
-	if (ARGS_GET_CONFIG(nft_high))
+	if (ctx->args->nft_high)
 		state = _(((struct _nft_pktinfo_new *)pkt)->state);
 	else
 		state = _(((struct _nft_pktinfo *)pkt)->xt.state);
 
-	chain	= (void *)PT_REGS_PARM2(ctx);
+	chain	= nt_regs_ctx(ctx, 2);
 	table	= _CT(chain, table);
-	e.hook	= _C(state, hook);
-	e.pf	= _C(state, pf);
+	e->hook	= _C(state, hook);
+	e->pf	= _C(state, pf);
 
-	bpf_probe_read_kernel_str(e.chain, sizeof(e.chain),
+	bpf_probe_read_kernel_str(e->chain, sizeof(e->chain),
 				  _CT(chain, name));
-	bpf_probe_read_kernel_str(e.table, sizeof(e.table),
+	bpf_probe_read_kernel_str(e->table, sizeof(e->table),
 				  _CT(table, name));
 
-	EVENT_OUTPUT(ctx, e);
+	EVENT_OUTPUT_PTR(ctx->regs, ctx->e, size);
 	return 0;
 }
 
@@ -82,7 +85,7 @@ static try_inline int FAKE_FUNC_NAME(struct pt_regs *ctx, int func)
  * This function is used to the kernel version that don't support
  * kernel module BTF.
  */
-DEFINE_KPROBE_INIT(FUNC_NAME(nft_do_chain), nft_do_chain, NULL)
+DEFINE_KPROBE_INIT(FUNC_NAME(nft_do_chain), nft_do_chain)
 {
-	return FAKE_FUNC_NAME(ctx, func);
+	return FAKE_FUNC_NAME(ctx);
 }

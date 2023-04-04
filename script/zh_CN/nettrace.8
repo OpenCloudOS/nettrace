@@ -68,11 +68,20 @@ nettrace \- Linux系统下的网络报文跟踪、网络问题诊断工具
 \fB\fC\-\-diag\-keep\fR
 持续跟踪。\fB\fCdiag\fR模式下，默认在跟踪到异常报文后会停止跟踪，使用该参数后，会持续跟踪下去。
 .TP
+\fB\fC\-\-sock\fR
+启用套接口模式。这个模式下，不会再跟踪报文，而会跟踪套接口。
+.TP
 \fB\fC\-\-hooks\fR
 打印netfilter上的钩子函数
 .TP
 \fB\fC\-\-drop\fR
 进行系统丢包监控，取代原先的\fB\fCdroptrace\fR
+.TP
+\fB\fC\-\-drop\-stack\fR
+打印kfree_skb内核函数的调用堆栈
+.TP
+\fB\fC\-\-lifetime\fR
+根据报文的寿命进行过滤，仅打印处理时长超过该值的报文，单位为ms。该参数仅在默认和\fB\fCdiag\fR模式下可用。
 .TP
 \fB\fC\-v\fR
 显示程序启动的日志信息
@@ -263,6 +272,27 @@ end trace...
 .PP
 可以看出，上面\fB\fCfollowing hook functions are blamed\fR中列出了导致当前\fB\fCnetfilter\fR
 丢包的所有的钩子函数，这里只有\fB\fCiptables\fR一个钩子函数。
+.SS sock跟踪
+.PP
+套接口跟踪在原理上与skb的basic模式很类似，只不过跟踪对象从skb换成了sock。常规的过滤参数，如ip、端口等，在该模式下都可以直接使用，基本用法如下所示：
+.PP
+.RS
+.nf
+sudo ./nettrace \-p tcp \-\-port 9999 \-\-sock
+begin trace...
+[2157947.050509] [inet_listen         ] TCP: 0.0.0.0:9999 \-> 0.0.0.0:0 info:(0 0)
+[2157958.364842] [__tcp_transmit_skb  ] TCP: 127.0.0.1:36562 \-> 127.0.0.1:9999 info:(1 0)
+[2157958.364875] [tcp_rcv_state_process] TCP: 0.0.0.0:9999 \-> 0.0.0.0:0 info:(0 0)
+[2157958.364890] [tcp_rcv_state_process] TCP: 127.0.0.1:36562 \-> 127.0.0.1:9999 info:(1 0) timer:(retrans, 1.000s)
+[2157958.364896] [tcp_ack             ] TCP: 127.0.0.1:36562 \-> 127.0.0.1:9999 info:(1 0) timer:(retrans, 1.000s)
+[2157958.364906] [__tcp_transmit_skb  ] TCP: 127.0.0.1:36562 \-> 127.0.0.1:9999 info:(0 0)
+[2157958.364917] [tcp_rcv_state_process] TCP: 127.0.0.1:9999 \-> 127.0.0.1:36562 info:(0 0)
+[2157958.364921] [tcp_ack             ] TCP: 127.0.0.1:9999 \-> 127.0.0.1:36562 info:(0 0)
+[2157959.365240] [tcp_write_timer_handler] TCP: 127.0.0.1:36562 \-> 127.0.0.1:9999 info:(0 0)
+.fi
+.RE
+.PP
+其中，\fB\fCinfo\fR里显示的内容分别是：报文在外数量、报文重传数量。\fB\fCtimer\fR显示的为当前套接口上的定时器和超时时间。目前，信息还在不断完善中。
 .SH REQUIREMENTS
 .PP
 内核需要支持\fB\fCCONFIG_BPF\fR, \fB\fCCONFIG_KPROBE\fR, \fB\fCCONFIG_DEBUG_INFO_BTF\fR(可选)功能

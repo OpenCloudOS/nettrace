@@ -26,7 +26,11 @@ struct analyzer;
 #define TRACE_STACK		(1 << 4)
 #define TRACE_ATTACH_MANUAL	(1 << 5)
 
-#define trace_for_each(pos) list_for_each_entry(pos, &trace_list, all)
+#define trace_for_each(pos)		\
+	list_for_each_entry(pos, &trace_list, all)
+#define trace_for_each_cond(pos, cond)	\
+	trace_for_each(pos) 		\
+		if (cond)
 
 typedef struct trace_group {
 	char	*name;
@@ -48,6 +52,7 @@ typedef struct trace {
 	char	*regex;
 	char	*tp;
 	int	skb;
+	int	sk;
 	/* traces in a global list */
 	struct list_head all;
 	/* traces in the same group */
@@ -77,6 +82,8 @@ typedef struct trace_args {
 	bool date;
 	bool drop_stack;
 	bool show_traces;
+	bool sock;
+	u32  lifetime;
 	char *traces;
 } trace_args_t;
 
@@ -120,10 +127,8 @@ extern trace_group_t root_group;
 extern int trace_count;
 extern struct list_head trace_list;
 
-#define FNC(name)		extern trace_t trace_##name;
-#define FN(name, index)		FNC(name)
-#define FN_tp(name, a1, a2, a3) FNC(name)
-DEFINE_ALL_PROBES(FN, FN_tp, FNC)
+#define DECLARE_TRACES(name, ...) extern trace_t trace_##name;
+DEFINE_ALL_PROBES(DECLARE_TRACES, DECLARE_TRACES, DECLARE_TRACES)
 
 static inline trace_t *get_trace(int index)
 {
@@ -225,7 +230,7 @@ static inline bool trace_mode_timeline()
 
 static inline bool trace_mode_intel()
 {
-	return trace_ctx.mode == TRACE_MODE_INETL;
+	return trace_ctx.mode == TRACE_MODE_DIAG;
 }
 
 void trace_show(trace_group_t *group);

@@ -149,8 +149,10 @@ static int probe_trace_load()
 	case TRACE_MODE_BASIC:
 	case TRACE_MODE_DROP:
 		probe_ops.trace_poll = basic_poll_handler;
+	case TRACE_MODE_SOCK:
+		probe_ops.trace_poll = async_poll_handler;
 		break;
-	case TRACE_MODE_INETL:
+	case TRACE_MODE_DIAG:
 	case TRACE_MODE_TIMELINE:
 		probe_ops.trace_poll = tl_poll_handler;
 		break;
@@ -290,7 +292,7 @@ static void probe_print_stack(int key)
 }
 
 analyzer_t probe_analyzer =  {
-	.mode = TRACE_MODE_INETL_MASK | TRACE_MODE_TIMELINE_MASK,
+	.mode = TRACE_MODE_DIAG_MASK | TRACE_MODE_TIMELINE_MASK,
 	.analy_entry = probe_analy_entry,
 	.analy_exit = probe_analy_exit,
 };

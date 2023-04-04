@@ -110,6 +110,9 @@ static inline int list_is_singular(const struct list_head *head)
 #define list_first_entry(ptr, type, member) \
 	list_entry((ptr)->next, type, member)
 
+#define list_last_entry(ptr, type, member) \
+	list_entry((ptr)->prev, type, member)
+
 #define list_for_each_entry(pos, head, member)				\
 	for (pos = list_entry((head)->next, typeof(*pos), member);	\
 	     &pos->member != (head); 	\

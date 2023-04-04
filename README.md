@@ -154,12 +154,14 @@ Usage:
     --diag-keep      don't quit when abnormal packet found
     --hooks          print netfilter hooks if dropping by netfilter
     --drop           skb drop monitor mode, for replace of 'droptrace'
+    --sock           enable 'sock' mode
     --drop-stack     print the kernel function call stack of kfree_skb
+    --lifetime       the minial time to live of the skb
 
     -v               show log information
     --debug          show debug information
-    --bpf-debug      show bpf debug information
     -h, --help       show help information
+    -V, --version    show nettrace version
 ```
 
 其中，参数`s/d/addr/S/D/port/p/pid`用于进行报文的过滤，可以通过IP地址、端口、协议等属性进行过滤。其中，通过IPv6地址进行过滤目前也已经实现了支持。其他参数的用途包括：
@@ -172,9 +174,11 @@ Usage:
 - `diag`：启用诊断模式
 - `diag-quiet`：只显示出现存在问题的报文，不显示正常的报文
 - `diag-keep`：持续跟踪。`diag`模式下，默认在跟踪到异常报文后会停止跟踪，使用该参数后，会持续跟踪下去。
+- `sock`：启用套接口模式。这个模式下，不会再跟踪报文，而会跟踪套接口。
 - `hooks`：结合netfilter做的适配，详见下文
 - `drop`：进行系统丢包监控，取代原先的`droptrace`
 - `drop-stack`: 打印kfree_skb内核函数的调用堆栈
+- `lifetime`：根据报文的寿命进行过滤，仅打印处理时长超过该值的报文，单位为ms。该参数仅在默认和`diag`模式下可用。
 
 下面我们首先来看一下默认模式下的工具使用方法。
 
@@ -302,6 +306,39 @@ begin tracing......
 463697.332042: [dev_queue_xmit          ]: ICMP: 9.135.224.89  -> 10.123.119.98, ping request   , seq: 0
 463697.332046: [dev_hard_start_xmit     ]: ICMP: 9.135.224.89  -> 10.123.119.98, ping request   , seq: 0
 463697.332060: [consume_skb             ]: ICMP: 9.135.224.89  -> 10.123.119.98, ping request   , seq: 0
+```
+
+#### 3.1.5 寿命过滤
+
+在特定场景下，如网络时延问题诊断的时候，我们可能仅关注处理时长超过一定时间的报文。此时，就需要根据报文的处理时长进行输出过滤。目前，是根据报文从被跟踪到，直到被销毁来作为报文的处理时长的，这个后续可能要优化，因为内核里会存在“延迟批量销毁skb”的行为。下面的命令会过滤处理时长超过1ms的报文：
+
+```shell
+$ sudo ./nettrace -p icmp --lifetime 1
+begin trace...
+***************** ff1100007b5fe000 ***************
+[66.725587] [napi_gro_receive_entry] ICMP: 192.168.122.1 -> 192.168.122.8 ping request, seq: 1, id: 32535
+[66.727131] [dev_gro_receive     ] ICMP: 192.168.122.1 -> 192.168.122.8 ping request, seq: 1, id: 32535
+[66.727675] [__netif_receive_skb_core] ICMP: 192.168.122.1 -> 192.168.122.8 ping request, seq: 1, id: 32535
+[66.728330] [ip_rcv_core.isra.0  ] ICMP: 192.168.122.1 -> 192.168.122.8 ping request, seq: 1, id: 32535
+[66.728922] [ip_route_input_slow ] ICMP: 192.168.122.1 -> 192.168.122.8 ping request, seq: 1, id: 32535
+[66.729206] [fib_validate_source ] ICMP: 192.168.122.1 -> 192.168.122.8 ping request, seq: 1, id: 32535
+[66.729868] [ip_local_deliver    ] ICMP: 192.168.122.1 -> 192.168.122.8 ping request, seq: 1, id: 32535
+[66.730428] [ip_local_deliver_finish] ICMP: 192.168.122.1 -> 192.168.122.8 ping request, seq: 1, id: 32535
+[66.731109] [icmp_rcv            ] ICMP: 192.168.122.1 -> 192.168.122.8 ping request, seq: 1, id: 32535
+[66.731879] [icmp_echo           ] ICMP: 192.168.122.1 -> 192.168.122.8 ping request, seq: 1, id: 32535
+[66.732456] [icmp_reply.constprop.0] ICMP: 192.168.122.1 -> 192.168.122.8 ping request, seq: 1, id: 32535
+[66.739716] [consume_skb         ] ICMP: 192.168.122.1 -> 192.168.122.8 ping request, seq: 1, id: 32535
+
+***************** ff1100007b5fe100 ***************
+[66.735628] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 192.168.122.1 ping reply, seq: 1, id: 32535
+[66.736355] [ip_output           ] ICMP: 192.168.122.8 -> 192.168.122.1 ping reply, seq: 1, id: 32535
+[66.736600] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 192.168.122.1 ping reply, seq: 1, id: 32535
+[66.737234] [ip_finish_output    ] ICMP: 192.168.122.8 -> 192.168.122.1 ping reply, seq: 1, id: 32535
+[66.737995] [ip_finish_output2   ] ICMP: 192.168.122.8 -> 192.168.122.1 ping reply, seq: 1, id: 32535
+[66.738682] [__dev_queue_xmit    ] ICMP: 192.168.122.8 -> 192.168.122.1 ping reply, seq: 1, id: 32535
+[66.739011] [sch_direct_xmit     ] ICMP: 192.168.122.8 -> 192.168.122.1 ping reply, seq: 1, id: 32535
+[66.739287] [dev_hard_start_xmit ] ICMP: 192.168.122.8 -> 192.168.122.1 ping reply, seq: 1, id: 32535
+[66.740110] [consume_skb         ] ICMP: 192.168.122.8 -> 192.168.122.1 ping reply, seq: 1, id: 32535
 ```
 
 ### 3.2 诊断模式
@@ -566,3 +603,22 @@ begin trace...
 [2025.235967] TCP: 162.241.189.135:46756 -> 172.27.0.6:22 seq:1304582308, ack:1354418612, flags:AP, tcp_v4_do_rcv+0x70
 ```
 
+## 3.4 套接口跟踪
+
+套接口跟踪在原理上与skb的basic模式很类似，只不过跟踪对象从skb换成了sock。常规的过滤参数，如ip、端口等，在该模式下都可以直接使用，基本用法如下所示：
+
+```shell
+sudo ./nettrace -p tcp --port 9999 --sock
+begin trace...
+[2157947.050509] [inet_listen         ] TCP: 0.0.0.0:9999 -> 0.0.0.0:0 info:(0 0)
+[2157958.364842] [__tcp_transmit_skb  ] TCP: 127.0.0.1:36562 -> 127.0.0.1:9999 info:(1 0)
+[2157958.364875] [tcp_rcv_state_process] TCP: 0.0.0.0:9999 -> 0.0.0.0:0 info:(0 0)
+[2157958.364890] [tcp_rcv_state_process] TCP: 127.0.0.1:36562 -> 127.0.0.1:9999 info:(1 0) timer:(retrans, 1.000s)
+[2157958.364896] [tcp_ack             ] TCP: 127.0.0.1:36562 -> 127.0.0.1:9999 info:(1 0) timer:(retrans, 1.000s)
+[2157958.364906] [__tcp_transmit_skb  ] TCP: 127.0.0.1:36562 -> 127.0.0.1:9999 info:(0 0)
+[2157958.364917] [tcp_rcv_state_process] TCP: 127.0.0.1:9999 -> 127.0.0.1:36562 info:(0 0)
+[2157958.364921] [tcp_ack             ] TCP: 127.0.0.1:9999 -> 127.0.0.1:36562 info:(0 0)
+[2157959.365240] [tcp_write_timer_handler] TCP: 127.0.0.1:36562 -> 127.0.0.1:9999 info:(0 0)
+```
+
+其中，`info`里显示的内容分别是：报文在外数量、报文重传数量。`timer`显示的为当前套接口上的定时器和超时时间。目前，信息还在不断完善中。

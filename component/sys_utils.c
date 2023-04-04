@@ -16,6 +16,7 @@
 
 #include "sys_utils.h"
 
+static int __hz = -1;
 int log_level = 0;
 
 int exec(char *cmd, char *output)
@@ -83,8 +84,43 @@ bool debugfs_mounted()
 	return simple_exec("mount | grep debugfs") == 0;
 }
 
+int kernel_get_config(char *name, char *output)
+{
+	char tmp[128] = {};
+	int err;
+
+	if (file_exist("/proc/config.gz"))
+		err = execf(tmp, "zcat /proc/config.gz | grep 'CONFIG_%s=' 2>&1",
+			    name);
+	else
+		err = execf(tmp, "grep 'CONFIG_%s=' /boot/config-$(uname -r)"
+			    " 2>&1", name);
+
+	if (!output || err)
+		return err;
+
+	sscanf(tmp, "%*[^=]=%s", output);
+	return err;
+}
+
 bool kernel_has_config(char *name)
 {
-	return execf(NULL, "zgrep 'CONFIG_%s=y' /proc/config.gz 2>/dev/null",
-		     name) == 0;
+	char type[32] = {};
+	return kernel_get_config(name, type) == 0 && type[0] == 'y';
+}
+
+int kernel_hz()
+{
+	char hz[32] = {};
+	int err;
+
+	if (__hz > 0)
+		return __hz;
+
+	err = kernel_get_config("HZ", hz);
+	if (err)
+		return -ENOTSUP;
+
+	__hz = atoi(hz);
+	return __hz;
 }

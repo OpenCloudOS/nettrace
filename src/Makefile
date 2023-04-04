@@ -16,6 +16,9 @@ else
 ifneq ($(shell grep -c get_stackid $(HEADERS)/include/uapi/linux/bpf.h),0)
 	CFLAGS += -DSTACK_TRACE
 endif
+ifneq ($(shell grep -c "sk_protocol.*8" $(HEADERS)/include/net/sock.h),0)
+	BPF_CFLAGS += -DSK_PRPTOCOL_LEGACY
+endif
 endif
 
 progs/kprobe_trace.h:

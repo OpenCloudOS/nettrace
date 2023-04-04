@@ -5,7 +5,7 @@
 #include <bpf/bpf_tracing.h>
 
 #include <skb_shared.h>
-#include <skb_utils.h>
+#include <skb_parse.h>
 
 #include "shared.h"
 

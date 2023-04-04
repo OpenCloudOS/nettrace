@@ -1,12 +1,24 @@
+/* 
+ * This file define the macro that used by BPF program. As the vmlinux
+ * can't contain macro definition, we have to define them is this
+ * file instead.
+ * 
+ * NOTE: This file SHOULD be used by BPF only.
+ */
 #ifndef _H_BPF_MACRO
 #define _H_BPF_MACRO
+
+#define AF_INET		2	/* Internet IP Protocol 	*/
+#define AF_INET6	10	/* IP version 6			*/
 
 #define ETH_P_IP	0x0800		/* Internet Protocol packet	*/
 #define ETH_P_IPV6	0x86DD		/* IPv6 over bluebook		*/
 
 #define ETH_HLEN	14		/* Total octets in header.	 */
 
+#ifndef IPPROTO_ICMPV6
 #define IPPROTO_ICMPV6		58	/* ICMPv6			*/
+#endif
 
 #define ICMPV6_ECHO_REQUEST		128
 #define ICMPV6_ECHO_REPLY		129
