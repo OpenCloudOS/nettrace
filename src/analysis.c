@@ -5,6 +5,7 @@
 #include <linux/netfilter_bridge.h>
 #undef __USE_MISC
 #include <net/if.h>
+#include <pthread.h>
 
 #include <pkt_utils.h>
 #include <stdlib.h>
@@ -416,6 +417,59 @@ void basic_poll_handler(void *ctx, int cpu, void *data, u32 size)
 	trace = get_trace_from_analy_entry(&entry);
 	try_run_analyzer(trace, trace->analyzer, &entry);
 	analy_entry_handle(&entry);
+}
+
+static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+static bool async_thread_created;
+static pthread_t async_thread;
+static LIST_HEAD(async_list);
+static void *do_async_poll(void *arg)
+{
+	analy_entry_t *entry, *pos;
+	trace_t *trace;
+
+	while (!trace_ctx.stop) {
+		list_for_each_entry_safe(entry, pos, &async_list, list) {
+			trace = get_trace_from_analy_entry(entry);
+			try_run_analyzer(trace, trace->analyzer, entry);
+			analy_entry_handle(entry);
+			list_del(&entry->list);
+			analy_entry_free(entry);
+		}
+		sleep(1);
+	}
+}
+
+void async_poll_handler(void *ctx, int cpu, void *data, u32 size)
+{
+	analy_entry_t *entry, *pos;
+	bool added = false;
+	event_t *e;
+
+	entry = analy_entry_alloc(data, size);
+	if (!entry) {
+		pr_err("entry alloc failed\n");
+		return;
+	}
+	e = entry->event;
+	entry->cpu = cpu;
+
+	list_for_each_entry(pos, &async_list, list) {
+		if (pos->event->pkt.ts > e->pkt.ts) {
+			list_add(&entry->list, &pos->list);
+			added = true;
+			break;
+		}
+	}
+
+	if (!added)
+		list_add_tail(&entry->list, &async_list);
+
+	if (!async_thread_created) {
+		pthread_create(&async_thread, NULL, do_async_poll, NULL);
+		async_thread_created = true;
+	}
 }
 
 static inline void rule_run(analy_entry_t *entry, trace_t *trace, int ret)
