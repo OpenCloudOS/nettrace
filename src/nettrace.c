@@ -94,7 +94,7 @@ static void do_parse_args(int argc, char *argv[])
 		{
 			.lname = "lifetime", .dest = &trace_args->lifetime,
 			.type = OPTION_U32,
-			.desc = "the minial time to live of the skb",
+			.desc = "the minial time to live of the skb in ms",
 		},
 		{ .type = OPTION_BLANK },
 		{
