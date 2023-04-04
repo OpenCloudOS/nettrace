@@ -152,6 +152,20 @@ err:
 	exit(-EINVAL);
 }
 
+static void do_exit(int code)
+{
+	static bool is_exited = false;
+
+	if (is_exited)
+		return;
+
+	is_exited = true;
+	pr_info("end trace...\n");
+	pr_debug("begin destory BPF skel...\n");
+	trace_ctx.ops->trace_close();
+	pr_debug("BPF skel is destroied\n");
+}
+
 int main(int argc, char *argv[])
 {
 	trace_ops_t *ops = &probe_ops;
@@ -166,9 +180,13 @@ int main(int argc, char *argv[])
 		pr_err("failed to load kprobe-based bpf\n");
 		goto err;
 	}
+
+	signal(SIGTERM, do_exit);
+	signal(SIGINT, do_exit);
+
 	pr_info("begin trace...\n");
 	trace_poll(trace_ctx);
-	pr_info("end trace...\n");
+	do_exit(0);
 	return 0;
 err:
 	return -1;

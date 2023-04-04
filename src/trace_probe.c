@@ -202,6 +202,7 @@ void probe_trace_close()
 {
 	if (skel)
 		kprobe__destroy(skel);
+	skel = NULL;
 }
 
 static analyzer_result_t probe_analy_exit(trace_t *trace, analy_exit_t *e)
