@@ -346,4 +346,10 @@ out:
 #undef QDISC_LEGACY
 #include "kprobe_qdisc.c"
 
+DEFINE_KPROBE_INIT(inet_listen, inet_listen,
+		   .sk = _C((struct socket *)nt_regs(regs, 1), sk))
+{
+	return default_handle_entry(ctx);
+}
+
 char _license[] SEC("license") = "GPL";
