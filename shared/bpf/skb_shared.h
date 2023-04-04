@@ -95,6 +95,8 @@ typedef struct __attribute__((__packed__)) {
 		struct {
 			u16	sport;
 			u16	dport;
+			u32	packets_out;
+			u32	retrans_out;
 		} tcp;
 		struct {
 			u16	sport;

@@ -371,11 +371,15 @@ static try_inline int __probe_parse_sk(parse_ctx_t *ctx)
 		goto err;
 
 	switch (l4_proto) {
-	case IPPROTO_TCP:
+	case IPPROTO_TCP: {
+		struct tcp_sock *tp = (void *)sk;
+
+		ske->l4.tcp.packets_out = _C(tp, packets_out);
+		ske->l4.tcp.retrans_out = _C(tp, retrans_out);
+	}
 	case IPPROTO_UDP:
-	case IPPROTO_IP:
-		ske->l4.tcp.sport = bpf_htons(_C(skc, skc_num));
-		ske->l4.tcp.dport = _C(skc, skc_dport);
+		ske->l4.min.sport = bpf_htons(_C(skc, skc_num));
+		ske->l4.min.dport = _C(skc, skc_dport);
 		break;
 	default:
 		break;
@@ -389,8 +393,8 @@ static try_inline int __probe_parse_sk(parse_ctx_t *ctx)
 	ske->proto_l4 = l4_proto;
 
 	icsk = (void *)sk;
+	ske->timer_out = _C(icsk, icsk_timeout) - (unsigned long)bpf_jiffies64();
 	ske->timer_pending = _C(icsk, icsk_pending);
-	ske->timer_out = _C(icsk, icsk_timeout);
 
 	return 0;
 err:
