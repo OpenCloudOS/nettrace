@@ -25,7 +25,7 @@ typedef struct __attribute__((__packed__)) {
 	};
 	u64		key;
 	u32		func;
-#ifdef STACK_TRACE
+#ifdef BPF_FEAT_STACK_TRACE
 	u32		stack_id;
 #endif
 	int		__event_filed[0];
@@ -35,7 +35,7 @@ typedef struct __attribute__((__packed__)) {
 	packet_t	pkt;
 	u64		key;
 	u32		func;
-#ifdef STACK_TRACE
+#ifdef BPF_FEAT_STACK_TRACE
 	u32		stack_id;
 #endif
 	u32		pid;

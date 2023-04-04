@@ -84,7 +84,7 @@ static void do_parse_args(int argc, char *argv[])
 			.type = OPTION_BOOL,
 			.desc = "enable 'sock' mode",
 		},
-#ifdef STACK_TRACE
+#ifdef BPF_FEAT_STACK_TRACE
 		{
 			.lname = "drop-stack", .dest = &trace_args->drop_stack,
 			.type = OPTION_BOOL,

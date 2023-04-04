@@ -14,10 +14,10 @@ ifndef COMPAT
 ifdef BPF_FEATS
 	CFLAGS += -DBPF_FEAT_SUP_JIFFIES
 endif
-	CFLAGS += -DSTACK_TRACE
+	CFLAGS += -DBPF_FEAT_STACK_TRACE
 else
 ifneq ($(shell grep -c get_stackid $(HEADERS)/include/uapi/linux/bpf.h),0)
-	CFLAGS += -DSTACK_TRACE
+	CFLAGS += -DBPF_FEAT_STACK_TRACE
 endif
 ifneq ($(shell grep -c "sk_protocol.*8" $(HEADERS)/include/net/sock.h),0)
 	BPF_CFLAGS += -DBPF_FEAT_SK_PRPTOCOL_LEGACY

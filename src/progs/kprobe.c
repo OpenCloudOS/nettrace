@@ -21,7 +21,7 @@ struct {
 	__uint(max_entries, TRACE_MAX);
 } m_ret SEC(".maps");
 
-#ifdef STACK_TRACE
+#ifdef BPF_FEAT_STACK_TRACE
 struct {
 	__uint(type, BPF_MAP_TYPE_STACK_TRACE);
 	__uint(max_entries, 16384);
@@ -54,7 +54,7 @@ static try_inline int put_ret(int func)
 	return 0;
 }
 
-#ifdef STACK_TRACE
+#ifdef BPF_FEAT_STACK_TRACE
 static try_inline void try_trace_stack(context_t *ctx)
 {
 	int i = 0, key;
