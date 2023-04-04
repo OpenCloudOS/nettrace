@@ -334,6 +334,38 @@ out:
 	return 0;
 }
 
+static try_inline int bpf_qdisc_handle(context_t *ctx, struct Qdisc *q)
+{
+	struct netdev_queue *txq;
+	DECLARE_EVENT(qdisc_event_t, e)
+
+	txq = _C(q, dev_queue);
+
+#ifdef BPF_FEAT_SUP_JIFFIES
+	u64 start;
+
+	start = _C(txq, trans_start);
+	if (start)
+		e->last_update = bpf_jiffies64() - start;
+#endif
+
+	e->qlen = _C(&(q->q), qlen);
+	e->state = _C(txq, state);
+	e->flags = _C(q, flags);
+
+	return handle_entry(ctx);
+}
+
+DEFINE_KPROBE_SKB(sch_direct_xmit, 1) {
+	struct Qdisc *q = nt_regs_ctx(ctx, 2);
+	return bpf_qdisc_handle(ctx, q);
+}
+
+DEFINE_KPROBE_SKB(pfifo_enqueue, 1) {
+	struct Qdisc *q = nt_regs_ctx(ctx, 2);
+	return bpf_qdisc_handle(ctx, q);
+}
+
 #ifndef NT_DISABLE_NFT
 #define NFT_LEGACY 1
 #include "kprobe_nft.c"
@@ -341,10 +373,12 @@ out:
 #include "kprobe_nft.c"
 #endif
 
-#define QDISC_LEGACY 1
-#include "kprobe_qdisc.c"
-#undef QDISC_LEGACY
-#include "kprobe_qdisc.c"
+
+/*******************************************************************
+ * 
+ * Following is socket related custom BPF program.
+ * 
+ *******************************************************************/
 
 DEFINE_KPROBE_INIT(inet_listen, inet_listen,
 		   .sk = _C((struct socket *)nt_regs(regs, 1), sk))

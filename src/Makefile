@@ -11,13 +11,16 @@ BPF_EXTRA_DEP := kheaders.h
 include ../common.mk
 
 ifndef COMPAT
+ifdef BPF_FEATS
+	CFLAGS += -DBPF_FEAT_SUP_JIFFIES
+endif
 	CFLAGS += -DSTACK_TRACE
 else
 ifneq ($(shell grep -c get_stackid $(HEADERS)/include/uapi/linux/bpf.h),0)
 	CFLAGS += -DSTACK_TRACE
 endif
 ifneq ($(shell grep -c "sk_protocol.*8" $(HEADERS)/include/net/sock.h),0)
-	BPF_CFLAGS += -DSK_PRPTOCOL_LEGACY
+	BPF_CFLAGS += -DBPF_FEAT_SK_PRPTOCOL_LEGACY
 endif
 endif
 

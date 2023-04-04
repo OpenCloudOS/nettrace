@@ -353,7 +353,7 @@ static try_inline int __probe_parse_sk(parse_ctx_t *ctx)
 	if (FILTER_CHECK(ctx, l3_proto, l3_proto))
 		goto err;
 
-#ifdef SK_PRPTOCOL_LEGACY
+#ifdef BPF_FEAT_SK_PRPTOCOL_LEGACY
 	u32 flags = _(((u32 *)(&sk->__sk_flags_offset))[0]);
 #ifdef CONFIG_CPU_BIG_ENDIAN
 	l4_proto = (flags << 8) >> 24;
@@ -393,7 +393,9 @@ static try_inline int __probe_parse_sk(parse_ctx_t *ctx)
 	ske->proto_l4 = l4_proto;
 
 	icsk = (void *)sk;
+#ifdef BPF_FEAT_SUP_JIFFIES
 	ske->timer_out = _C(icsk, icsk_timeout) - (unsigned long)bpf_jiffies64();
+#endif
 	ske->timer_pending = _C(icsk, icsk_pending);
 
 	return 0;

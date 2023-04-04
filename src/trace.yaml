@@ -72,25 +72,14 @@ children:
         msg: failed to queue packet to qdisc
         adv: too complex to say
     - dev_hard_start_xmit:0
-    - names:
-      - &pfifo_enqueue_legacy
-        name: pfifo_enqueue_legacy
-      - name: pfifo_enqueue
-        backup: *pfifo_enqueue_legacy
-        probe: true
+    - name: pfifo_enqueue
       analyzer: qdisc
       target: pfifo_enqueue
       rules:
       - exp: ne 0
         level: error
         msg: failed to queue packet to qdisc
-    - names:
-      - &sch_direct_xmit_legacy
-        name: sch_direct_xmit_legacy
-        rules: # return value is ambiguous in old kernel
-      - name: sch_direct_xmit
-        backup: *sch_direct_xmit_legacy
-        probe: true
+    - name: sch_direct_xmit
       analyzer: qdisc
       target: sch_direct_xmit
       rules:
