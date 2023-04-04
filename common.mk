@@ -78,9 +78,8 @@ kheaders.h:
 	$(call kheaders_cmd)
 
 progs/%.o: progs/%.c $(BPF_EXTRA_DEP)
-	clang -O2 -c -g -S -Wall -Wno-pointer-sign -Wno-unused-value	\
+	clang -O2 -c -g -S -Wall -fno-asynchronous-unwind-tables	\
 	-Wno-incompatible-pointer-types-discards-qualifiers		\
-	-fno-asynchronous-unwind-tables					\
 	$< -emit-llvm -Wno-unknown-attributes $(BPF_CFLAGS) -Xclang	\
 	-disable-llvm-passes -o - | 					\
 	opt -O2 -mtriple=bpf-pc-linux | 				\
