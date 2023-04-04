@@ -685,11 +685,14 @@ DEFINE_ANALYZER_EXIT(qdisc, TRACE_MODE_DIAG_MASK)
 {
 	define_pure_event(qdisc_event_t, event, e->entry->event);
 	char *msg = malloc(1024);
+	int hz;
 
 	msg[0] = '\0';
+	hz = kernel_hz();
+	hz = hz > 0 ? hz : 1;
 	sprintf(msg, PFMT_EMPH_STR(" *queue state: %x, flags: %x, "
-		"update: %lu, len: %lu*"),
-		event->state, event->flags, event->last_update,
+		"last update: %lums, len: %lu*"), event->state,
+		event->flags, (1000 * event->last_update) / hz,
 		event->qlen);
 	entry_set_msg(e->entry, msg);
 
