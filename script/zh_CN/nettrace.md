@@ -84,7 +84,7 @@ nettrace - Linux系统下的网络报文跟踪、网络问题诊断工具
 `--drop-stack`
   打印kfree_skb内核函数的调用堆栈
 
-`--lifetime`
+`--min-latency`
   根据报文的寿命进行过滤，仅打印处理时长超过该值的报文，单位为ms。该参数仅在默认和`diag`模式下可用。
 
 `-v`
