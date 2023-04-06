@@ -79,11 +79,6 @@ static void do_parse_args(int argc, char *argv[])
 			.type = OPTION_BOOL,
 			.desc = "skb drop monitor mode, for replace of 'droptrace'",
 		},
-		{
-			.lname = "sock", .dest = &trace_args->sock,
-			.type = OPTION_BOOL,
-			.desc = "enable 'sock' mode",
-		},
 #ifdef BPF_FEAT_STACK_TRACE
 		{
 			.lname = "drop-stack", .dest = &trace_args->drop_stack,
@@ -92,9 +87,14 @@ static void do_parse_args(int argc, char *argv[])
 		},
 #endif
 		{
-			.lname = "lifetime", .dest = &trace_args->lifetime,
+			.lname = "min-latency", .dest = &trace_args->min_latency,
 			.type = OPTION_U32,
 			.desc = "the minial time to live of the skb in ms",
+		},
+		{
+			.lname = "sock", .dest = &trace_args->sock,
+			.type = OPTION_BOOL,
+			.desc = "enable 'sock' mode",
 		},
 		{ .type = OPTION_BLANK },
 		{

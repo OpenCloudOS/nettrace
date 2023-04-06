@@ -254,15 +254,17 @@ skip_trace:
 		if (!trace_has_end())
 			trace_group_enable("life");
 		break;
-	case TRACE_MODE_BASIC:
-		break;
-	case TRACE_MODE_DROP: {
+	case TRACE_MODE_DROP:
 		if (!trace_ctx.drop_reason)
 			pr_warn("skb drop reason is not support by your kernel"
 				", drop reason will not be printed\n");
-		break;
-	}
+	case TRACE_MODE_BASIC:
 	case TRACE_MODE_SOCK:
+		if (args->min_latency) {
+			pr_err("--min-latency is only supported in default "
+			       "and 'diag' mode\n");
+			goto err;
+		}
 		break;
 	default:
 		pr_err("mode not supported!\n");
@@ -281,7 +283,7 @@ skip_trace:
 		switch (trace_ctx.mode) {
 		case TRACE_MODE_BASIC:
 			pr_err("return value trace is only supported on "
-			       "'timeline' and 'diag' mode\n");
+			       "default and 'diag' mode\n");
 			goto err;
 		case TRACE_MODE_TIMELINE:
 			trace_all_set_ret();

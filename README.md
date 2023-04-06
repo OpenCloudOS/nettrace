@@ -156,7 +156,7 @@ Usage:
     --drop           skb drop monitor mode, for replace of 'droptrace'
     --sock           enable 'sock' mode
     --drop-stack     print the kernel function call stack of kfree_skb
-    --lifetime       the minial time to live of the skb
+    --min-latency       the minial time to live of the skb
 
     -v               show log information
     --debug          show debug information
@@ -178,7 +178,7 @@ Usage:
 - `hooks`：结合netfilter做的适配，详见下文
 - `drop`：进行系统丢包监控，取代原先的`droptrace`
 - `drop-stack`: 打印kfree_skb内核函数的调用堆栈
-- `lifetime`：根据报文的寿命进行过滤，仅打印处理时长超过该值的报文，单位为ms。该参数仅在默认和`diag`模式下可用。
+- `min-latency`：根据报文的寿命进行过滤，仅打印处理时长超过该值的报文，单位为ms。该参数仅在默认和`diag`模式下可用。
 
 下面我们首先来看一下默认模式下的工具使用方法。
 
@@ -313,7 +313,7 @@ begin tracing......
 在特定场景下，如网络时延问题诊断的时候，我们可能仅关注处理时长超过一定时间的报文。此时，就需要根据报文的处理时长进行输出过滤。目前，是根据报文从被跟踪到，直到被销毁来作为报文的处理时长的，这个后续可能要优化，因为内核里会存在“延迟批量销毁skb”的行为。下面的命令会过滤处理时长超过1ms的报文：
 
 ```shell
-$ sudo ./nettrace -p icmp --lifetime 1
+$ sudo ./nettrace -p icmp --min-latency 1
 begin trace...
 ***************** ff1100007b5fe000 ***************
 [66.725587] [napi_gro_receive_entry] ICMP: 192.168.122.1 -> 192.168.122.8 ping request, seq: 1, id: 32535
