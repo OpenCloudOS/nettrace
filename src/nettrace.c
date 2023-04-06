@@ -25,6 +25,18 @@ static void do_parse_args(int argc, char *argv[])
 	option_item_t opts[] = {
 		COMMON_PROG_ARGS_DEFINE(pkt_args),
 		{
+			.lname = "netns",
+			.dest = &bpf_args->netns,
+			.type = OPTION_U32,
+			.desc = "filter by net namespace inode",
+		},
+		{
+			.lname = "netns-current",
+			.dest = &trace_args->netns_current,
+			.type = OPTION_BOOL,
+			.desc = "filter by current net namespace",
+		},
+		{
 			.lname = "pid", .type = OPTION_U32,
 			.dest = &bpf_args->pid, .set = &bpf_args->enable_pid,
 			.desc = "filter by current process id(pid)",

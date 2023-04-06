@@ -124,3 +124,31 @@ int kernel_hz()
 	__hz = atoi(hz);
 	return __hz;
 }
+
+u32 file_inode(char *path)
+{
+	char tmp1[128], tmp2[128];
+	struct stat file_stat;
+	char *__path = path;
+	u32 inode;
+
+	if (!file_exist(path))
+		return 0;
+
+again:
+	if (sscanf(__path, "%*[^:]:[%u]", &inode) == 1)
+		return inode;
+
+	if (stat(__path, &file_stat) == -1)
+		return 0;
+
+	if (S_ISLNK(file_stat.st_mode)) {
+		if (readlink(path, tmp1, sizeof(tmp1)) == -1)
+			return 0;
+		memcpy(tmp2, tmp1, sizeof(tmp1));
+		__path = tmp2;
+		goto again;
+	}
+
+	return file_stat.st_ino;
+}

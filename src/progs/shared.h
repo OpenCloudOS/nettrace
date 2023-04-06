@@ -6,6 +6,7 @@
 #define DEFINE_BPF_ARGS()	\
 	u32  trace_mode;	\
 	u32  pid;		\
+	u32  netns;		\
 	bool enable_trace_mode;	\
 	bool enable_pid;	\
 	bool drop_reason;	\
@@ -42,6 +43,7 @@ typedef struct __attribute__((__packed__)) {
 	char		task[16];
 	char		ifname[16];
 	u32		ifindex;
+	u32		netns;
 	int		__event_filed[0];
 } detail_event_t;
 
