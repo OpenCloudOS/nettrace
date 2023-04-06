@@ -82,10 +82,6 @@ children:
     - name: sch_direct_xmit
       analyzer: qdisc
       target: sch_direct_xmit
-      rules:
-      - exp: eq 0
-        level: error
-        msg: failed to direct xmit
   - name: sched
     desc: TC(traffic control) module
     visual: true
