@@ -593,6 +593,12 @@ DEFINE_ANALYZER_EXIT(ret, TRACE_MODE_DIAG_MASK)
 	return RESULT_CONT;
 }
 
+DEFINE_ANALYZER_ENTRY(default, TRACE_MODE_DIAG_MASK)
+{
+	rule_run(e, trace, 0);
+	return RESULT_CONT;
+}
+
 const char *hook_names[][8] = {
 	[NFPROTO_IPV4] = {
 		[NF_INET_PRE_ROUTING]	= "PRE_ROUTING",

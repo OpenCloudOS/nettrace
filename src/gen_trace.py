@@ -171,7 +171,7 @@ def gen_trace(trace, group, p_name):
     if 'analyzer' in trace:
         analyzer = f'\n\t.analyzer = &ANALYZER({trace["analyzer"]}),'
     else:
-        analyzer = ''
+        analyzer = '\n\t.analyzer = &ANALYZER(default),'
 
     if 'rules' in trace and trace['rules']:
         rules = trace['rules']

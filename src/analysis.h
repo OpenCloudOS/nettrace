@@ -130,6 +130,7 @@ DECLARE_ANALYZER(ret);
 DECLARE_ANALYZER(iptable);
 DECLARE_ANALYZER(nf);
 DECLARE_ANALYZER(qdisc);
+DECLARE_ANALYZER(default);
 
 #ifndef COMPAT_MODE
 #define define_pure_event(type, name, data)			\

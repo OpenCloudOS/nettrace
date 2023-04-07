@@ -13,6 +13,9 @@ common_rules:
     - exp: eq 1
       level: info
       msg: packet is accepted
+  define: &rule_msg
+    - exp: any
+      level: info
 children:
 - name: link
   desc: link layer (L2) of the network stack
@@ -71,7 +74,10 @@ children:
       - <<: *rule_ret_err
         msg: failed to queue packet to qdisc
         adv: too complex to say
-    - dev_hard_start_xmit:0
+    - name: dev_hard_start_xmit:0
+      rules:
+      - <<: *rule_msg
+        msg: skb is successfully sent to the NIC driver
     - name: pfifo_enqueue
       analyzer: qdisc
       target: pfifo_enqueue
