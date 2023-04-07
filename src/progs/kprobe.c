@@ -82,6 +82,39 @@ do_stack:
 static try_inline void try_trace_stack(context_t *ctx) { }
 #endif
 
+static try_inline int filter_by_netns(context_t *ctx)
+{	
+	struct sk_buff *skb = ctx->skb;
+	struct net_device *dev;
+	struct net *ns;
+	u32 inode;
+
+	if (!ctx->args->netns && !ctx->args->detail)
+		return 0;
+
+	dev = _C(skb, dev);
+	if (!dev) {
+		struct sock *sk = _C(skb, sk);
+		if (!sk)
+			return 0;
+		ns = _C(&(sk->__sk_common.skc_net), net);
+	} else {
+		ns = _C(&(dev->nd_net), net);
+	}
+
+	if (!ns)
+		return 0;
+
+	inode = _C(&(ns->ns), inum);
+	if (ctx->args->detail)
+		((detail_event_t *)ctx->e)->netns = inode;
+
+	if (ctx->args->netns)
+		return ctx->args->netns != inode;
+
+	return 0;
+}
+
 static try_inline int handle_entry(context_t *ctx)
 {
 	bpf_args_t *args = (void *)ctx->args;
@@ -112,8 +145,7 @@ static try_inline int handle_entry(context_t *ctx)
 	matched = bpf_map_lookup_elem(&m_matched, &skb);
 	if (matched && *matched) {
 		probe_parse_skb_always(skb, pkt);
-	} else if (!ARGS_CHECK(args, pid, pid) &&
-		   !probe_parse_skb(skb, pkt)) {
+	} else if (!probe_parse_skb(skb, pkt)) {
 		bool _matched = true;
 		bpf_map_update_elem(&m_matched, &skb, &_matched, 0);
 	} else {
@@ -121,6 +153,9 @@ static try_inline int handle_entry(context_t *ctx)
 	}
 
 skip_life:
+	if (ARGS_CHECK(args, pid, pid) || filter_by_netns(ctx))
+		return -1;
+
 	if (!args->detail)
 		goto out;
 

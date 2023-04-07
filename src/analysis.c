@@ -158,9 +158,9 @@ static void analy_entry_handle(analy_entry_t *entry)
 			ifname = ifname ?: "";
 		}
 
-		sprintf(tinfo, "[%llx][%-20s][cpu:%-3u][%-5s][pid:%-7u][%-12s] ",
+		sprintf(tinfo, "[%llx][%-20s][cpu:%-3u][%-5s][pid:%-7u][%-12s][ns:%u] ",
 			detail->key, t->name, entry->cpu, ifname,
-			detail->pid, detail->task);
+			detail->pid, detail->task, detail->netns);
 	} else if (trace_ctx.mode != TRACE_MODE_DROP) {
 		sprintf(tinfo, "[%-20s] ", t->name);
 	}

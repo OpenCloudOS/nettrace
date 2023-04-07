@@ -173,6 +173,7 @@ static void trace_all_set_ret()
 static int trace_prepare_args()
 {
 	trace_t *drop_trace = search_trace_enabled("kfree_skb");
+	bpf_args_t *bpf_args = &trace_ctx.bpf_args;
 	trace_args_t *args = &trace_ctx.args;
 	char *traces = args->traces;
 	trace_t *trace;
@@ -237,7 +238,7 @@ skip_trace:
 	}
 
 	if (drop_reason_support()) {
-		trace_ctx.bpf_args.drop_reason = true;
+		bpf_args->drop_reason = true;
 		trace_ctx.drop_reason = true;
 		get_drop_reason(1);
 	}
@@ -294,8 +295,13 @@ skip_trace:
 		}
 	}
 
-	trace_ctx.bpf_args.trace_mode = 1 << trace_ctx.mode;
-	trace_ctx.detail = trace_ctx.bpf_args.detail;
+	if (args->netns_current) {
+		bpf_args->netns = file_inode("/proc/self/ns/net");
+		pr_debug("current netns inode is: %u\n", bpf_args->netns);
+	}
+
+	bpf_args->trace_mode = 1 << trace_ctx.mode;
+	trace_ctx.detail = bpf_args->detail;
 
 	return 0;
 err:

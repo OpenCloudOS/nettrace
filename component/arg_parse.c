@@ -114,8 +114,8 @@ found:
 			break;
 		}
 		case OPTION_U32: {
-			int val = atoi(optarg);
-			if (val < 0) {
+			long val = atol(optarg);
+			if (val < 0 || val > 0xFFFFFFFF) {
 				printf("invalid arg value: %s\n",
 				       optarg);
 				goto err;

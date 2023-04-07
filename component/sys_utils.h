@@ -11,6 +11,8 @@
 #include <fcntl.h>
 #include <stdio.h>
 
+#include "net_utils.h"
+
 extern int log_level;
 
 int	execf(char *output, char *fmt, ...);
@@ -21,6 +23,7 @@ int	kernel_version();
 bool	debugfs_mounted();
 bool	kernel_has_config(char *name);
 int	kernel_hz();
+u32	file_inode(char *path);
 
 static inline int simple_exec(char *cmd)
 {
