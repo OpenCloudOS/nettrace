@@ -32,6 +32,19 @@ nettrace \- Linux系统下的网络报文跟踪、网络问题诊断工具
 \fB\fC\-p,\-\-proto\fR \fIprotocol\fP
 根据报文的协议（三层或者四层）进行过滤，如\fI\-p udp\fP
 .TP
+\fB\fC\-\-netns\fR \fInetns_inode\fP
+根据网络命名空间进行过滤。
+.IP
+该参数后面跟的是网络命名空间的inode，可以通过
+\fB\fCls \-l /proc/<pid>/ns/net\fR
+来查看对应进程的网络命名空间的inode号
+.TP
+\fB\fC\-\-netns\-current\fR
+仅显示当前网络命名空间的报文，等价于\fB\fC\-\-netns <当前网络命名空间的inode>\fR
+.TP
+\fB\fC\-\-pid\fR \fIpid\fP
+根据进程号进行过滤
+.TP
 \fB\fC\-t,\-\-trace\fR \fItraces\fP
 要启用（跟踪）的内核函数、tracepoint。
 .IP
@@ -80,7 +93,7 @@ nettrace \- Linux系统下的网络报文跟踪、网络问题诊断工具
 \fB\fC\-\-drop\-stack\fR
 打印kfree_skb内核函数的调用堆栈
 .TP
-\fB\fC\-\-min-latency\fR
+\fB\fC\-\-min\-latency\fR
 根据报文的寿命进行过滤，仅打印处理时长超过该值的报文，单位为ms。该参数仅在默认和\fB\fCdiag\fR模式下可用。
 .TP
 \fB\fC\-v\fR

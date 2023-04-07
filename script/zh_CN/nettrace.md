@@ -36,6 +36,19 @@ nettrace - Linux系统下的网络报文跟踪、网络问题诊断工具
 `-p,--proto` *protocol*
   根据报文的协议（三层或者四层）进行过滤，如*-p udp*
 
+`--netns` *netns_inode*
+  根据网络命名空间进行过滤。
+  
+  该参数后面跟的是网络命名空间的inode，可以通过
+  `ls -l /proc/<pid>/ns/net`
+  来查看对应进程的网络命名空间的inode号
+
+`--netns-current`
+  仅显示当前网络命名空间的报文，等价于`--netns <当前网络命名空间的inode>`
+
+`--pid` *pid*
+  根据进程号进行过滤
+
 `-t,--trace` *traces*
   要启用（跟踪）的内核函数、tracepoint。
 
