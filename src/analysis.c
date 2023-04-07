@@ -165,7 +165,7 @@ static void analy_entry_handle(analy_entry_t *entry)
 		sprintf(tinfo, "[%-20s] ", t->name);
 	}
 
-	if (!t->sk)
+	if (trace_ctx.mode != TRACE_MODE_SOCK)
 		ts_print_packet(buf, &e->pkt, tinfo, trace_ctx.args.date);
 	else
 		ts_print_sock(buf, &e->ske, tinfo, trace_ctx.args.date);
