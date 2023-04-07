@@ -143,6 +143,8 @@ Usage:
     -D, --dport      filter dest TCP/UDP port
     -P, --port       filter source or dest TCP/UDP port
     -p, --proto      filter L3/L4 protocol, such as 'tcp', 'arp'
+    --netns          filter by net namespace inode
+    --netns-current  filter by current net namespace
     --pid            filter by current process id(pid)
     -t, --trace      enable trace group or trace
     --ret            show function return value
@@ -166,6 +168,8 @@ Usage:
 
 其中，参数`s/d/addr/S/D/port/p/pid`用于进行报文的过滤，可以通过IP地址、端口、协议等属性进行过滤。其中，通过IPv6地址进行过滤目前也已经实现了支持。其他参数的用途包括：
 
+- `netns`：根据网络命名空间进行过滤，该参数后面跟的是网络命名空间的inode，可以通过`ls -l /proc/<pid>/ns/net`来查看对应进程的网络命名空间的inode号
+- `netns-current`：仅显示当前网络命名空间的报文，等价于`--netns 当前网络命名空间的inode`
 - `t/trace`：要启用的跟踪模块，默认启用所有
 - `ret`：跟踪和显示内核函数的返回值
 - `detail`：显示跟踪详细信息，包括当前的进程、网口和CPU等信息

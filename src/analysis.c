@@ -320,7 +320,8 @@ void tl_poll_handler(void *raw_ctx, int cpu, void *data, u32 size)
 	}
 	e = entry->event;
 	entry->cpu = cpu;
-	pr_debug("create entry: %llx, %llx\n", PTR2X(entry), e->key);
+	pr_debug("create entry: %llx, %llx, size: %u\n", PTR2X(entry),
+		 e->key, size);
 
 	fake = analy_fake_ctx_fetch(e->key);
 	if (!fake) {
