@@ -325,13 +325,6 @@ static int trace_prepare_traces()
 	trace_t *trace;
 
 	trace_exec_cond();
-
-	/* from v5.14, the struct of nft_pktinfo changed */
-	if (kv_compare(5, 14, 0) >= 0) {
-		trace_ctx.bpf_args.nft_high = true;
-		pr_debug("nft high version founded\n");
-	}
-
 	pr_debug("begin to resolve kernel symbol...\n");
 
 	/* make the programs that target kernel function can't be found

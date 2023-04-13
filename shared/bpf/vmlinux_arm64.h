@@ -121812,6 +121812,10 @@ enum flow_offload_tuple_dir {
 	FLOW_OFFLOAD_DIR_MAX = 2,
 };
 
+#ifndef BPF_NO_PRESERVE_ACCESS_INDEX
+#pragma clang attribute pop
+#endif
+
 struct nft_pktinfo {
 	struct sk_buff *skb;
 	bool tprot_set;
@@ -122068,6 +122072,10 @@ struct nft_jumpstack {
 	const struct nft_chain *chain;
 	struct nft_rule * const *rules;
 };
+
+#ifndef BPF_NO_PRESERVE_ACCESS_INDEX
+#pragma clang attribute push (__attribute__((preserve_access_index)), apply_to = record)
+#endif
 
 enum nf_tables_msg_types {
 	NFT_MSG_NEWTABLE = 0,
@@ -127413,14 +127421,14 @@ struct xa_limit {
 	u32 min;
 };
 
+#ifndef BPF_NO_PRESERVE_ACCESS_INDEX
+#pragma clang attribute pop
+#endif
+
 struct ip_esp_hdr {
 	__be32 spi;
 	__be32 seq_no;		/* Sequence number */
 	__u8  enc_data[0];	/* Variable len but >=8. Mind the 64 bit alignment! */
 };
-
-#ifndef BPF_NO_PRESERVE_ACCESS_INDEX
-#pragma clang attribute pop
-#endif
 
 #endif /* __VMLINUX_H__ */

@@ -13,7 +13,6 @@
 	bool detail;		\
 	bool hooks;		\
 	bool ready;		\
-	bool nft_high;		\
 	bool stack;		\
 	u16  stack_funs[MAX_FUNC_STACK];
 

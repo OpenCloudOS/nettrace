@@ -4,7 +4,9 @@ COMMON_SHARED	:= $(ROOT)/shared/pkt_utils.c $(COMPONENT)/net_utils.c	\
 		   $(ROOT)/shared/bpf_utils.c
 
 CFLAGS		+= -I./ -I$(ROOT)/shared/bpf/
-BPF_CFLAGS	= $(CFLAGS) -Wno-unused-function
+BPF_CFLAGS	= $(CFLAGS) -Wno-unused-function			\
+		  -Wno-compare-distinct-pointer-types -Wuninitialized	\
+		  -D__TARGET_ARCH_$(SRCARCH)
 HOST_CFLAGS	= \
 		-lbpf -lelf -lz -g -O2 -static $(CFLAGS)		\
 		-Wno-deprecated-declarations -DVERSION=$(VERSION)	\
@@ -53,9 +55,11 @@ $(error kernel headers not exist in COMPAT mdoe, please install it)
 endif
 	kheaders_cmd	:= ln -s vmlinux_header.h kheaders.h
 	CFLAGS		+= -DCOMPAT_MODE
-	BPF_CFLAGS	+= $(KERNEL_CFLAGS) -DBPF_NO_GLOBAL_DATA
+	BPF_CFLAGS	+= $(KERNEL_CFLAGS) -DBPF_NO_GLOBAL_DATA \
+			   -DBPF_NO_PRESERVE_ACCESS_INDEX
 else
 	kheaders_cmd	:= ln -s ../shared/bpf/vmlinux.h kheaders.h
+	BPF_CFLAGS	+= -target bpf
 endif
 
 ifndef BPFTOOL

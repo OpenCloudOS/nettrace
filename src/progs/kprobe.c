@@ -97,9 +97,9 @@ static try_inline int filter_by_netns(context_t *ctx)
 		struct sock *sk = _C(skb, sk);
 		if (!sk)
 			return 0;
-		ns = _C(&(sk->__sk_common.skc_net), net);
+		ns = _(sk->__sk_common.skc_net.net);
 	} else {
-		ns = _C(&(dev->nd_net), net);
+		ns = _(dev->nd_net.net);
 	}
 
 	if (!ns)
@@ -402,10 +402,75 @@ DEFINE_KPROBE_SKB(pfifo_enqueue, 1) {
 }
 
 #ifndef NT_DISABLE_NFT
-#define NFT_LEGACY 1
-#include "kprobe_nft.c"
-#undef NFT_LEGACY
-#include "kprobe_nft.c"
+
+/* use the 'ignored suffix rule' feature of CO-RE, as described in:
+ * https://nakryiko.com/posts/bpf-core-reference-guide/#handling-incompatible-field-and-type-changes
+ */
+struct nft_pktinfo___new {
+	struct sk_buff			*skb;
+	const struct nf_hook_state	*state;
+	u8				flags;
+	u8				tprot;
+	u16				fragoff;
+	u16				thoff;
+	u16				inneroff;
+};
+
+/**
+ * This function is used to the kernel version that don't support
+ * kernel module BTF.
+ */
+DEFINE_KPROBE_INIT(nft_do_chain, nft_do_chain)
+{
+	struct nft_pktinfo *pkt = nt_regs_ctx(ctx, 1);
+	void *chain_name, *table_name;
+	struct nf_hook_state *state;
+	struct nft_chain *chain;
+	struct nft_table *table;
+	size_t size;
+	DECLARE_EVENT(nf_event_t, e)
+
+	ctx->skb = (struct sk_buff *)_(pkt->skb);
+	size = ctx->size;
+	ctx->size = 0;
+	if (handle_entry(ctx))
+		return 0;
+
+#ifndef COMPAT_MODE
+	if (bpf_core_type_exists(struct nft_pktinfo)) {
+		if (!bpf_core_field_exists(pkt->xt))
+			state = _C((struct nft_pktinfo___new *)pkt, state);
+		else
+			state = _C(&(pkt->xt), state);
+	} else
+#endif
+	{
+		/* don't use CO-RE, as nft may be a module */
+		state = _(pkt->xt.state);
+	}
+
+	chain = nt_regs_ctx(ctx, 2);
+#ifndef COMPAT_MODE
+	if (bpf_core_type_exists(struct nft_chain)) {
+		table = _C(chain, table);
+		chain_name = _C(chain, name);
+		table_name = _C(table, name);
+	} else
+#endif
+	{
+		table = _(chain->table);
+		chain_name = _(chain->name);
+		table_name = _(table->name);
+	}
+	e->hook	= _C(state, hook);
+	e->pf	= _C(state, pf);
+
+	bpf_probe_read_kernel_str(e->chain, sizeof(e->chain), chain_name);
+	bpf_probe_read_kernel_str(e->table, sizeof(e->table), table_name);
+
+	EVENT_OUTPUT_PTR(ctx->regs, ctx->e, size);
+	return 0;
+}
 #endif
 
 
