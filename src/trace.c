@@ -109,8 +109,8 @@ trace_t *search_trace_enabled(char *name)
 
 int trace_enable(char *name)
 {
+	bool found = false;
 	trace_t *t;
-	bool found;
 
 	trace_for_each(t) {
 		if (strcmp(t->name, name))
@@ -221,7 +221,7 @@ static int trace_prepare_args()
 	cur = strtok(tmp, ",");
 	while (cur) {
 		if (trace_group_enable(cur) && trace_enable(cur)) {
-			pr_err("no valid trace for %s\n", cur);
+			pr_err("trace not found: %s\n", cur);
 			free(tmp);
 			goto err;
 		}
