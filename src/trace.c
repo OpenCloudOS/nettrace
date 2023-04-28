@@ -170,6 +170,29 @@ static void trace_all_set_ret()
 		trace_set_ret(trace);
 }
 
+/* By default, don't allow to trace 'all' without any filter condition,
+ * as it will cause performance problem.
+ */
+static int trace_check_force()
+{
+	bpf_args_t *bpf_args = &trace_ctx.bpf_args;
+	pkt_args_t *pkt_args = &bpf_args->pkt;
+	trace_args_t *args = &trace_ctx.args;
+
+	if (args->drop || args->force)
+		return 0;
+
+	if (ARGS_ENABLED(bpf_args, pid) || ARGS_ENABLED(pkt_args, saddr) ||
+	    ARGS_ENABLED(pkt_args, daddr) || ARGS_ENABLED(pkt_args, addr) ||
+	    ARGS_ENABLED(pkt_args, saddr_v6) || ARGS_ENABLED(pkt_args, daddr_v6) ||
+	    ARGS_ENABLED(pkt_args, addr_v6)|| ARGS_ENABLED(pkt_args, sport) ||
+	    ARGS_ENABLED(pkt_args, dport)|| ARGS_ENABLED(pkt_args, port)||
+	    ARGS_ENABLED(pkt_args, l3_proto) || ARGS_ENABLED(pkt_args, l4_proto))
+		return 0;
+
+	return -1;
+}
+
 static int trace_prepare_args()
 {
 	trace_t *drop_trace = search_trace_enabled("kfree_skb");
@@ -302,6 +325,13 @@ skip_trace:
 
 	bpf_args->trace_mode = 1 << trace_ctx.mode;
 	trace_ctx.detail = bpf_args->detail;
+
+	if (trace_check_force()) {
+		pr_err("\tdon't allow to trace 'all' without any filter condition,\n"
+		       "\tas it will cause performance problem.\n\n"
+		       "\t** You can use '--force' to skip this check **\n");
+		goto err;
+	}
 
 	return 0;
 err:

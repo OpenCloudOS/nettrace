@@ -84,6 +84,7 @@ typedef struct trace_args {
 	bool show_traces;
 	bool sock;
 	bool netns_current;
+	bool force;
 	u32  min_latency;
 	char *traces;
 } trace_args_t;

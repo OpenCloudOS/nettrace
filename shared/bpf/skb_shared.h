@@ -140,6 +140,13 @@ typedef struct {
 	DEFINE_FIELD(u8, l4_proto)
 } pkt_args_t;
 
+#define ARGS_ENABLED(args, name)	args->enable_##name
+#define ARGS_GET(args, name)		(args)->name
+#define ARGS_CHECK(args, name, value)		\
+	(ARGS_ENABLED(args, name) && args->name != (value))
+#define ARGS_CHECK_OPS(args, name, value, ops)	\
+	(ARGS_ENABLED(args, name) && ops(args->name, value))
+
 #define CONFIG_MAP_SIZE	1024
 
 #ifndef PERF_MAX_STACK_DEPTH

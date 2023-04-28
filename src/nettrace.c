@@ -47,6 +47,10 @@ static void do_parse_args(int argc, char *argv[])
 			.desc = "enable trace group or trace",
 		},
 		{
+			.lname = "force", .dest = &trace_args->force,
+			.desc = "skip some check and force load nettrace",
+		},
+		{
 			.lname = "ret", .dest = &trace_args->ret,
 			.type = OPTION_BOOL,
 			.desc = "show function return value",

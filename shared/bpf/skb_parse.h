@@ -85,12 +85,6 @@ struct {
 
 
 #define ARGS_GET_CONFIG(name)		((bpf_args_t *)CONFIG())->name
-#define ARGS_ENABLED(args, name)	args->enable_##name
-#define ARGS_GET(args, name)		(args)->name
-#define ARGS_CHECK(args, name, value)		\
-	(ARGS_ENABLED(args, name) && args->name != (value))
-#define ARGS_CHECK_OPS(args, name, value, ops)	\
-	(ARGS_ENABLED(args, name) && ops(args->name, value))
 
 typedef struct {
 	u64 pad;
