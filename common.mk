@@ -8,7 +8,7 @@ BPF_CFLAGS	= $(CFLAGS) -Wno-unused-function			\
 		  -Wno-compare-distinct-pointer-types -Wuninitialized	\
 		  -D__TARGET_ARCH_$(SRCARCH)
 HOST_CFLAGS	= \
-		-lbpf -lelf -lz -g -O2 -static $(CFLAGS)		\
+		-lbpf -lelf -lz -O2 -static $(CFLAGS)			\
 		-Wno-deprecated-declarations -DVERSION=$(VERSION)	\
 		-DRELEASE=$(RELEASE)					\
 		-I$(ROOT)/shared/ -I$(ROOT)/component
@@ -56,10 +56,10 @@ endif
 	kheaders_cmd	:= ln -s vmlinux_header.h kheaders.h
 	CFLAGS		+= -DCOMPAT_MODE
 	BPF_CFLAGS	+= $(KERNEL_CFLAGS) -DBPF_NO_GLOBAL_DATA \
-			   -DBPF_NO_PRESERVE_ACCESS_INDEX
+			   -DBPF_NO_PRESERVE_ACCESS_INDEX -g
 else
 	kheaders_cmd	:= ln -s ../shared/bpf/vmlinux.h kheaders.h
-	BPF_CFLAGS	+= -target bpf
+	BPF_CFLAGS	+= -target bpf -g
 endif
 
 ifndef BPFTOOL
@@ -82,14 +82,14 @@ kheaders.h:
 	$(call kheaders_cmd)
 
 progs/%.o: progs/%.c $(BPF_EXTRA_DEP)
-	clang -O2 -c -g -S -Wall -fno-asynchronous-unwind-tables	\
+	clang -O2 -c -S -Wall -fno-asynchronous-unwind-tables		\
 	-Wno-incompatible-pointer-types-discards-qualifiers		\
 	$< -emit-llvm -Wno-unknown-attributes $(BPF_CFLAGS) -Xclang	\
 	-disable-llvm-passes -o - | 					\
 	opt -O2 -mtriple=bpf-pc-linux | 				\
 	llvm-dis |							\
 	llc -march=bpf -filetype=obj -o $@
-	@file $@ | grep debug_info > /dev/null || (rm $@ && exit 1)
+	@file $@ | grep eBPF > /dev/null || (rm $@ && exit 1)
 
 %.skel.h: %.o
 	$(BPFTOOL) gen skeleton $< > $@
