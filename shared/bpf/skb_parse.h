@@ -12,6 +12,13 @@
 #include "skb_macro.h"
 #include "skb_shared.h"
 
+#ifndef COMPAT_MODE
+#define bpf_core_helper_exist(name)				\
+	bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_##name)
+#else
+#define bpf_core_helper_exist(name) false
+#endif
+
 typedef struct {
 	pkt_args_t pkt;
 #ifdef BPF_DEBUG
