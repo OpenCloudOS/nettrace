@@ -199,8 +199,11 @@ static void analy_entry_handle(analy_entry_t *entry)
 	}
 out:
 	pr_info("%s\n", buf);
+
+#ifdef BPF_FEAT_STACK_TRACE
 	if (trace_is_stack(t))
 		trace_ctx.ops->print_stack(e->stack_id);
+#endif
 }
 
 static void analy_ctx_free(analy_ctx_t *ctx)
