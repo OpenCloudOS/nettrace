@@ -74,7 +74,7 @@ struct {
 #endif
 
 #ifdef COMPAT_MODE
-#define try_inline __attribute__((always_inline))
+#define try_inline __always_inline
 #else
 #define try_inline inline
 #endif
@@ -394,9 +394,9 @@ static try_inline int __probe_parse_sk(parse_ctx_t *ctx)
 	ske->proto_l4 = l4_proto;
 
 	icsk = (void *)sk;
-#ifdef BPF_FEAT_SUP_JIFFIES
-	ske->timer_out = _C(icsk, icsk_timeout) - (unsigned long)bpf_jiffies64();
-#endif
+	if (bpf_core_helper_exist(jiffies64))
+		ske->timer_out = _C(icsk, icsk_timeout) - (unsigned long)bpf_jiffies64();
+
 	ske->timer_pending = _C(icsk, icsk_pending);
 
 	return 0;

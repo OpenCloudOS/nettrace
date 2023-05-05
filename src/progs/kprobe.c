@@ -372,20 +372,20 @@ out:
 	return 0;
 }
 
-static try_inline int bpf_qdisc_handle(context_t *ctx, struct Qdisc *q)
+static __always_inline int
+bpf_qdisc_handle(context_t *ctx, struct Qdisc *q)
 {
 	struct netdev_queue *txq;
+	unsigned long start;
 	DECLARE_EVENT(qdisc_event_t, e)
 
 	txq = _C(q, dev_queue);
 
-#ifdef BPF_FEAT_SUP_JIFFIES
-	u64 start;
-
-	start = _C(txq, trans_start);
-	if (start)
-		e->last_update = bpf_jiffies64() - start;
-#endif
+	if (bpf_core_helper_exist(jiffies64)) {
+		start = _C(txq, trans_start);
+		if (start)
+			e->last_update = bpf_jiffies64() - start;
+	}
 
 	e->qlen = _C(&(q->q), qlen);
 	e->state = _C(txq, state);
