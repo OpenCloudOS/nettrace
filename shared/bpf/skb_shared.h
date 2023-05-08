@@ -105,6 +105,8 @@ typedef struct __attribute__((__packed__)) {
 		l4_min_t min;
 	} l4;
 	long timer_out;
+	u32 wqlen;
+	u32 rqlen;
 	u16 proto_l3;
 	u8 proto_l4;
 	u8 timer_pending;

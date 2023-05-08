@@ -390,6 +390,9 @@ static try_inline int __probe_parse_sk(parse_ctx_t *ctx)
 			      ske->l4.tcp.dport))
 		goto err;
 
+	ske->rqlen = _C(&(sk->sk_receive_queue), qlen);
+	ske->wqlen = _C(&(sk->sk_write_queue), qlen);
+
 	ske->proto_l3 = l3_proto;
 	ske->proto_l4 = l4_proto;
 
