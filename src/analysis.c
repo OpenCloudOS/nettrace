@@ -431,10 +431,17 @@ static LIST_HEAD(async_list);
 static void *do_async_poll(void *arg)
 {
 	analy_entry_t *entry, *pos;
+	struct list_head head;
 	trace_t *trace;
+	
 
 	while (!trace_ctx.stop) {
-		list_for_each_entry_safe(entry, pos, &async_list, list) {
+		pthread_mutex_lock(&mutex);
+		INIT_LIST_HEAD(&head);
+		list_splice_init(&async_list, &head);
+		pthread_mutex_unlock(&mutex);
+
+		list_for_each_entry_safe(entry, pos, &head, list) {
 			trace = get_trace_from_analy_entry(entry);
 			try_run_analyzer(trace, trace->analyzer, entry);
 			analy_entry_handle(entry);
@@ -459,6 +466,7 @@ void async_poll_handler(void *ctx, int cpu, void *data, u32 size)
 	e = entry->event;
 	entry->cpu = cpu;
 
+	pthread_mutex_lock(&mutex);
 	list_for_each_entry(pos, &async_list, list) {
 		if (pos->event->pkt.ts > e->pkt.ts) {
 			list_add(&entry->list, &pos->list);
@@ -469,6 +477,7 @@ void async_poll_handler(void *ctx, int cpu, void *data, u32 size)
 
 	if (!added)
 		list_add_tail(&entry->list, &async_list);
+	pthread_mutex_unlock(&mutex);
 
 	if (!async_thread_created) {
 		pthread_create(&async_thread, NULL, do_async_poll, NULL);
