@@ -553,9 +553,8 @@ DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_DIAG_MASK |
 	sym = sym_parse(event->location);
 	sym_str = sym ? sym->desc : "unknow";
 
-	info = malloc(1024);
-	info[0] = '\0';
 	if (trace_ctx.mode == TRACE_MODE_DROP) {
+		info = malloc(1024);
 		if (trace_ctx.drop_reason)
 			sprintf(info, ", reason: %s, %s", reason, sym_str);
 		else
@@ -569,6 +568,8 @@ DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_DIAG_MASK |
 	if (!trace_mode_intel())
 		goto out;
 
+	info = malloc(1024);
+	info[0] = '\0';
 	rule_run(e, trace, 0);
 	sprintf(info, PFMT_EMPH_STR("    location")":\n\t%s", sym_str);
 	if (trace_ctx.drop_reason) {
