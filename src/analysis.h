@@ -107,18 +107,30 @@ typedef struct analyzer {
 
 #define ANALYZER(name) analyzer_##name
 #define DEFINE_ANALYZER_PART(name, type, mode_mask)			\
-	analyzer_result_t analyzer_##name##_##type(trace_t *trace,	\
-						analy_##type##_t *e);	\
+	analyzer_result_t analyzer_##name##_exit(trace_t *trace,	\
+		analy_exit_t *e) __attribute__((weak));			\
+	analyzer_result_t analyzer_##name##_entry(trace_t *trace,	\
+		analy_entry_t *e) __attribute__((weak));		\
 	analyzer_t ANALYZER(name) = {					\
 		.analy_##type =analyzer_##name##_##type,		\
 		.mode = mode_mask,					\
 	};								\
 	analyzer_result_t analyzer_##name##_##type(trace_t *trace,	\
-						   analy_##type##_t *e)
-#define DEFINE_ANALYZER_ENTRY(name, mode)	\
+		analy_##type##_t *e)
+#define DEFINE_ANALYZER_ENTRY(name, mode)				\
 	DEFINE_ANALYZER_PART(name, entry, mode)
-#define DEFINE_ANALYZER_EXIT(name, mode)	\
+#define DEFINE_ANALYZER_EXIT(name, mode)				\
 	DEFINE_ANALYZER_PART(name, exit, mode)
+#define DEFINE_ANALYZER_EXIT_FUNC(name)					\
+	analyzer_result_t analyzer_##name##_exit(trace_t *trace,	\
+		analy_exit_t *e)
+
+#define DEFINE_ANALYZER_EXIT_FUNC_DEFAULT(name)				\
+DEFINE_ANALYZER_EXIT_FUNC(name)						\
+{									\
+	rule_run(e->entry, trace, e->event.val);			\
+	return RESULT_CONT;						\
+}
 
 #define DECLARE_ANALYZER(name) extern analyzer_t ANALYZER(name)
 #define IS_ANALYZER(target, name) (target == &(ANALYZER(name)))
