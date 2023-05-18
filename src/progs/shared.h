@@ -12,6 +12,7 @@
 	bool hooks;			\
 	bool ready;			\
 	bool stack;			\
+	bool pkt_fixed;			\
 	u16  stack_funs[MAX_FUNC_STACK];
 
 #include <skb_shared.h>

@@ -112,6 +112,13 @@ static void do_parse_args(int argc, char *argv[])
 			.type = OPTION_BOOL,
 			.desc = "enable 'sock' mode",
 		},
+		{
+			.lname = "pkt-fixed", .dest = &bpf_args->pkt_fixed,
+			.type = OPTION_BOOL,
+			.desc = "set this option if you are sure the target "
+				"packet is not NATed to get better "
+				"performance",
+		},
 		{ .type = OPTION_BLANK },
 		{
 			.sname = 'v', .dest = &show_log,

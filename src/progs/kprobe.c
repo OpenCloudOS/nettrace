@@ -128,7 +128,8 @@ static try_inline int handle_entry(context_t *ctx)
 		goto err;
 
 	pr_debug_skb("begin to handle, func=%d", ctx->func);
-	skip_life = args->trace_mode & MODE_SKIP_LIFE_MASK;
+	skip_life = (args->trace_mode & MODE_SKIP_LIFE_MASK) ||
+		args->pkt_fixed;
 	pid = (u32)bpf_get_current_pid_tgid();
 	pkt = &e->pkt;
 	if (!skip_life) {
