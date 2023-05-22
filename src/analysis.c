@@ -170,9 +170,6 @@ static void analy_entry_handle(analy_entry_t *entry)
 	else
 		ts_print_sock(buf, &e->ske, tinfo, trace_ctx.args.date);
 
-	if (trace_ctx.mode == TRACE_MODE_BASIC)
-		goto out;
-
 	if ((entry->status & ANALY_ENTRY_RETURNED) && trace_ctx.args.ret)
 		sprintf_end(buf, PFMT_EMPH_STR(" *return: %d*"),
 			    (int)entry->priv);
@@ -199,8 +196,11 @@ static void analy_entry_handle(analy_entry_t *entry)
 	}
 out:
 	pr_info("%s\n", buf);
+
+#ifdef BPF_FEAT_STACK_TRACE
 	if (trace_is_stack(t))
 		trace_ctx.ops->print_stack(e->stack_id);
+#endif
 }
 
 static void analy_ctx_free(analy_ctx_t *ctx)
@@ -428,10 +428,17 @@ static LIST_HEAD(async_list);
 static void *do_async_poll(void *arg)
 {
 	analy_entry_t *entry, *pos;
+	struct list_head head;
 	trace_t *trace;
+	
 
 	while (!trace_ctx.stop) {
-		list_for_each_entry_safe(entry, pos, &async_list, list) {
+		pthread_mutex_lock(&mutex);
+		INIT_LIST_HEAD(&head);
+		list_splice_init(&async_list, &head);
+		pthread_mutex_unlock(&mutex);
+
+		list_for_each_entry_safe(entry, pos, &head, list) {
 			trace = get_trace_from_analy_entry(entry);
 			try_run_analyzer(trace, trace->analyzer, entry);
 			analy_entry_handle(entry);
@@ -456,6 +463,7 @@ void async_poll_handler(void *ctx, int cpu, void *data, u32 size)
 	e = entry->event;
 	entry->cpu = cpu;
 
+	pthread_mutex_lock(&mutex);
 	list_for_each_entry(pos, &async_list, list) {
 		if (pos->event->pkt.ts > e->pkt.ts) {
 			list_add(&entry->list, &pos->list);
@@ -466,6 +474,7 @@ void async_poll_handler(void *ctx, int cpu, void *data, u32 size)
 
 	if (!added)
 		list_add_tail(&entry->list, &async_list);
+	pthread_mutex_unlock(&mutex);
 
 	if (!async_thread_created) {
 		pthread_create(&async_thread, NULL, do_async_poll, NULL);
@@ -484,7 +493,7 @@ static inline void rule_run(analy_entry_t *entry, trace_t *trace, int ret)
 			hit = true;
 			break;
 		case RULE_RETURN_EQ:
-			hit =rule->expected == ret;
+			hit = rule->expected == ret;
 			break;
 		case RULE_RETURN_RANGE:
 			hit = rule->range.min < ret && rule->range.max > ret;
@@ -541,9 +550,8 @@ DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_DIAG_MASK |
 	sym = sym_parse(event->location);
 	sym_str = sym ? sym->desc : "unknow";
 
-	info = malloc(1024);
-	info[0] = '\0';
 	if (trace_ctx.mode == TRACE_MODE_DROP) {
+		info = malloc(1024);
 		if (trace_ctx.drop_reason)
 			sprintf(info, ", reason: %s, %s", reason, sym_str);
 		else
@@ -557,6 +565,8 @@ DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_DIAG_MASK |
 	if (!trace_mode_intel())
 		goto out;
 
+	info = malloc(1024);
+	info[0] = '\0';
 	rule_run(e, trace, 0);
 	sprintf(info, PFMT_EMPH_STR("    location")":\n\t%s", sym_str);
 	if (trace_ctx.drop_reason) {
@@ -632,10 +642,11 @@ const char *pf_names[] = {
 	[NFPROTO_IPV6]		= "ipv6",
 	[NFPROTO_DECNET]	= "decnet",
 };
-DEFINE_ANALYZER_EXIT(nf, TRACE_MODE_DIAG_MASK)
+DEFINE_ANALYZER_ENTRY(nf, TRACE_MODE_DIAG_MASK |
+			  TRACE_MODE_BASIC_MASK |
+			  TRACE_MODE_TIMELINE_MASK)
 {
-	analy_entry_t *entry = e->entry;
-	define_pure_event(nf_hooks_event_t, event, entry->event);
+	define_pure_event(nf_hooks_event_t, event, e->event);
 	char *msg = malloc(1024), *extinfo;
 	struct sym_result *sym;
 	int i = 0;
@@ -643,10 +654,9 @@ DEFINE_ANALYZER_EXIT(nf, TRACE_MODE_DIAG_MASK)
 	msg[0] = '\0';
 	sprintf(msg, PFMT_EMPH_STR(" *%s in chain: %s*"), pf_names[event->pf],
 		hook_names[event->pf][event->hook]);
-	entry_set_msg(entry, msg);
-	rule_run(entry, trace, e->event.val);
+	entry_set_msg(e, msg);
 
-	if (!BPF_ARG_GET(hooks) || !entry->status)
+	if (!BPF_ARG_GET(hooks) || !e->status)
 		goto out;
 
 	extinfo = malloc(1024);
@@ -662,16 +672,18 @@ DEFINE_ANALYZER_EXIT(nf, TRACE_MODE_DIAG_MASK)
 		else
 			sprintf_end(extinfo, "\t%llx\n", hook);
 	}
-	entry_set_extinfo(entry, extinfo);
+	entry_set_extinfo(e, extinfo);
 
 out:
 	return RESULT_CONT;
 }
+DEFINE_ANALYZER_EXIT_FUNC_DEFAULT(nf)
 
-DEFINE_ANALYZER_EXIT(iptable, TRACE_MODE_DIAG_MASK)
+DEFINE_ANALYZER_ENTRY(iptable, TRACE_MODE_DIAG_MASK |
+			       TRACE_MODE_BASIC_MASK |
+			       TRACE_MODE_TIMELINE_MASK)
 {
-	analy_entry_t *entry = e->entry;
-	define_pure_event(nf_event_t, event, entry->event);
+	define_pure_event(nf_event_t, event, e->event);
 	char *msg = malloc(1024);
 	const char *chain;
 
@@ -682,15 +694,17 @@ DEFINE_ANALYZER_EXIT(iptable, TRACE_MODE_DIAG_MASK)
 		chain = inet_hook_names[event->hook];
 	sprintf(msg, PFMT_EMPH_STR(" *iptables table:%s, chain:%s*"),
 		event->table, chain);
-	entry_set_msg(entry, msg);
-	rule_run(entry, trace, e->event.val);
+	entry_set_msg(e, msg);
 
 	return RESULT_CONT;
 }
+DEFINE_ANALYZER_EXIT_FUNC_DEFAULT(iptable)
 
-DEFINE_ANALYZER_EXIT(qdisc, TRACE_MODE_DIAG_MASK)
+DEFINE_ANALYZER_ENTRY(qdisc, TRACE_MODE_DIAG_MASK |
+			     TRACE_MODE_BASIC_MASK |
+			     TRACE_MODE_TIMELINE_MASK)
 {
-	define_pure_event(qdisc_event_t, event, e->entry->event);
+	define_pure_event(qdisc_event_t, event, e->event);
 	char *msg = malloc(1024);
 	int hz;
 
@@ -701,9 +715,8 @@ DEFINE_ANALYZER_EXIT(qdisc, TRACE_MODE_DIAG_MASK)
 		"last update: %lums, len: %lu*"), event->state,
 		event->flags, (1000 * event->last_update) / hz,
 		event->qlen);
-	entry_set_msg(e->entry, msg);
-
-	rule_run(e->entry, trace, e->event.val);
+	entry_set_msg(e, msg);
 
 	return RESULT_CONT;
 }
+DEFINE_ANALYZER_EXIT_FUNC_DEFAULT(qdisc)

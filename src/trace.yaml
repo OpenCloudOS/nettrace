@@ -174,14 +174,8 @@ children:
       - exp: eq 1
         level: info
         msg: packet is accepted
-    - names:
-      - &nft_do_chain_legacy
-        name: nft_do_chain_legacy
-      - name: nft_do_chain
-        backup: *nft_do_chain_legacy
-        probe: true
+    - name: nft_do_chain
       analyzer: iptable
-      target: nft_do_chain
       rules:
       - exp: eq 0
         level: error

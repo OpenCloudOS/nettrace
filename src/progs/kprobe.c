@@ -86,33 +86,33 @@ static try_inline int filter_by_netns(context_t *ctx)
 {	
 	struct sk_buff *skb = ctx->skb;
 	struct net_device *dev;
+	u32 inode, netns;
 	struct net *ns;
-	u32 inode;
 
-	if (!ctx->args->netns && !ctx->args->detail)
+	netns = ctx->args->netns;
+	if (!netns && !ctx->args->detail)
 		return 0;
 
-	dev = _C(skb, dev);
+	dev = _(skb->dev);
 	if (!dev) {
-		struct sock *sk = _C(skb, sk);
+		struct sock *sk = _(skb->sk);
 		if (!sk)
-			return 0;
-		ns = _C(&(sk->__sk_common.skc_net), net);
+			goto no_ns;
+		ns = _(sk->__sk_common.skc_net.net);
 	} else {
-		ns = _C(&(dev->nd_net), net);
+		ns = _(dev->nd_net.net);
 	}
 
 	if (!ns)
-		return 0;
+		goto no_ns;
 
-	inode = _C(&(ns->ns), inum);
+	inode = _(ns->ns.inum);
 	if (ctx->args->detail)
 		((detail_event_t *)ctx->e)->netns = inode;
 
-	if (ctx->args->netns)
-		return ctx->args->netns != inode;
-
-	return 0;
+	return netns ? netns != inode : 0;
+no_ns:
+	return !!netns;
 }
 
 static try_inline int handle_entry(context_t *ctx)
@@ -125,37 +125,38 @@ static try_inline int handle_entry(context_t *ctx)
 	u32 pid;
 
 	if (!args->ready)
-		return -1;
+		goto err;
 
 	pr_debug_skb("begin to handle, func=%d", ctx->func);
 	skip_life = args->trace_mode & MODE_SKIP_LIFE_MASK;
 	pid = (u32)bpf_get_current_pid_tgid();
 	pkt = &e->pkt;
-	if (skip_life) {
-		if (args->trace_mode == TRACE_MODE_SOCK_MASK) {
-			if (!probe_parse_sk(ctx->sk, &e->ske))
-				goto skip_life;
-		} else {
-			if (!probe_parse_skb(skb, pkt))
-				goto skip_life;
+	if (!skip_life) {
+		matched = bpf_map_lookup_elem(&m_matched, &skb);
+		if (matched && *matched) {
+			probe_parse_skb_always(skb, pkt);
+			filter_by_netns(ctx);
+			goto skip_filter;
 		}
-		return -1;
 	}
 
-	matched = bpf_map_lookup_elem(&m_matched, &skb);
-	if (matched && *matched) {
-		probe_parse_skb_always(skb, pkt);
-	} else if (!probe_parse_skb(skb, pkt)) {
+	if (ARGS_CHECK(args, pid, pid) || filter_by_netns(ctx))
+		goto err;
+
+	if (args->trace_mode == TRACE_MODE_SOCK_MASK) {
+		if (probe_parse_sk(ctx->sk, &e->ske))
+			goto err;
+	} else {
+		if (probe_parse_skb(skb, pkt))
+			goto err;
+	}
+
+	if (!skip_life) {
 		bool _matched = true;
 		bpf_map_update_elem(&m_matched, &skb, &_matched, 0);
-	} else {
-		return -1;
 	}
 
-skip_life:
-	if (ARGS_CHECK(args, pid, pid) || filter_by_netns(ctx))
-		return -1;
-
+skip_filter:
 	if (!args->detail)
 		goto out;
 
@@ -186,6 +187,8 @@ out:
 	if (!skip_life)
 		get_ret(ctx->func);
 	return 0;
+err:
+	return -1;
 }
 
 static try_inline int handle_destroy(context_t *ctx)
@@ -369,20 +372,20 @@ out:
 	return 0;
 }
 
-static try_inline int bpf_qdisc_handle(context_t *ctx, struct Qdisc *q)
+static __always_inline int
+bpf_qdisc_handle(context_t *ctx, struct Qdisc *q)
 {
 	struct netdev_queue *txq;
+	unsigned long start;
 	DECLARE_EVENT(qdisc_event_t, e)
 
 	txq = _C(q, dev_queue);
 
-#ifdef BPF_FEAT_SUP_JIFFIES
-	u64 start;
-
-	start = _C(txq, trans_start);
-	if (start)
-		e->last_update = bpf_jiffies64() - start;
-#endif
+	if (bpf_core_helper_exist(jiffies64)) {
+		start = _C(txq, trans_start);
+		if (start)
+			e->last_update = bpf_jiffies64() - start;
+	}
 
 	e->qlen = _C(&(q->q), qlen);
 	e->state = _C(txq, state);
@@ -402,10 +405,75 @@ DEFINE_KPROBE_SKB(pfifo_enqueue, 1) {
 }
 
 #ifndef NT_DISABLE_NFT
-#define NFT_LEGACY 1
-#include "kprobe_nft.c"
-#undef NFT_LEGACY
-#include "kprobe_nft.c"
+
+/* use the 'ignored suffix rule' feature of CO-RE, as described in:
+ * https://nakryiko.com/posts/bpf-core-reference-guide/#handling-incompatible-field-and-type-changes
+ */
+struct nft_pktinfo___new {
+	struct sk_buff			*skb;
+	const struct nf_hook_state	*state;
+	u8				flags;
+	u8				tprot;
+	u16				fragoff;
+	u16				thoff;
+	u16				inneroff;
+};
+
+/**
+ * This function is used to the kernel version that don't support
+ * kernel module BTF.
+ */
+DEFINE_KPROBE_INIT(nft_do_chain, nft_do_chain)
+{
+	struct nft_pktinfo *pkt = nt_regs_ctx(ctx, 1);
+	void *chain_name, *table_name;
+	struct nf_hook_state *state;
+	struct nft_chain *chain;
+	struct nft_table *table;
+	size_t size;
+	DECLARE_EVENT(nf_event_t, e)
+
+	ctx->skb = (struct sk_buff *)_(pkt->skb);
+	size = ctx->size;
+	ctx->size = 0;
+	if (handle_entry(ctx))
+		return 0;
+
+#ifndef COMPAT_MODE
+	if (bpf_core_type_exists(struct nft_pktinfo)) {
+		if (!bpf_core_field_exists(pkt->xt))
+			state = _C((struct nft_pktinfo___new *)pkt, state);
+		else
+			state = _C(&(pkt->xt), state);
+	} else
+#endif
+	{
+		/* don't use CO-RE, as nft may be a module */
+		state = _(pkt->xt.state);
+	}
+
+	chain = nt_regs_ctx(ctx, 2);
+#ifndef COMPAT_MODE
+	if (bpf_core_type_exists(struct nft_chain)) {
+		table = _C(chain, table);
+		chain_name = _C(chain, name);
+		table_name = _C(table, name);
+	} else
+#endif
+	{
+		table = _(chain->table);
+		chain_name = _(chain->name);
+		table_name = _(table->name);
+	}
+	e->hook	= _C(state, hook);
+	e->pf	= _C(state, pf);
+
+	bpf_probe_read_kernel_str(e->chain, sizeof(e->chain), chain_name);
+	bpf_probe_read_kernel_str(e->table, sizeof(e->table), table_name);
+
+	EVENT_OUTPUT_PTR(ctx->regs, ctx->e, size);
+	return 0;
+}
 #endif
 
 

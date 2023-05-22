@@ -12,6 +12,13 @@
 #include "skb_macro.h"
 #include "skb_shared.h"
 
+#ifndef COMPAT_MODE
+#define bpf_core_helper_exist(name)				\
+	bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_##name)
+#else
+#define bpf_core_helper_exist(name) false
+#endif
+
 typedef struct {
 	pkt_args_t pkt;
 #ifdef BPF_DEBUG
@@ -67,7 +74,7 @@ struct {
 #endif
 
 #ifdef COMPAT_MODE
-#define try_inline __attribute__((always_inline))
+#define try_inline __always_inline
 #else
 #define try_inline inline
 #endif
@@ -85,12 +92,6 @@ struct {
 
 
 #define ARGS_GET_CONFIG(name)		((bpf_args_t *)CONFIG())->name
-#define ARGS_ENABLED(args, name)	args->enable_##name
-#define ARGS_GET(args, name)		(args)->name
-#define ARGS_CHECK(args, name, value)		\
-	(ARGS_ENABLED(args, name) && args->name != (value))
-#define ARGS_CHECK_OPS(args, name, value, ops)	\
-	(ARGS_ENABLED(args, name) && ops(args->name, value))
 
 typedef struct {
 	u64 pad;
@@ -389,13 +390,16 @@ static try_inline int __probe_parse_sk(parse_ctx_t *ctx)
 			      ske->l4.tcp.dport))
 		goto err;
 
+	ske->rqlen = _C(&(sk->sk_receive_queue), qlen);
+	ske->wqlen = _C(&(sk->sk_write_queue), qlen);
+
 	ske->proto_l3 = l3_proto;
 	ske->proto_l4 = l4_proto;
 
 	icsk = (void *)sk;
-#ifdef BPF_FEAT_SUP_JIFFIES
-	ske->timer_out = _C(icsk, icsk_timeout) - (unsigned long)bpf_jiffies64();
-#endif
+	if (bpf_core_helper_exist(jiffies64))
+		ske->timer_out = _C(icsk, icsk_timeout) - (unsigned long)bpf_jiffies64();
+
 	ske->timer_pending = _C(icsk, icsk_pending);
 
 	return 0;

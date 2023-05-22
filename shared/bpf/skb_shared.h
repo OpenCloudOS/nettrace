@@ -105,6 +105,8 @@ typedef struct __attribute__((__packed__)) {
 		l4_min_t min;
 	} l4;
 	long timer_out;
+	u32 wqlen;
+	u32 rqlen;
 	u16 proto_l3;
 	u8 proto_l4;
 	u8 timer_pending;
@@ -139,6 +141,13 @@ typedef struct {
 	DEFINE_FIELD(u16, l3_proto)
 	DEFINE_FIELD(u8, l4_proto)
 } pkt_args_t;
+
+#define ARGS_ENABLED(args, name)	args->enable_##name
+#define ARGS_GET(args, name)		(args)->name
+#define ARGS_CHECK(args, name, value)		\
+	(ARGS_ENABLED(args, name) && args->name != (value))
+#define ARGS_CHECK_OPS(args, name, value, ops)	\
+	(ARGS_ENABLED(args, name) && ops(args->name, value))
 
 #define CONFIG_MAP_SIZE	1024
 

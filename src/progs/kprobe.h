@@ -7,6 +7,9 @@ typedef struct {
 	struct sock *sk;
 	event_t *e;
 	bpf_args_t *args;
+	/* regs spill only support u64 on kernel 5.4, so it donesn't work
+	 * to use u16 here.
+	 */
 	size_t size;
 	u16 func;
 } context_t;

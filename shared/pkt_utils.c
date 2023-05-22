@@ -227,6 +227,7 @@ print_ip:
 	case IPPROTO_UDP:
 		hz = kernel_hz();
 		hz = hz > 0 ? hz : 1;
+		BUF_FMT(" mem:(w%u r%u)", ske->wqlen, ske->rqlen);
 		if (ske->timer_pending)
 			BUF_FMT(" timer:(%s, %ld.%03lds)",
 				timer_name[ske->timer_pending],

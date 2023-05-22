@@ -3,18 +3,15 @@
 
 #define MAX_FUNC_STACK 16
 
-#define DEFINE_BPF_ARGS()	\
-	u32  trace_mode;	\
-	u32  pid;		\
-	u32  netns;		\
-	bool enable_trace_mode;	\
-	bool enable_pid;	\
-	bool drop_reason;	\
-	bool detail;		\
-	bool hooks;		\
-	bool ready;		\
-	bool nft_high;		\
-	bool stack;		\
+#define DEFINE_BPF_ARGS()		\
+	DEFINE_FIELD(u32, trace_mode)	\
+	DEFINE_FIELD(u32, pid)		\
+	u32  netns;			\
+	bool drop_reason;		\
+	bool detail;			\
+	bool hooks;			\
+	bool ready;			\
+	bool stack;			\
 	u16  stack_funs[MAX_FUNC_STACK];
 
 #include <skb_shared.h>
