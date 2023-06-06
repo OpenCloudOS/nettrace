@@ -63,5 +63,6 @@ static inline int perf_output(int fd, perf_buffer_sample_fn fn)
 }
 
 int compat_bpf_attach_kprobe(int fd, char *name, bool ret);
+int btf_get_arg_count(char *name);
 
 #endif
