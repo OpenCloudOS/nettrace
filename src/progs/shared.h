@@ -23,6 +23,7 @@ typedef struct {
 		sock_t		ske;
 	};
 	u64		key;
+	u64		retval;
 	u32		func;
 #ifdef BPF_FEAT_STACK_TRACE
 	u32		stack_id;
@@ -93,7 +94,7 @@ DEFINE_EVENT(qdisc_event_t,
 
 #define MAX_EVENT_SIZE sizeof(nf_hooks_event_t)
 
-typedef struct {
+typedef struct __attribute__((__packed__)) {
 	u64 ts;
 	u64 val;
 	u16 func;
@@ -105,13 +106,36 @@ typedef enum trace_mode {
 	TRACE_MODE_TIMELINE,
 	TRACE_MODE_DIAG,
 	TRACE_MODE_SOCK,
+	TRACE_MODE_MONITOR,
 } trace_mode_t;
+
+enum rule_type {
+	/* equal */
+	RULE_RETURN_EQ = 1,
+	/* not equal */
+	RULE_RETURN_NE,
+	/* less than */
+	RULE_RETURN_LT,
+	/* greater then */
+	RULE_RETURN_GT,
+	/* in range */
+	RULE_RETURN_RANGE,
+	/* always active this rule */
+	RULE_RETURN_ANY,
+};
+
+#define MAX_RULE_COUNT	8
+typedef struct {
+	int expected[MAX_RULE_COUNT];
+	int op[MAX_RULE_COUNT];
+} rules_ret_t;
 
 #define TRACE_MODE_BASIC_MASK		(1 << TRACE_MODE_BASIC)
 #define TRACE_MODE_TIMELINE_MASK	(1 << TRACE_MODE_TIMELINE)
 #define TRACE_MODE_DIAG_MASK		(1 << TRACE_MODE_DIAG)
 #define TRACE_MODE_DROP_MASK		(1 << TRACE_MODE_DROP)
 #define TRACE_MODE_SOCK_MASK		(1 << TRACE_MODE_SOCK)
+#define TRACE_MODE_MONITOR_MASK		(1 << TRACE_MODE_MONITOR)
 
 #define __MACRO_SIZE(macro)	sizeof(#macro)
 #define MACRO_SIZE(macro)	__MACRO_SIZE(macro)

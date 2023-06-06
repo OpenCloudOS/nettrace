@@ -176,6 +176,7 @@ children:
         msg: packet is accepted
     - name: nft_do_chain
       analyzer: iptable
+      monitor: 1
       rules:
       - exp: eq 0
         level: error
@@ -288,6 +289,7 @@ children:
           check you ip route config or disable rp_filter with command
           'echo 0 > /proc/sys/net/ipv4/conf/all/rp_filter'
     - name: ip_route_input_slow:0
+      monitor: 1
       rules:
       - <<: *rule_ret_err
         msg: failed to route packet in input path
@@ -315,6 +317,7 @@ children:
     - tcp_probe_timer:-1:0
     - tcp_send_probe0:-1:0
     - name: __inet_lookup_listener:2
+      monitor: 1
       analyzer: ret
       rules:
       - exp: eq 0
@@ -411,6 +414,7 @@ children:
   - name: kfree_skb
     tp: skb:kfree_skb
     analyzer: drop
+    monitor: 1
     rules:
     - exp: any
       level: error

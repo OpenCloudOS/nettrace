@@ -25,12 +25,16 @@ struct analyzer;
 #define TRACE_RET		(1 << 3)
 #define TRACE_STACK		(1 << 4)
 #define TRACE_ATTACH_MANUAL	(1 << 5)
+#define TRACE_RET_ONLY		(1 << 6)
 
 #define trace_for_each(pos)		\
 	list_for_each_entry(pos, &trace_list, all)
 #define trace_for_each_cond(pos, cond)	\
 	trace_for_each(pos) 		\
 		if (cond)
+
+#define bpf_pbn(obj, name)	\
+	bpf_object__find_program_by_name(obj, name)
 
 typedef struct trace_group {
 	char	*name;
@@ -39,6 +43,12 @@ typedef struct trace_group {
 	struct list_head list;
 	struct list_head traces;
 } trace_group_t;
+
+enum {
+	TRACE_MONITOR_EXIT = 1,
+	TRACE_MONITOR_ENTRY,
+	TRACE_MONITOR_ALL,
+};
 
 typedef struct trace {
 	/* name of the kernel function this trace targeted */
@@ -63,7 +73,9 @@ typedef struct trace {
 	struct trace *backup;
 	bool	is_backup;
 	bool	probe;
+	int	monitor;
 	int	index;
+	int	arg_count;
 	u32	status;
 	trace_group_t *parent;
 	struct analyzer *analyzer;
@@ -78,6 +90,7 @@ typedef struct trace_args {
 	bool intel_quiet;
 	bool intel_keep;
 	bool basic;
+	bool monitor;
 	bool drop;
 	bool date;
 	bool drop_stack;
@@ -100,6 +113,7 @@ typedef struct {
 	void (*trace_ready)();
 	void (*print_stack)(int key);
 	void (*trace_feat_probe)();
+	bool (*trace_supported)();
 	struct analyzer *analyzer;
 } trace_ops_t;
 
@@ -121,7 +135,6 @@ typedef struct {
 
 #define BPF_ARG_GET(name) (trace_ctx.bpf_args.name)
 
-extern trace_ops_t probe_ops;
 extern trace_context_t trace_ctx;
 
 extern trace_t *all_traces[];
@@ -190,6 +203,16 @@ static inline bool trace_is_ret(trace_t *t)
 	return t->status & TRACE_RET;
 }
 
+static inline void trace_set_retonly(trace_t *t)
+{
+	t->status |= TRACE_RET_ONLY;
+}
+
+static inline bool trace_is_retonly(trace_t *t)
+{
+	return t->status & TRACE_RET_ONLY;
+}
+
 static inline int trace_set_stack(trace_t *t)
 {
 	int i = 0;
@@ -244,5 +267,6 @@ int trace_prepare();
 int trace_bpf_load_and_attach();
 int trace_poll();
 bool trace_analyzer_enabled(struct analyzer *analyzer);
+int trace_pre_load();
 
 #endif

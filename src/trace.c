@@ -18,6 +18,10 @@ trace_context_t trace_ctx = {
 	.mode = TRACE_MODE_TIMELINE,
 };
 
+extern trace_ops_t tracing_ops;
+extern trace_ops_t probe_ops;
+trace_ops_t *trace_ops_all[] = { &tracing_ops, &probe_ops };
+
 static void __print_trace_group(trace_group_t *group, int level)
 {
 	char prefix[32] = {}, buf[32], *name;
@@ -179,7 +183,7 @@ static int trace_check_force()
 	pkt_args_t *pkt_args = &bpf_args->pkt;
 	trace_args_t *args = &trace_ctx.args;
 
-	if (args->drop || args->force)
+	if (args->drop || args->force || args->monitor)
 		return 0;
 
 	if (ARGS_ENABLED(bpf_args, pid) || ARGS_ENABLED(pkt_args, saddr) ||
@@ -215,6 +219,9 @@ static int trace_prepare_args()
 
 	if (args->sock)
 		trace_ctx.mode = TRACE_MODE_SOCK;
+
+	if (args->monitor)
+		trace_ctx.mode = TRACE_MODE_MONITOR;
 
 	if (args->drop_stack) {
 		if (trace_set_stack(drop_trace))
@@ -288,6 +295,25 @@ skip_trace:
 			pr_err("--min-latency is only supported in default "
 			       "and 'diag' mode\n");
 			goto err;
+		}
+		break;
+	case TRACE_MODE_MONITOR:
+		trace_for_each(trace) {
+			if (!trace->monitor) {
+				trace_set_invalid(trace);
+				continue;
+			}
+			if (!trace_is_func(trace))
+				continue;
+			switch (trace->monitor) {
+			case TRACE_MONITOR_EXIT:
+				trace_set_retonly(trace);
+			case TRACE_MONITOR_ALL:
+				trace_set_ret(trace);
+				break;
+			default:
+				break;
+			}
 		}
 		break;
 	default:
@@ -441,11 +467,33 @@ static void trace_print_enabled()
 
 int trace_prepare()
 {
-	int err;
+	int err, i = 0;
+
+#ifndef COMPAT_MODE
+	if (!file_exist("/sys/kernel/btf/vmlinux")) {
+		pr_err("BTF is not support by your kernel, please compile"
+		       "this tool with \"COMPAT=1\"\n");
+		err = -ENOTSUP;
+		goto err;
+	}
+#endif
 
 	err = trace_prepare_args();
 	if (err)
 		goto err;
+
+	for (; i < ARRAY_SIZE(trace_ops_all); i++) {
+		if (trace_ops_all[i]->trace_supported()) {
+			set_trace_ops(trace_ops_all[i]);
+			break;
+		}
+	}
+
+	if (i == ARRAY_SIZE(trace_ops_all)) {
+		pr_err("no ops found!\n");
+		err = -EINVAL;
+		goto err;
+	}
 
 	err = trace_prepare_traces();
 	if (err)
@@ -470,18 +518,50 @@ int trace_prepare()
 	}
 	trace_print_enabled();
 
-#ifndef COMPAT_MODE
-	if (!file_exist("/sys/kernel/btf/vmlinux")) {
-		pr_err("BTF is not support by your kernel, please compile"
-		       "this tool with \"COMPAT=1\"\n");
-		err = -ENOTSUP;
-		goto err;
-	}
-#endif
-
 	return 0;
 err:
 	return err;
+}
+
+int trace_pre_load()
+{
+	char kret_name[128], regex[128], *func;
+	struct bpf_program *prog;
+	bool manual, autoload;
+	trace_t *trace;
+
+	/* disable all programs that is not enabled or invalid */
+	trace_for_each(trace) {
+		autoload = !trace_is_invalid(trace) &&
+			   trace_is_enable(trace);
+
+		if (autoload && !trace_is_retonly(trace))
+			goto check_ret;
+
+		prog = bpf_pbn(trace_ctx.obj, trace->prog);
+		if (!prog) {
+			pr_warn("prog: %s not founded\n", trace->prog);
+			continue;
+		}
+		bpf_program__set_autoload(prog, false);
+		pr_debug("prog: %s is made no-autoload\n", trace->prog);
+
+check_ret:
+		if (!trace_is_func(trace) || (trace_is_ret(trace) &&
+		    autoload))
+			continue;
+
+		sprintf(kret_name, "ret%s", trace->prog);
+		prog = bpf_pbn(trace_ctx.obj, kret_name);
+		if (!prog) {
+			pr_warn("prog: %s not founded\n", kret_name);
+			continue;
+		}
+		bpf_program__set_autoload(prog, false);
+		pr_debug("prog: %s is made no-autoload\n", trace->prog);
+	}
+
+	return 0;
 }
 
 static int trace_bpf_load()

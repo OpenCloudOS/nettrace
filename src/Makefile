@@ -1,5 +1,5 @@
 ROOT		?= $(abspath ../)
-bpf_progs	:= progs/tracing progs/kprobe
+bpf_progs	:= progs/kprobe
 progs		:= nettrace
 prog-nettrace-origin = \
 		trace.c $(COMMON_SHARED) trace_probe.c trace_tracing.c \
@@ -7,6 +7,9 @@ prog-nettrace-origin = \
 		dropreason.c
 prog-nettrace	= $(prog-nettrace-origin) nettrace.c
 
+ifndef COMPAT
+	bpf_progs += progs/tracing progs/feat_args_ext
+endif
 
 BPF_EXTRA_DEP := kheaders.h
 include ../common.mk
@@ -28,7 +31,7 @@ progs/kprobe_trace.h:
 trace_group.c: trace.yaml
 	python3 gen_trace.py > trace_group.c
 
-progs/kprobe.c: progs/kprobe_trace.h
+progs/*.c: progs/kprobe_trace.h
 	@:
 
 nettrace.c: $(prog-nettrace-origin)
