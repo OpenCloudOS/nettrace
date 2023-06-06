@@ -33,7 +33,7 @@ typedef struct {
 	u16	dport;
 } l4_min_t;
 
-typedef struct __attribute__((__packed__)) {
+typedef struct {
 	u64	ts;
 	union {
 		struct {
@@ -79,7 +79,7 @@ typedef struct __attribute__((__packed__)) {
 	u8 pad;
 } packet_t;
 
-typedef struct __attribute__((__packed__)) {
+typedef struct {
 	u64	ts;
 	union {
 		struct {

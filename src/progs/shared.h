@@ -17,7 +17,7 @@
 
 #include <skb_shared.h>
 
-typedef struct __attribute__((__packed__)) {
+typedef struct {
 	union {
 		packet_t	pkt;
 		sock_t		ske;
@@ -30,7 +30,7 @@ typedef struct __attribute__((__packed__)) {
 	int		__event_filed[0];
 } event_t;
 
-typedef struct __attribute__((__packed__)) {
+typedef struct {
 	packet_t	pkt;
 	u64		key;
 	u32		func;
@@ -49,17 +49,17 @@ typedef struct {
 } pure_event_t;
 
 #define DEFINE_EVENT(name, fields...)		\
-typedef struct __attribute__((__packed__)) {	\
+typedef struct {				\
 	event_t event;				\
 	int __event_filed[0];			\
 	fields					\
 } name;						\
-typedef struct __attribute__((__packed__)) {	\
+typedef struct {				\
 	detail_event_t event;			\
 	int __event_filed[0];			\
 	fields					\
 } detail_##name;				\
-typedef struct __attribute__((__packed__)) {	\
+typedef struct {				\
 	fields					\
 } pure_##name;
 #define event_field(type, name) type name;
@@ -93,7 +93,7 @@ DEFINE_EVENT(qdisc_event_t,
 
 #define MAX_EVENT_SIZE sizeof(nf_hooks_event_t)
 
-typedef struct __attribute__((__packed__)) {
+typedef struct {
 	u64 ts;
 	u64 val;
 	u16 func;
