@@ -101,20 +101,38 @@ static void tracing_load_rules()
 
 static void tracing_check_args()
 {
-	bool support_feat_args_ext;
+	bool support_feat_args_ext, support_btf_modules;
 	trace_t *trace;
 
 	support_feat_args_ext = tracing_support_feat_args_ext();
 	if (!support_feat_args_ext)
 		pr_warn("tracing kernel function with 6+ arguments is not"
-			"supportd by your kernel, following function is "
-			"skipped:\n");
+			"supportd by your kernel, following functions "
+			"are skipped:\n");
+
 	trace_for_each(trace) {
 		if (trace_is_invalid(trace) || !trace_is_enable(trace) ||
 		    !trace_is_func(trace))
 			continue;
 
 		if (!support_feat_args_ext && trace->arg_count > 6) {
+			pr_warn("\t%s\n", trace->name);
+			trace_set_invalid(trace);
+		}
+	}
+
+	support_btf_modules = kernel_has_config("DEBUG_INFO_BTF_MODULES");
+	if (!support_btf_modules)
+		pr_warn("CONFIG_DEBUG_INFO_BTF_MODULES is not supported "
+			"by your kernel, following functions are "
+			"skipped:\n");
+
+	trace_for_each(trace) {
+		if (trace_is_invalid(trace) || !trace_is_enable(trace) ||
+		    !trace_is_func(trace))
+			continue;
+
+		if (!support_btf_modules && !btf_get_type(trace->name)) {
 			pr_warn("\t%s\n", trace->name);
 			trace_set_invalid(trace);
 		}

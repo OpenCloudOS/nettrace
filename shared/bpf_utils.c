@@ -114,20 +114,28 @@ exist:;
 	return 0;
 }
 
-int btf_get_arg_count(char *name)
+static struct btf *local_btf;
+const struct btf_type *btf_get_type(char *name)
 {
-	struct btf *local_btf = btf__load_vmlinux_btf();
 	const struct btf_type *t;
 	int id;
 
 	if (!local_btf)
-		return -ENOTSUP;
+		local_btf= btf__load_vmlinux_btf();
 
 	id = btf__find_by_name(local_btf, name);
 	if (id < 0)
-		return -ENOENT;
+		return NULL;
 
 	t = btf__type_by_id(local_btf, id);
+	return t;
+}
+
+int btf_get_arg_count(char *name)
+{
+	const struct btf_type *t;
+
+	t = btf_get_type(name);
 	if (!t)
 		return -ENOENT;
 
