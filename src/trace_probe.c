@@ -24,7 +24,7 @@ static void probe_trace_attach_manual(char *prog_name, char *func,
 
 	prog = bpf_pbn(skel->obj, prog_name);
 	if (!prog) {
-		pr_warn("failed to find prog %s\n", prog_name);
+		pr_verb("failed to find prog %s\n", prog_name);
 		return;
 	}
 
@@ -40,7 +40,7 @@ again:
 					       func, retprobe);
 
 	if (err && !legacy) {
-		pr_warn("retring to attach in legacy mode, prog=%s, func=%s\n",
+		pr_verb("retring to attach in legacy mode, prog=%s, func=%s\n",
 			prog_name, func);
 		legacy = true;
 		goto again;
@@ -134,7 +134,7 @@ static bool is_trace_supported(trace_t *trace)
 	kprobe__destroy(tmp);
 
 	if (err)
-		pr_warn("kernel feature probe failed for trace: %s\n",
+		pr_verb("kernel feature probe failed for trace: %s\n",
 			trace->prog);
 	else
 		pr_debug("kernel feature probe success for trace: %s\n",

@@ -395,7 +395,7 @@ static int trace_prepare_traces()
 
 		sprintf(name, "%s.", trace->name);
 		if (sym_search_pattern(name, func, true) == SYM_NOT_EXIST) {
-			pr_warn("kernel function %s not founded, skipped\n",
+			pr_verb("kernel function %s not founded, skipped\n",
 				trace->name);
 			trace_set_invalid(trace);
 			continue;
@@ -540,7 +540,7 @@ int trace_pre_load()
 
 		prog = bpf_pbn(trace_ctx.obj, trace->prog);
 		if (!prog) {
-			pr_warn("prog: %s not founded\n", trace->prog);
+			pr_verb("prog: %s not founded\n", trace->prog);
 			continue;
 		}
 		bpf_program__set_autoload(prog, false);
@@ -554,7 +554,7 @@ check_ret:
 		sprintf(kret_name, "ret%s", trace->prog);
 		prog = bpf_pbn(trace_ctx.obj, kret_name);
 		if (!prog) {
-			pr_warn("prog: %s not founded\n", kret_name);
+			pr_verb("prog: %s not founded\n", kret_name);
 			continue;
 		}
 		bpf_program__set_autoload(prog, false);

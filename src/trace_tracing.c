@@ -49,7 +49,7 @@ static void tracing_trace_attach_manual(char *prog_name, char *func)
 
 	prog = bpf_pbn(skel->obj, prog_name);
 	if (!prog) {
-		pr_warn("failed to find prog %s\n", prog_name);
+		pr_verb("failed to find prog %s\n", prog_name);
 		return;
 	}
 	bpf_program__set_attach_target(prog, 0, func);
