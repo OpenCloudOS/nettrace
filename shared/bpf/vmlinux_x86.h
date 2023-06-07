@@ -8733,6 +8733,7 @@ struct sock {
 	unsigned int sk_gso_max_size;
 	gfp_t sk_allocation;
 	__u32 sk_txhash;
+	unsigned int		__sk_flags_offset[0];
 	u8 sk_padding: 1;
 	u8 sk_kern_sock: 1;
 	u8 sk_no_check_tx: 1;

@@ -323,6 +323,19 @@ err:
 	return -1;
 }
 
+static __always_inline u8 sk_get_protocol(struct sock *sk)
+{
+	u32 flags = _(((u32 *)(&sk->__sk_flags_offset))[0]);
+	u8 l4_proto;
+
+#ifdef CONFIG_CPU_BIG_ENDIAN
+	l4_proto = (flags << 8) >> 24;
+#else
+	l4_proto = (flags << 16) >> 24;
+#endif
+	return l4_proto;
+}
+
 static try_inline int __probe_parse_sk(parse_ctx_t *ctx)
 {
 	struct inet_connection_sock *icsk;
@@ -354,15 +367,17 @@ static try_inline int __probe_parse_sk(parse_ctx_t *ctx)
 	if (FILTER_CHECK(ctx, l3_proto, l3_proto))
 		goto err;
 
+#ifdef COMPAT_MODE
 #ifdef BPF_FEAT_SK_PRPTOCOL_LEGACY
-	u32 flags = _(((u32 *)(&sk->__sk_flags_offset))[0]);
-#ifdef CONFIG_CPU_BIG_ENDIAN
-	l4_proto = (flags << 8) >> 24;
-#else
-	l4_proto = (flags << 16) >> 24;
-#endif
+	l4_proto = sk_get_protocol(sk);
 #else
 	l4_proto = _C(sk, sk_protocol);
+#endif
+#else
+	if (bpf_core_field_size(sk->sk_protocol) == 2)
+		l4_proto = _C(sk, sk_protocol);
+	else
+		l4_proto = sk_get_protocol(sk);
 #endif
 
 	if (l4_proto == IPPROTO_IP)
