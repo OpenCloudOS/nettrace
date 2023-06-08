@@ -84,6 +84,9 @@ nettrace \- Linux系统下的网络报文跟踪、网络问题诊断工具
 \fB\fC\-\-sock\fR
 启用套接口模式。这个模式下，不会再跟踪报文，而会跟踪套接口。
 .TP
+\fB\fC\-\-monitor\fR
+启用监控模式。一种轻量化的实时监控系统中网络异常的模式（对内核版本有一定要求）。
+.TP
 \fB\fC\-\-hooks\fR
 打印netfilter上的钩子函数
 .TP
@@ -287,7 +290,8 @@ end trace...
 丢包的所有的钩子函数，这里只有\fB\fCiptables\fR一个钩子函数。
 .SS sock跟踪
 .PP
-套接口跟踪在原理上与skb的basic模式很类似，只不过跟踪对象从skb换成了sock。常规的过滤参数，如ip、端口等，在该模式下都可以直接使用，基本用法如下所示：
+套接口跟踪在原理上与skb的basic模式很类似，只不过跟踪对象从skb换成了sock。
+常规的过滤参数，如ip、端口等，在该模式下都可以直接使用，基本用法如下所示：
 .PP
 .RS
 .nf
@@ -306,6 +310,41 @@ begin trace...
 .RE
 .PP
 其中，\fB\fCinfo\fR里显示的内容分别是：报文在外数量、报文重传数量。\fB\fCtimer\fR显示的为当前套接口上的定时器和超时时间。目前，信息还在不断完善中。
+.SS monitor模式
+.PP
+常规的网络定位手段，包括上面的报文跟踪、诊断等方式，由于开销过大，不适合在生产环境中
+部署和常态化运行。监控模式能够提供一种更加轻量级别的网络异常、丢包监控。由于这种模式
+是基于\fB\fCTRACING\fR类型的BPF，因此其对于内核版本有较高的要求。以下是内核版本要求：
+.TS
+allbox;
+cb cb cb cb
+l l l l
+l l l l
+l l l l
+.
+TencentOS	开源版本	BPF特性	monitor
+5.4.119\-19.0009	5.5	TRACING	可用，不可监控内核模块中的函数和参数个数超过6的内核函数
+开发中	5.11	BTF_MODULES	可用，不可监控参数个数超过6的内核函数
+开发中	开发中	TRACING支持6+参数	完全可用
+.TE
+.PP
+其中，“TRACING支持6+参数”目前正在开发中，具体进展可参见：
+.PP
+bpf, x86: allow function arguments up to 12 for TRACING \[la]https://lore.kernel.org/bpf/20230607125911.145345-1-imagedong@tencent.com/\[ra]
+.PP
+基本用法（在内核特性完全支持的情况下）：
+.PP
+.RS
+.nf
+$ nettrace \-\-monitor
+begin trace...
+[25.167980] [nft_do_chain        ] ICMP: 192.168.122.1 \-> 192.168.122.9 ping request, seq: 1, id: 1523 *iptables table:filter, chain:INPUT* *packet is dropped by iptables/iptables\-nft*
+[25.167996] [kfree_skb           ] ICMP: 192.168.122.1 \-> 192.168.122.9 ping request, seq: 1, id: 1523, reason: NETFILTER_DROP, nf_hook_slow+0xa8
+[25.168000] [nf_hook_slow        ] ICMP: 192.168.122.1 \-> 192.168.122.9 ping request, seq: 1, id: 1523 *ipv4 in chain: INPUT* *packet is dropped by netfilter (NF_DROP)*
+.fi
+.RE
+.PP
+监控模式下，也可以使用普通模式的下各种参数，如报文过滤、\fB\fC\-\-detail\fR详情显示等。
 .SH REQUIREMENTS
 .PP
 内核需要支持\fB\fCCONFIG_BPF\fR, \fB\fCCONFIG_KPROBE\fR, \fB\fCCONFIG_DEBUG_INFO_BTF\fR(可选)功能
