@@ -63,6 +63,9 @@ print_trace:
 		if (status & TRACE_INVALID)
 			sprintf_end(buf, ",%s", PFMT_WARN_STR("invalid"));
 
+		if (trace->monitor)
+			sprintf_end(buf, ",%s", PFMT_WARN_STR("monitor"));
+
 		/* skip the prefix of __trace_ */
 		name = trace->prog + TRACE_PREFIX_LEN - 1;
 		if (buf[0]) {

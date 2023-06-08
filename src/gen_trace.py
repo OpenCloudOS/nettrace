@@ -117,6 +117,9 @@ def get_arg_count(name):
             btf_data = btf_file.read()
     reg_text = f"'{name}' type_id=([0-9]+)"
     match = re.search(reg_text, btf_data)
+    if not match:
+        return 0
+
     type_id = match.group(1)
     match = re.search(f"\\[{type_id}\\].*vlen=([0-9]+)", btf_data)
     return match.group(1)
@@ -197,9 +200,16 @@ def gen_trace(trace, group, p_name):
         if 'skb' in trace or 'sock' in trace:
             arg_count = '0'
             if 'monitor' in trace:
-                trace['arg_count'] = get_arg_count(target)
-                arg_count = trace['arg_count']
-                fields_str += append_trace_field('arg_count', trace, 'raw')
+                if 'arg_count' not in trace:
+                    trace['arg_count'] = get_arg_count(target)
+                    arg_count = trace['arg_count']
+                else:
+                    arg_count = trace['arg_count']
+                if not arg_count:
+                    print(f"BTF not found for {target}, skip monitor", file=sys.stderr)
+                    trace['monitor'] = 0
+                else:
+                    fields_str += append_trace_field('arg_count', trace, 'raw')
             if 'skb' in trace:
                 skb_index = int(trace["skb"]) + 1
                 skb_str = f'\n\t.skb = {skb_index},'

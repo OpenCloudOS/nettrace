@@ -34,6 +34,7 @@ children:
         msg: packet is dropped by GRO
     - name: enqueue_to_backlog:0
       analyzer: ret
+      monitor: 1
       rules:
       - <<: *rule_ret_err
         msg: failed to enqeueu to CPU backlog
@@ -53,6 +54,7 @@ children:
         msg: packet is redirected by XDP program
     - name: xdp_do_generic_redirect:1
       analyzer: ret
+      monitor: 1
       rules:
       - <<: *rule_ret_err
         msg: XDP failed to redirect skb
@@ -70,6 +72,7 @@ children:
     children:
     - name: __dev_queue_xmit:0
       analyzer: ret
+      monitor: 1
       rules:
       - <<: *rule_ret_err
         msg: failed to queue packet to qdisc
@@ -80,6 +83,7 @@ children:
         msg: skb is successfully sent to the NIC driver
     - name: pfifo_enqueue
       analyzer: qdisc
+      monitor: 1
       target: pfifo_enqueue
       rules:
       - exp: ne 0
@@ -165,6 +169,7 @@ children:
         cond: '[ $(verlte "$(uname -r)" "5.16") -eq -1 ]' # valid when kernel < 5.16
         backup: *ipt_do_table
       analyzer: iptable
+      monitor: 1
       target: ipt_do_table
       rules:
       - exp: eq 0
@@ -192,6 +197,7 @@ children:
         msg: NAT happens (packet address will change)
         level: warn
     - name: nf_hook_slow
+      monitor: 1
       analyzer: nf
       rules:
       - exp: eq -1
@@ -214,6 +220,8 @@ children:
     - tcp_packet:1
     - name: tcp_in_window:4
       analyzer: ret
+      monitor: 1
+      arg_count: 7
       rules:
       - exp: eq 0
         level: warn
@@ -326,6 +334,7 @@ children:
         adv: check your target tcp port
     - name: inet6_lookup_listener:2
       analyzer: ret
+      monitor: 1
       rules:
       - exp: eq 0
         level: warn
