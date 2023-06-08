@@ -111,19 +111,19 @@ children:
     visual: true
     children:
     - name: br_nf_pre_routing:1
-      analysis: ret
+      analyzer: ret
       msg: ebtable in PREROUTING
       rules: *rules_nf
     - name: br_nf_forward_ip:1
-      analysis: ret
+      analyzer: ret
       msg: ebtable in FORWARD
       rules: *rules_nf
     - name: br_nf_forward_arp:1
-      analysis: ret
+      analyzer: ret
       msg: ebtable in FORWARD
       rules: *rules_nf
     - name: br_nf_post_routing:1
-      analysis: ret
+      analyzer: ret
       msg: ebtable in POST_ROUTING
       rules: *rules_nf
   - name: arp
@@ -213,7 +213,7 @@ children:
     - resolve_normal_ct:2
     - tcp_packet:1
     - name: tcp_in_window:4
-      analysis: ret
+      analyzer: ret
       rules:
       - exp: eq 0
         level: warn
