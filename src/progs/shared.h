@@ -12,16 +12,18 @@
 	bool hooks;			\
 	bool ready;			\
 	bool stack;			\
+	bool pkt_fixed;			\
 	u16  stack_funs[MAX_FUNC_STACK];
 
 #include <skb_shared.h>
 
-typedef struct __attribute__((__packed__)) {
+typedef struct {
 	union {
 		packet_t	pkt;
 		sock_t		ske;
 	};
 	u64		key;
+	u64		retval;
 	u32		func;
 #ifdef BPF_FEAT_STACK_TRACE
 	u32		stack_id;
@@ -29,7 +31,7 @@ typedef struct __attribute__((__packed__)) {
 	int		__event_filed[0];
 } event_t;
 
-typedef struct __attribute__((__packed__)) {
+typedef struct {
 	packet_t	pkt;
 	u64		key;
 	u32		func;
@@ -48,17 +50,17 @@ typedef struct {
 } pure_event_t;
 
 #define DEFINE_EVENT(name, fields...)		\
-typedef struct __attribute__((__packed__)) {	\
+typedef struct {				\
 	event_t event;				\
 	int __event_filed[0];			\
 	fields					\
 } name;						\
-typedef struct __attribute__((__packed__)) {	\
+typedef struct {				\
 	detail_event_t event;			\
 	int __event_filed[0];			\
 	fields					\
 } detail_##name;				\
-typedef struct __attribute__((__packed__)) {	\
+typedef struct {				\
 	fields					\
 } pure_##name;
 #define event_field(type, name) type name;
@@ -104,13 +106,36 @@ typedef enum trace_mode {
 	TRACE_MODE_TIMELINE,
 	TRACE_MODE_DIAG,
 	TRACE_MODE_SOCK,
+	TRACE_MODE_MONITOR,
 } trace_mode_t;
+
+enum rule_type {
+	/* equal */
+	RULE_RETURN_EQ = 1,
+	/* not equal */
+	RULE_RETURN_NE,
+	/* less than */
+	RULE_RETURN_LT,
+	/* greater then */
+	RULE_RETURN_GT,
+	/* in range */
+	RULE_RETURN_RANGE,
+	/* always active this rule */
+	RULE_RETURN_ANY,
+};
+
+#define MAX_RULE_COUNT	8
+typedef struct {
+	int expected[MAX_RULE_COUNT];
+	int op[MAX_RULE_COUNT];
+} rules_ret_t;
 
 #define TRACE_MODE_BASIC_MASK		(1 << TRACE_MODE_BASIC)
 #define TRACE_MODE_TIMELINE_MASK	(1 << TRACE_MODE_TIMELINE)
 #define TRACE_MODE_DIAG_MASK		(1 << TRACE_MODE_DIAG)
 #define TRACE_MODE_DROP_MASK		(1 << TRACE_MODE_DROP)
 #define TRACE_MODE_SOCK_MASK		(1 << TRACE_MODE_SOCK)
+#define TRACE_MODE_MONITOR_MASK		(1 << TRACE_MODE_MONITOR)
 
 #define __MACRO_SIZE(macro)	sizeof(#macro)
 #define MACRO_SIZE(macro)	__MACRO_SIZE(macro)

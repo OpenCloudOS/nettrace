@@ -13,6 +13,13 @@
 #define __nt_placehold_arg_3		3,
 #define __nt_placehold_arg_4		4,
 #define __nt_placehold_arg_5		5,
+#define __nt_placehold_arg_6		6,
+#define __nt_placehold_arg_7		7,
+#define __nt_placehold_arg_8		8,
+#define __nt_placehold_arg_9		9,
+#define __nt_placehold_arg_10		10,
+#define __nt_placehold_arg_11		11,
+#define __nt_placehold_arg_12		12,
 
 #define ____nt_ternary_take(a, b, c)	nt_take_2th(a b, c)
 #define __nt_ternary_take(a, b, c)	\
@@ -33,7 +40,7 @@ typedef struct {
 	u16	dport;
 } l4_min_t;
 
-typedef struct __attribute__((__packed__)) {
+typedef struct {
 	u64	ts;
 	union {
 		struct {
@@ -79,7 +86,7 @@ typedef struct __attribute__((__packed__)) {
 	u8 pad;
 } packet_t;
 
-typedef struct __attribute__((__packed__)) {
+typedef struct {
 	u64	ts;
 	union {
 		struct {

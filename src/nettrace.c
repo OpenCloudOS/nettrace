@@ -48,6 +48,7 @@ static void do_parse_args(int argc, char *argv[])
 		},
 		{
 			.lname = "force", .dest = &trace_args->force,
+			.type = OPTION_BOOL,
 			.desc = "skip some check and force load nettrace",
 		},
 		{
@@ -111,6 +112,18 @@ static void do_parse_args(int argc, char *argv[])
 			.lname = "sock", .dest = &trace_args->sock,
 			.type = OPTION_BOOL,
 			.desc = "enable 'sock' mode",
+		},
+		{
+			.lname = "monitor", .dest = &trace_args->monitor,
+			.type = OPTION_BOOL,
+			.desc = "enable 'monitor' mode",
+		},
+		{
+			.lname = "pkt-fixed", .dest = &bpf_args->pkt_fixed,
+			.type = OPTION_BOOL,
+			.desc = "set this option if you are sure the target "
+				"packet is not NATed to get better "
+				"performance",
 		},
 		{ .type = OPTION_BLANK },
 		{
@@ -184,14 +197,12 @@ static void do_exit(int code)
 
 int main(int argc, char *argv[])
 {
-	trace_ops_t *ops = &probe_ops;
-
 	init_trace_group();
 	do_parse_args(argc, argv);
 
-	set_trace_ops(&probe_ops);
 	if (trace_prepare())
 		goto err;
+
 	if (trace_bpf_load_and_attach()) {
 		pr_err("failed to load kprobe-based bpf\n");
 		goto err;

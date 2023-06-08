@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #include <sys_utils.h>
+#include <bpf/btf.h>
 
 #include "bpf_utils.h"
 
@@ -111,4 +112,36 @@ exist:;
 	ioctl(efd, PERF_EVENT_IOC_SET_BPF, fd);
 
 	return 0;
+}
+
+static struct btf *local_btf;
+const struct btf_type *btf_get_type(char *name)
+{
+	const struct btf_type *t;
+	int id;
+
+	if (!local_btf)
+		local_btf= btf__load_vmlinux_btf();
+
+	id = btf__find_by_name(local_btf, name);
+	if (id < 0)
+		return NULL;
+
+	t = btf__type_by_id(local_btf, id);
+	return t;
+}
+
+int btf_get_arg_count(char *name)
+{
+	const struct btf_type *t;
+
+	t = btf_get_type(name);
+	if (!t)
+		return -ENOENT;
+
+	t = btf__type_by_id(local_btf, t->type);
+	if (!t)
+		return -ENOENT;
+
+	return btf_vlen(t);
 }

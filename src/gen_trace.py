@@ -2,6 +2,7 @@
 """ script that generate trace group info """
 import sys
 import yaml
+import re
 
 global_status = {}
 global_names = {}
@@ -108,6 +109,19 @@ def gen_name(name, is_trace=False):
     return name
 
 
+btf_data = None
+def get_arg_count(name):
+    global btf_data
+    if not btf_data:
+        with open("btf.raw", 'r', encoding='utf-8') as btf_file:
+            btf_data = btf_file.read()
+    reg_text = f"'{name}' type_id=([0-9]+)"
+    match = re.search(reg_text, btf_data)
+    type_id = match.group(1)
+    match = re.search(f"\\[{type_id}\\].*vlen=([0-9]+)", btf_data)
+    return match.group(1)
+
+
 def gen_rules(rules, name):
     rule_str, init_str = '', ''
     for index, rule in enumerate(rules):
@@ -136,6 +150,28 @@ def gen_rules(rules, name):
     return (rule_str, init_str)
 
 
+def append_trace_field(field, trace, type='string'):
+    if type == 'string':
+        return f'\n\t.{field} = "{trace[field]}",' if field in trace else ''
+    if type == 'bool':
+        value = 'true' if trace.get(field) else 'false'
+        return f'\n\t.{field} = {value},'
+    if type == 'raw':
+        if field in trace:
+            return f'\n\t.{field} = {trace[field]},'
+    return ''
+
+def append_filed(field, value, type='string'):
+    if type == 'string':
+        return f'\n\t.{field} = "{value}",'
+    if type == 'bool':
+        value = 'true' if value else 'false'
+        return f'\n\t.{field} = {value},'
+    if type == 'raw':
+        return f'\n\t.{field} = {value},'
+    return ''
+
+
 def gen_trace(trace, group, p_name):
     name = gen_name(trace["name"], True)
     trace_name = 'trace_' + name
@@ -145,8 +181,10 @@ def gen_trace(trace, group, p_name):
     index_str = f'#define INDEX_{name} {global_status["trace_index"]}\n'
     rule_str = ''
     init_str = ''
+    fields_str = ''
     skb_index = 0
     sk_index = 0
+    target = trace.get('target') or trace['name']
 
     if 'tp' in trace:
         trace_type = 'TRACE_TP'
@@ -157,13 +195,18 @@ def gen_trace(trace, group, p_name):
     else:
         trace_type = 'TRACE_FUNCTION'
         if 'skb' in trace or 'sock' in trace:
+            arg_count = '0'
+            if 'monitor' in trace:
+                trace['arg_count'] = get_arg_count(target)
+                arg_count = trace['arg_count']
+                fields_str += append_trace_field('arg_count', trace, 'raw')
             if 'skb' in trace:
                 skb_index = int(trace["skb"]) + 1
                 skb_str = f'\n\t.skb = {skb_index},'
             if 'sock' in trace:
                 sk_index = int(trace["sock"]) + 1
             if 'custom' not in trace:
-                probe_str = f'\tFN({name}, {skb_index}, {sk_index})\t\\\n'
+                probe_str = f'\tFN({name}, {skb_index}, {sk_index}, {arg_count})\t\\\n'
             else:
                 probe_str = f'\tFNC({name})\t\\\n'
         else:
@@ -178,26 +221,26 @@ def gen_trace(trace, group, p_name):
         (rule_str, _init_str) = gen_rules(rules, trace_name)
         init_str += _init_str
 
-    cond_str = f'\n\t.cond = "{trace["cond"]}",' if 'cond' in trace else ''
-    reg_str = f'\n\t.regex = "{trace["regex"]}",' if 'regex' in trace else ''
-    msg_str = f'\n\t.msg = "{trace["msg"]}",' if 'msg' in trace else ''
+    fields_str += append_trace_field('cond', trace)
+    fields_str += append_trace_field('regex', trace)
+    fields_str += append_trace_field('msg', trace)
+    fields_str += append_trace_field('is_backup', trace, 'bool')
+    fields_str += append_trace_field('probe', trace, 'bool')
+    fields_str += append_trace_field('monitor', trace, 'raw')
+    fields_str += append_filed('name', target)
+
     default = True
     if 'default' in trace:
         default = trace['default']
     elif 'default' in group:
         default = group['default']
-    default = 'true' if default else 'false'
-    default = f'\n\t.def = {default},'
-    target = trace.get('target') or trace['name']
-    is_backup = 'true' if trace.get('is_backup') else 'false'
+    fields_str += append_filed('def', default, 'bool')
+
     define_str = f'''trace_t {trace_name} = {{
-\t.name = "{target}",
-\t.desc = "{trace.get('desc') or ''}",{skb_str}{cond_str}{default}
-\t.type = {trace_type},{reg_str}{analyzer}{msg_str}
+\t.desc = "{trace.get('desc') or ''}",{skb_str}
+\t.type = {trace_type},{analyzer}{fields_str}
 \t.index = INDEX_{name},
 \t.prog = "__trace_{name}",
-\t.is_backup = {is_backup},
-\t.probe = {'true' if trace.get('probe') else 'false'},
 \t.parent = &{p_name},
 \t.sk = {sk_index},
 \t.rules =  LIST_HEAD_INIT({trace_name}.rules),

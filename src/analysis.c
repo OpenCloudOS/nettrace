@@ -289,12 +289,22 @@ free_ctx:
 	analy_ctx_free(ctx);
 }
 
-static int try_run_analyzer(trace_t *trace, analyzer_t *analyzer,
-			    analy_entry_t *entry)
+static int try_run_entry(trace_t *trace, analyzer_t *analyzer,
+			 analy_entry_t *entry)
 {
 	if (analyzer && (analyzer->mode & (1 << trace_ctx.mode)) &&
 	    analyzer->analy_entry)
 		return analyzer->analy_entry(trace, entry);
+
+	return RESULT_CONT;
+}
+
+static int try_run_exit(trace_t *trace, analyzer_t *analyzer,
+			analy_exit_t *exit)
+{
+	if (analyzer && (analyzer->mode & (1 << trace_ctx.mode)) &&
+	    analyzer->analy_exit)
+		return analyzer->analy_exit(trace, exit);
 
 	return RESULT_CONT;
 }
@@ -340,7 +350,7 @@ void tl_poll_handler(void *raw_ctx, int cpu, void *data, u32 size)
 
 	entry->ctx = analy_ctx;
 	entry->fake_ctx = fake;
-	switch (try_run_analyzer(trace, analyzer, entry)) {
+	switch (try_run_entry(trace, analyzer, entry)) {
 	case RESULT_CONSUME:
 		goto check_pending;
 	case RESULT_CONT:
@@ -349,7 +359,7 @@ void tl_poll_handler(void *raw_ctx, int cpu, void *data, u32 size)
 		break;
 	}
 
-	switch (try_run_analyzer(trace, trace->analyzer, entry)) {
+	switch (try_run_entry(trace, trace->analyzer, entry)) {
 	case RESULT_CONSUME:
 		goto check_pending;
 	case RESULT_CONT:
@@ -407,17 +417,33 @@ check_pending:
 	}
 }
 
+static inline void do_basic_poll(analy_entry_t *entry)
+{
+	trace_t *trace;
+
+	trace = get_trace_from_analy_entry(entry);
+	try_run_entry(trace, trace->analyzer, entry);
+
+	if (trace_ctx.mode == TRACE_MODE_MONITOR) {
+		analy_exit_t analy_exit = {
+			.event = {
+				.val = entry->event->retval,
+			},
+			.entry = entry,
+		};
+		try_run_exit(trace, trace->analyzer, &analy_exit);
+	}
+
+	analy_entry_handle(entry);
+}
+
 void basic_poll_handler(void *ctx, int cpu, void *data, u32 size)
 {
 	analy_entry_t entry = {
 		.event = data,
 		.cpu = cpu
 	};
-	trace_t *trace;
-
-	trace = get_trace_from_analy_entry(&entry);
-	try_run_analyzer(trace, trace->analyzer, &entry);
-	analy_entry_handle(&entry);
+	do_basic_poll(&entry);
 }
 
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -439,9 +465,7 @@ static void *do_async_poll(void *arg)
 		pthread_mutex_unlock(&mutex);
 
 		list_for_each_entry_safe(entry, pos, &head, list) {
-			trace = get_trace_from_analy_entry(entry);
-			try_run_analyzer(trace, trace->analyzer, entry);
-			analy_entry_handle(entry);
+			do_basic_poll(entry);
 			list_del(&entry->list);
 			analy_entry_free(entry);
 		}
@@ -513,6 +537,8 @@ static inline void rule_run(analy_entry_t *entry, trace_t *trace, int ret)
 		if (!hit)
 			continue;
 		entry->rule = rule;
+		if (!mode_has_context())
+			break;
 		switch (rule->level) {
 		case RULE_INFO:
 			break;
@@ -540,7 +566,8 @@ out:
 }
 
 DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_DIAG_MASK |
-			    TRACE_MODE_DROP_MASK)
+			    TRACE_MODE_DROP_MASK |
+			    TRACE_MODE_MONITOR_MASK)
 {
 	define_pure_event(drop_event_t, event, e->event);
 	char *reason = NULL, *sym_str, *info;
@@ -550,7 +577,7 @@ DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_DIAG_MASK |
 	sym = sym_parse(event->location);
 	sym_str = sym ? sym->desc : "unknow";
 
-	if (trace_ctx.mode == TRACE_MODE_DROP) {
+	if (!mode_has_context()) {
 		info = malloc(1024);
 		if (trace_ctx.drop_reason)
 			sprintf(info, ", reason: %s, %s", reason, sym_str);
@@ -595,7 +622,8 @@ out:
 	return RESULT_CONSUME;
 }
 
-DEFINE_ANALYZER_EXIT(ret, TRACE_MODE_DIAG_MASK)
+DEFINE_ANALYZER_EXIT(ret, TRACE_MODE_DIAG_MASK |
+			  TRACE_MODE_MONITOR_MASK)
 {
 	int ret = (int) e->event.val;
 
@@ -644,7 +672,8 @@ const char *pf_names[] = {
 };
 DEFINE_ANALYZER_ENTRY(nf, TRACE_MODE_DIAG_MASK |
 			  TRACE_MODE_BASIC_MASK |
-			  TRACE_MODE_TIMELINE_MASK)
+			  TRACE_MODE_TIMELINE_MASK |
+			  TRACE_MODE_MONITOR_MASK)
 {
 	define_pure_event(nf_hooks_event_t, event, e->event);
 	char *msg = malloc(1024), *extinfo;
@@ -681,7 +710,8 @@ DEFINE_ANALYZER_EXIT_FUNC_DEFAULT(nf)
 
 DEFINE_ANALYZER_ENTRY(iptable, TRACE_MODE_DIAG_MASK |
 			       TRACE_MODE_BASIC_MASK |
-			       TRACE_MODE_TIMELINE_MASK)
+			       TRACE_MODE_TIMELINE_MASK |
+			       TRACE_MODE_MONITOR_MASK)
 {
 	define_pure_event(nf_event_t, event, e->event);
 	char *msg = malloc(1024);
@@ -702,7 +732,8 @@ DEFINE_ANALYZER_EXIT_FUNC_DEFAULT(iptable)
 
 DEFINE_ANALYZER_ENTRY(qdisc, TRACE_MODE_DIAG_MASK |
 			     TRACE_MODE_BASIC_MASK |
-			     TRACE_MODE_TIMELINE_MASK)
+			     TRACE_MODE_TIMELINE_MASK |
+			     TRACE_MODE_MONITOR_MASK)
 {
 	define_pure_event(qdisc_event_t, event, e->event);
 	char *msg = malloc(1024);
