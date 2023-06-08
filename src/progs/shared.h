@@ -92,7 +92,7 @@ DEFINE_EVENT(qdisc_event_t,
 	event_field(u32, flags)
 )
 
-#define MAX_EVENT_SIZE sizeof(nf_hooks_event_t)
+#define MAX_EVENT_SIZE sizeof(detail_nf_hooks_event_t)
 
 typedef struct __attribute__((__packed__)) {
 	u64 ts;
