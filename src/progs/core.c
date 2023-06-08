@@ -285,7 +285,8 @@ DEFINE_KPROBE_SKB_TARGET(ipt_do_table_legacy, ipt_do_table, 1)
 	struct nf_hook_state *state = nt_regs_ctx(ctx, 2);
 	struct xt_table *table = nt_regs_ctx(ctx, 3);
 
-	return bpf_ipt_do_table(ctx, table, state);
+	bpf_ipt_do_table(ctx, table, state);
+	return 0;
 }
 
 DEFINE_KPROBE_SKB(ipt_do_table, 2)
@@ -293,66 +294,67 @@ DEFINE_KPROBE_SKB(ipt_do_table, 2)
 	struct nf_hook_state *state = nt_regs_ctx(ctx, 3);
 	struct xt_table *table = nt_regs_ctx(ctx, 1);
 
-	return bpf_ipt_do_table(ctx, table, state);
+	bpf_ipt_do_table(ctx, table, state);
+	return 0;
 }
 
-// DEFINE_KPROBE_SKB(nf_hook_slow, 1)
-// {
-// 	struct nf_hook_state *state;
-// 	size_t size;
-// 	int num;
+DEFINE_KPROBE_SKB(nf_hook_slow, 1)
+{
+	struct nf_hook_state *state;
+	size_t size;
+	int num;
 
-// 	state = nt_regs_ctx(ctx, 2);
-// 	if (ctx->args->hooks)
-// 		goto on_hooks;
+	state = nt_regs_ctx(ctx, 2);
+	if (ctx->args->hooks)
+		goto on_hooks;
 
-// 	DECLARE_EVENT(nf_event_t, e)
+	DECLARE_EVENT(nf_event_t, e)
 
-// 	size = ctx->size;
-// 	ctx->size = 0;
-// 	if (handle_entry(ctx))
-// 		return 0;
+	size = ctx->size;
+	ctx->size = 0;
+	if (handle_entry(ctx))
+		return 0;
 
-// 	e->hook = _C(state, hook);
-// 	e->pf = _C(state, pf);
-// 	EVENT_OUTPUT_PTR(ctx->regs, ctx->e, size);
-// 	return 0;
+	e->hook = _C(state, hook);
+	e->pf = _C(state, pf);
+	EVENT_OUTPUT_PTR(ctx->regs, ctx->e, size);
+	return 0;
 
-// on_hooks:;
-// 	struct nf_hook_entries *entries = nt_regs_ctx(ctx, 3);
-// 	__DECLARE_EVENT(hooks, nf_hooks_event_t, hooks_event)
+on_hooks:;
+	struct nf_hook_entries *entries = nt_regs_ctx(ctx, 3);
+	__DECLARE_EVENT(hooks, nf_hooks_event_t, hooks_event)
 
-// 	size = ctx->size;
-// 	ctx->size = 0;
-// 	if (handle_entry(ctx))
-// 		return 0;
+	size = ctx->size;
+	ctx->size = 0;
+	if (handle_entry(ctx))
+		return 0;
 
-// 	hooks_event->hook = _C(state, hook);
-// 	hooks_event->pf = _C(state, pf);
-// 	num = _(entries->num_hook_entries);
+	hooks_event->hook = _C(state, hook);
+	hooks_event->pf = _C(state, pf);
+	num = _(entries->num_hook_entries);
 
-// #define COPY_HOOK(i) do {					\
-// 	if (i >= num) goto out;					\
-// 	hooks_event->hooks[i] = (u64)_(entries->hooks[i].hook);	\
-// } while (0)
+#define COPY_HOOK(i) do {					\
+	if (i >= num) goto out;					\
+	hooks_event->hooks[i] = (u64)_(entries->hooks[i].hook);	\
+} while (0)
 
-// 	COPY_HOOK(0);
-// 	COPY_HOOK(1);
-// 	COPY_HOOK(2);
-// 	COPY_HOOK(3);
-// 	COPY_HOOK(4);
-// 	COPY_HOOK(5);
+	COPY_HOOK(0);
+	COPY_HOOK(1);
+	COPY_HOOK(2);
+	COPY_HOOK(3);
+	COPY_HOOK(4);
+	COPY_HOOK(5);
 
-// 	/* following code can't unroll, don't know why......:
-// 	 * 
-// 	 * #pragma clang loop unroll(full)
-// 	 * 	for (i = 0; i < 8; i++)
-// 	 * 		COPY_HOOK(i);
-// 	 */
-// out:
-// 	EVENT_OUTPUT_PTR(ctx->regs, ctx->e, size);
-// 	return 0;
-// }
+	/* following code can't unroll, don't know why......:
+	 * 
+	 * #pragma clang loop unroll(full)
+	 * 	for (i = 0; i < 8; i++)
+	 * 		COPY_HOOK(i);
+	 */
+out:
+	EVENT_OUTPUT_PTR(ctx->regs, ctx->e, size);
+	return 0;
+}
 
 static __always_inline int
 bpf_qdisc_handle(context_t *ctx, struct Qdisc *q)
@@ -378,12 +380,16 @@ bpf_qdisc_handle(context_t *ctx, struct Qdisc *q)
 
 DEFINE_KPROBE_SKB(sch_direct_xmit, 1) {
 	struct Qdisc *q = nt_regs_ctx(ctx, 2);
-	return bpf_qdisc_handle(ctx, q);
+	bpf_qdisc_handle(ctx, q);
+
+	return 0;
 }
 
 DEFINE_KPROBE_SKB(pfifo_enqueue, 1) {
 	struct Qdisc *q = nt_regs_ctx(ctx, 2);
-	return bpf_qdisc_handle(ctx, q);
+	bpf_qdisc_handle(ctx, q);
+
+	return 0;
 }
 
 #ifndef NT_DISABLE_NFT
