@@ -274,9 +274,17 @@ DEFINE_KPROBE_INIT(__netif_receive_skb_core_pskb,
 static try_inline int bpf_ipt_do_table(context_t *ctx, struct xt_table *table,
 				       struct nf_hook_state *state)
 {
+	char *table_name;
 	DECLARE_EVENT(nf_event_t, e, .hook = _C(state, hook))
 
-	bpf_probe_read(e->table, sizeof(e->table) - 1, _C(table, name));
+#ifndef COMPAT_MODE
+	if (bpf_core_type_exists(struct xt_table))
+		table_name = _C(table, name);
+	else
+#endif
+		table_name = _(table->name);
+
+	bpf_probe_read(e->table, sizeof(e->table) - 1, table_name);
 	return handle_entry(ctx);
 }
 
