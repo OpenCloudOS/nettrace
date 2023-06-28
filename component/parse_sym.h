@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#define MAX_SYM_LENGTH		128
+#define MAX_SYM_LENGTH		256
 #define MAX_SYM_ADDR_LENGTH	(MAX_SYM_LENGTH + 8)
 
 enum {
