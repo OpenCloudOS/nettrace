@@ -228,6 +228,7 @@ static try_inline int default_handle_entry(context_t *ctx)
 
 DEFINE_ALL_PROBES(KPROBE_DEFAULT, TP_DEFAULT, FNC)
 
+#ifndef BPF_FEAT_TRACING
 struct kfree_skb_args {
 	u64 pad;
 	void *skb;
@@ -235,29 +236,29 @@ struct kfree_skb_args {
 	unsigned short protocol;
 	int reason;
 };
+#else
+struct kfree_skb_args {
+	void *skb;
+	void *location;
+	u64 reason;
+};
+#endif
 
-#ifdef BPF_FEAT_TRACING
-DEFINE_TP(kfree_skb, skb, kfree_skb, 1)
+DEFINE_TP_INIT(kfree_skb, skb, kfree_skb)
 {
-	unsigned long location = (unsigned long)nt_regs_ctx(ctx, 2);
+	struct kfree_skb_args *args = ctx->regs;
 	int reason = 0;
 
 	if (bpf_core_type_exists(enum skb_drop_reason))
-		reason = (int)(unsigned long)nt_regs_ctx(ctx, 3);
-#else
-DEFINE_TP(kfree_skb, skb, kfree_skb, 8)
-{
-	struct kfree_skb_args *args = ctx->regs;
-	unsigned long location = (unsigned long)args->location;
-	int reason = 0;
+		reason = (int)args->reason;
+	else if (ARGS_GET_CONFIG(drop_reason))
+		reason = (int)_(args->reason);
 
-	if (ARGS_GET_CONFIG(drop_reason))
-		reason = _(args->reason);
-#endif
 	DECLARE_EVENT(drop_event_t, e)
 
-	e->location = location;
+	e->location = (unsigned long)args->location;
 	e->reason = reason;
+	ctx->skb = args->skb;
 
 	handle_entry(ctx);
 	handle_destroy(ctx);
@@ -277,11 +278,9 @@ static try_inline int bpf_ipt_do_table(context_t *ctx, struct xt_table *table,
 	char *table_name;
 	DECLARE_EVENT(nf_event_t, e, .hook = _C(state, hook))
 
-#ifndef COMPAT_MODE
 	if (bpf_core_type_exists(struct xt_table))
 		table_name = _C(table, name);
 	else
-#endif
 		table_name = _(table->name);
 
 	bpf_probe_read(e->table, sizeof(e->table) - 1, table_name);
@@ -435,28 +434,22 @@ DEFINE_KPROBE_INIT(nft_do_chain, nft_do_chain, .arg_count = 2)
 	if (handle_entry(ctx))
 		return 0;
 
-#ifndef COMPAT_MODE
 	if (bpf_core_type_exists(struct nft_pktinfo)) {
 		if (!bpf_core_field_exists(pkt->xt))
 			state = _C((struct nft_pktinfo___new *)pkt, state);
 		else
 			state = _C(&(pkt->xt), state);
-	} else
-#endif
-	{
+	} else {
 		/* don't use CO-RE, as nft may be a module */
 		state = _(pkt->xt.state);
 	}
 
 	chain = nt_regs_ctx(ctx, 2);
-#ifndef COMPAT_MODE
 	if (bpf_core_type_exists(struct nft_chain)) {
 		table = _C(chain, table);
 		chain_name = _C(chain, name);
 		table_name = _C(table, name);
-	} else
-#endif
-	{
+	} else {
 		table = _(chain->table);
 		chain_name = _(chain->name);
 		table_name = _(table->name);
