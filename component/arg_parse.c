@@ -4,6 +4,7 @@
 #include <malloc.h>
 #include <string.h>
 #include <stdlib.h>
+#include <inttypes.h>
 #define _LINUX_IN_H
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -94,15 +95,24 @@ found:
 			S_SET(bool, true);
 			break;
 		case OPTION_INT: {
-			int val = atoi(optarg);
+			char buf[32];
+			int val;
+
+			if (sscanf(optarg, "%d%s", &val, buf) != 1) {
+				printf("invalid arg value: %s\n",
+				       optarg);
+				goto err;
+			}
 			S_DST(int, val);
 			S_SET(bool, true);
 			break;
 		}
 		case OPTION_U16BE:
 		case OPTION_U16: {
-			int val = atoi(optarg);
-			if (val <=0 || val > 65535) {
+			char buf[32];
+			u16 val;
+
+			if (sscanf(optarg, "%hu%s", &val, buf) != 1) {
 				printf("invalid arg value: %s\n",
 				       optarg);
 				goto err;
@@ -114,8 +124,10 @@ found:
 			break;
 		}
 		case OPTION_U32: {
-			long val = atol(optarg);
-			if (val < 0 || val > 0xFFFFFFFF) {
+			char buf[32];
+			u32 val;
+
+			if (sscanf(optarg, "%u%s", &val, buf) != 1) {
 				printf("invalid arg value: %s\n",
 				       optarg);
 				goto err;
