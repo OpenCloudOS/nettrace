@@ -318,13 +318,13 @@ children:
     - tcp_v6_send_reset:1
     - tcp_v4_do_rcv:1
     - tcp_v6_do_rcv:1
-    - tcp_rcv_established:1:0
-    - tcp_rcv_state_process:1:0
-    - tcp_queue_rcv:1:0
-    - tcp_ack_probe:-1:0
-    - tcp_ack:1:0
-    - tcp_probe_timer:-1:0
-    - tcp_send_probe0:-1:0
+    - tcp_rcv_established:1/0
+    - tcp_rcv_state_process:1/0
+    - tcp_queue_rcv:1/0
+    - tcp_ack_probe/0
+    - tcp_ack:1/0
+    - tcp_probe_timer/0
+    - tcp_send_probe0/0
     - name: __inet_lookup_listener:2
       monitor: 1
       analyzer: ret
@@ -345,24 +345,23 @@ children:
     desc: tcp layer of packet out
     visiual: true
     children:
-    - name: __tcp_transmit_skb
-      sock: 0
+    - name: __tcp_transmit_skb/0
       rules:
       - exp: ne 0
         level: warn
         msg: failed to xmit skb to ip layer
-    - tcp_retransmit_timer:-1:0
-    - tcp_sendmsg_locked:-1:0
-    - __tcp_push_pending_frames:-1:0
+    - tcp_retransmit_timer/0
+    - tcp_sendmsg_locked/0
+    - __tcp_push_pending_frames/0
   - name: socket
     desc: socket releated hooks
     visiual: true
     children:
-    - name: inet_listen:-1:0
+    - name: inet_listen/0
       custom: true
-    - tcp_write_timer_handler:-1:0
-    - tcp_v4_destroy_sock:-1:0
-    - tcp_close:-1:0
+    - tcp_write_timer_handler/0
+    - tcp_v4_destroy_sock/0
+    - tcp_close/0
 - name: udp
   desc: udp protocol layer (L4) of the network stack
   children:

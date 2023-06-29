@@ -52,38 +52,26 @@ def parse_group(group):
         child = children[i]
         if 'backup' in child:
             child['backup']['is_backup'] = True
-        if not isinstance(child, str):
-            parse_group(child)
-            if 'names' in child:
-                parse_names(child, children)
-                continue
-            i += 1
-            name_split = child['name'].split(':')
-            if len(name_split) > 1:
-                child['name'] = name_split[0]
-                child['skb'] = int(name_split[1])
-                if len(name_split) > 2:
-                    child['sock'] = int(name_split[2])
-                    if child['skb'] < 0:
-                        del child['skb']
+
+        if isinstance(child, str):
+            children.remove(child)
+            child = {
+                "name": child
+            }
+            children.insert(i, child)
+
+        parse_group(child)
+        if 'names' in child:
+            parse_names(child, children)
             continue
-        children.remove(child)
-        data = child.split(':')
-        if len(data) <= 1:
-            child = {
-                "name": data[0]
-            }
-        else:
-            child = {
-                "name": data[0],
-                "skb": int(data[1])
-            }
-            if len(data) > 2:
-                child['sock'] = int(data[2])
-                if child['skb'] < 0:
-                    del child['skb']
-        children.insert(i, child)
         i += 1
+        name_split = child['name'].split(':')
+        if len(name_split) > 1:
+            child['skb'] = int(re.match(r'\d+', name_split[1]).group())
+        name_split = child['name'].split('/')
+        if len(name_split) > 1:
+            child['sock'] = int(re.match(r'\d+', name_split[1]).group())
+        child['name'] = re.match(r'[a-zA-Z_0-9]+', child['name']).group()
 
 
 def gen_group_init(group, name):
