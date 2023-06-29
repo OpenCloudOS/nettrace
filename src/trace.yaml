@@ -99,7 +99,7 @@ children:
     - tcf_classify:0
     - cls_bpf_classify:0
     - tcf_bpf_act:0
-  - name: ipvaln
+  - name: ipvlan
     desc: ipvlan network interface
     default: false
     visual: true
@@ -219,6 +219,7 @@ children:
     - resolve_normal_ct:2
     - tcp_packet:1
     - name: tcp_in_window:4
+      default: true
       analyzer: ret
       monitor: 1
       arg_count: 7
