@@ -22,6 +22,26 @@ extern trace_ops_t tracing_ops;
 extern trace_ops_t probe_ops;
 trace_ops_t *trace_ops_all[] = { &tracing_ops, &probe_ops };
 
+static bool trace_group_valid(trace_group_t *group)
+{
+	trace_group_t *pos;
+	trace_t *trace;
+
+	if (!list_empty(&group->traces)) {
+		list_for_each_entry(trace, &group->traces, list)
+			if (!trace_is_invalid(trace))
+				return true;
+		return false;
+	}
+
+	if (!list_empty(&group->children)) {
+		list_for_each_entry(pos, &group->children, list)
+			if (trace_group_valid(pos))
+				return true;
+	}
+	return false;
+}
+
 static void __print_trace_group(trace_group_t *group, int level)
 {
 	char prefix[32] = {}, buf[32], *name;
@@ -31,6 +51,9 @@ static void __print_trace_group(trace_group_t *group, int level)
 
 	for (; i< level; i++)
 		prefix[i] = '\t';
+
+	if (!trace_group_valid(group))
+		return;
 
 	pr_info("%s"PFMT_EMPH"%s"PFMT_END": %s\n", prefix, group->name,
 		group->desc);
