@@ -303,7 +303,7 @@ skip_trace:
 	case TRACE_MODE_MONITOR:
 		trace_for_each(trace) {
 			if (!trace->monitor) {
-				trace_set_invalid(trace);
+				trace_set_invalid_reason(trace, "monitor");
 				continue;
 			}
 			if (!trace_is_func(trace))
@@ -330,7 +330,7 @@ skip_trace:
 	trace_for_each_cond(trace, (!args->sock && trace->sk &&
 				    !trace->skb) ||
 				   (args->sock && !trace->sk))
-			trace_set_invalid(trace);
+			trace_set_invalid_reason(trace, "sock or sk mode");
 
 	if (args->ret) {
 		switch (trace_ctx.mode) {
@@ -374,7 +374,7 @@ static void trace_exec_cond()
 	trace_for_each(trace) {
 		if (trace->cond && execf(NULL, "%s; %s", cond_pre,
 					 trace->cond))
-			trace_set_invalid(trace);
+			trace_set_invalid_reason(trace, "cond");
 	}
 }
 
@@ -400,7 +400,7 @@ static int trace_prepare_traces()
 		if (sym_search_pattern(name, func, true) == SYM_NOT_EXIST) {
 			pr_verb("kernel function %s not founded, skipped\n",
 				trace->name);
-			trace_set_invalid(trace);
+			trace_set_invalid_reason(trace, "not found");
 			continue;
 		}
 		trace->status |= TRACE_ATTACH_MANUAL;
