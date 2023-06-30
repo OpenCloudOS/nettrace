@@ -209,7 +209,7 @@ static int trace_check_force()
 	pkt_args_t *pkt_args = &bpf_args->pkt;
 	trace_args_t *args = &trace_ctx.args;
 
-	if (args->drop || args->force || args->monitor)
+	if (args->drop || args->force || args->monitor || args->show_traces)
 		return 0;
 
 	if (ARGS_ENABLED(bpf_args, pid) || ARGS_ENABLED(pkt_args, saddr) ||
