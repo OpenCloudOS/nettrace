@@ -7,6 +7,7 @@
 #define _LINUX_IN_H
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <netinet/tcp.h>
 
 #include <sys_utils.h>
 
@@ -158,6 +159,20 @@ static const char *timer_name[] = {
 	[ICSK_TIME_LOSS_PROBE] = "loss_probe",
 	[ICSK_TIME_REO_TIMEOUT] = "reo_timeout",
 };
+static const char *state_name[] = {
+	[0] = "UNKNOW",
+	[TCP_ESTABLISHED] = "ESTABLISHED",
+	[TCP_SYN_SENT] = "SYN_SENT",
+	[TCP_SYN_RECV] = "SYN_RECV",
+	[TCP_FIN_WAIT1] = "FIN_WAIT1",
+	[TCP_FIN_WAIT2] = "FIN_WAIT2",
+	[TCP_TIME_WAIT] = "TIME_WAIT",
+	[TCP_CLOSE] = "CLOSE",
+	[TCP_CLOSE_WAIT] = "CLOSE_WAIT",
+	[TCP_LAST_ACK] = "LAST_ACK",
+	[TCP_LISTEN] = "LISTEN",
+	[TCP_CLOSING] = "CLOSING",
+};
 
 int ts_print_sock(char *buf, sock_t *ske, char *minfo, bool date_format)
 {
@@ -222,7 +237,8 @@ print_ip:
 
 	switch (l4) {
 	case IPPROTO_TCP:
-		BUF_FMT(" info:(%u %u)", ske->l4.tcp.packets_out,
+		BUF_FMT(" %s info:(%u %u)", state_name[ske->state],
+			ske->l4.tcp.packets_out,
 			ske->l4.tcp.retrans_out);
 	case IPPROTO_UDP:
 		hz = kernel_hz();
