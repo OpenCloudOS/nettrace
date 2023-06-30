@@ -319,12 +319,20 @@ children:
     - tcp_v4_do_rcv:1
     - tcp_v6_do_rcv:1
     - tcp_rcv_established:1/0
-    - tcp_rcv_state_process:1/0
+    - name: tcp_rcv_state_process:1/0
+      rules:
+      - exp: any
+        level: info
+        msg: TCP socket state has changed
     - tcp_queue_rcv:1/0
     - tcp_ack_probe/0
     - tcp_ack:1/0
     - tcp_probe_timer/0
-    - tcp_send_probe0/0
+    - name: tcp_send_probe0/0
+      rules:
+      - exp: any
+        level: info
+        msg: send zero-window probe packet
     - name: __inet_lookup_listener:2
       monitor: 1
       analyzer: ret
@@ -350,7 +358,6 @@ children:
       - exp: ne 0
         level: warn
         msg: failed to xmit skb to ip layer
-    - tcp_retransmit_timer/0
     - tcp_sendmsg_locked/0
     - __tcp_push_pending_frames/0
   - name: socket
@@ -359,9 +366,22 @@ children:
     children:
     - name: inet_listen/0
       custom: true
+      rules:
+      - exp: any
+        level: info
+        msg: TCP socket begin to listen
     - tcp_write_timer_handler/0
     - tcp_v4_destroy_sock/0
-    - tcp_close/0
+    - name: tcp_close/0
+      rules:
+      - exp: any
+        level: info
+        msg: TCP socket is closed
+    - name: tcp_retransmit_timer/0
+      rules:
+      - exp: any
+        level: info
+        msg: TCP retransmission timer out
 - name: udp
   desc: udp protocol layer (L4) of the network stack
   children:
