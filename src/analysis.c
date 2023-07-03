@@ -309,6 +309,68 @@ static int try_run_exit(trace_t *trace, analyzer_t *analyzer,
 	return RESULT_CONT;
 }
 
+static inline void rule_run_ret(analy_entry_t *entry, trace_t *trace, int ret)
+{
+	bool hit = false;
+	rule_t *rule;
+
+	list_for_each_entry(rule, &trace->rules, list) {
+		switch (rule->type) {
+		case RULE_RETURN_ANY:
+			hit = true;
+			break;
+		case RULE_RETURN_EQ:
+			hit = rule->expected == ret;
+			break;
+		case RULE_RETURN_RANGE:
+			hit = rule->range.min < ret && rule->range.max > ret;
+			break;
+		case RULE_RETURN_LT:
+			hit = rule->expected < ret;
+			break;
+		case RULE_RETURN_GT:
+			hit = rule->expected > ret;
+			break;
+		case RULE_RETURN_NE:
+			hit = rule->expected != ret;
+			break;
+		default:
+			continue;
+		}
+		if (!hit)
+			continue;
+		entry->rule = rule;
+		if (!mode_has_context())
+			break;
+		switch (rule->level) {
+		case RULE_INFO:
+			break;
+		case RULE_WARN:
+			entry->ctx->status |= ANALY_CTX_WARN;
+			break;
+		case RULE_ERROR:
+			entry->ctx->status |= ANALY_CTX_ERROR;
+			break;
+		}
+		break;
+	}
+}
+
+static inline void rule_run_any(analy_entry_t *entry, trace_t *trace)
+{
+	rule_t *rule;
+
+	if (list_empty(&trace->rules))
+		return;
+
+	list_for_each_entry(rule, &trace->rules, list) {
+		if (rule->type == RULE_RETURN_ANY) {
+			entry->rule = rule;
+			return;
+		}
+	}
+}
+
 void tl_poll_handler(void *raw_ctx, int cpu, void *data, u32 size)
 {
 	static char buf[1024], tinfo[128];
@@ -506,68 +568,19 @@ void async_poll_handler(void *ctx, int cpu, void *data, u32 size)
 	}
 }
 
-static inline void rule_run(analy_entry_t *entry, trace_t *trace, int ret)
-{
-	bool hit = false;
-	rule_t *rule;
-
-	list_for_each_entry(rule, &trace->rules, list) {
-		switch (rule->type) {
-		case RULE_RETURN_ANY:
-			hit = true;
-			break;
-		case RULE_RETURN_EQ:
-			hit = rule->expected == ret;
-			break;
-		case RULE_RETURN_RANGE:
-			hit = rule->range.min < ret && rule->range.max > ret;
-			break;
-		case RULE_RETURN_LT:
-			hit = rule->expected < ret;
-			break;
-		case RULE_RETURN_GT:
-			hit = rule->expected > ret;
-			break;
-		case RULE_RETURN_NE:
-			hit = rule->expected != ret;
-			break;
-		default:
-			continue;
-		}
-		if (!hit)
-			continue;
-		entry->rule = rule;
-		if (!mode_has_context())
-			break;
-		switch (rule->level) {
-		case RULE_INFO:
-			break;
-		case RULE_WARN:
-			entry->ctx->status |= ANALY_CTX_WARN;
-			break;
-		case RULE_ERROR:
-			entry->ctx->status |= ANALY_CTX_ERROR;
-			break;
-		}
-		break;
-	}
-}
-
-DEFINE_ANALYZER_ENTRY(free, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_DIAG_MASK)
+DEFINE_ANALYZER_ENTRY(free, TRACE_MODE_CTX_MASK)
 {
 	put_fake_analy_ctx(e->fake_ctx);
 	hlist_del(&e->fake_ctx->hash);
 	if (!trace_mode_intel())
 		goto out;
 
-	rule_run(e, trace, 0);
+	rule_run_ret(e, trace, 0);
 out:
 	return RESULT_CONT;
 }
 
-DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_DIAG_MASK |
-			    TRACE_MODE_DROP_MASK |
-			    TRACE_MODE_MONITOR_MASK)
+DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_ALL_MASK)
 {
 	define_pure_event(drop_event_t, event, e->event);
 	char *reason = NULL, *sym_str, *info;
@@ -594,7 +607,7 @@ DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_DIAG_MASK |
 
 	info = malloc(1024);
 	info[0] = '\0';
-	rule_run(e, trace, 0);
+	rule_run_ret(e, trace, 0);
 	sprintf(info, PFMT_EMPH_STR("    location")":\n\t%s", sym_str);
 	if (trace_ctx.drop_reason) {
 		sprintf_end(info, PFMT_EMPH_STR("\n    drop reason")":\n\t%s",
@@ -605,7 +618,7 @@ out:
 	return RESULT_CONT;
 }
 
-DEFINE_ANALYZER_EXIT(clone, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_DIAG_MASK)
+DEFINE_ANALYZER_EXIT(clone, TRACE_MODE_CTX_MASK)
 {
 	analy_entry_t *entry = e->entry;
 
@@ -617,23 +630,22 @@ DEFINE_ANALYZER_EXIT(clone, TRACE_MODE_TIMELINE_MASK | TRACE_MODE_DIAG_MASK)
 	pr_debug("clone analyzer triggered on: %llx\n", e->event.val);
 	analy_fake_ctx_alloc(e->event.val, entry->ctx);
 	if (trace_mode_intel())
-		rule_run(entry, trace, 0);
+		rule_run_ret(entry, trace, 0);
 out:
 	return RESULT_CONSUME;
 }
 
-DEFINE_ANALYZER_EXIT(ret, TRACE_MODE_DIAG_MASK |
-			  TRACE_MODE_MONITOR_MASK)
+DEFINE_ANALYZER_EXIT(ret, TRACE_MODE_CTX_MASK)
 {
 	int ret = (int) e->event.val;
 
-	rule_run(e->entry, trace, ret);
+	rule_run_ret(e->entry, trace, ret);
 	return RESULT_CONT;
 }
 
-DEFINE_ANALYZER_ENTRY(default, TRACE_MODE_DIAG_MASK)
+DEFINE_ANALYZER_ENTRY(default, TRACE_MODE_ALL_MASK)
 {
-	rule_run(e, trace, 0);
+	rule_run_any(e, trace);
 	return RESULT_CONT;
 }
 
@@ -670,10 +682,7 @@ const char *pf_names[] = {
 	[NFPROTO_IPV6]		= "ipv6",
 	[NFPROTO_DECNET]	= "decnet",
 };
-DEFINE_ANALYZER_ENTRY(nf, TRACE_MODE_DIAG_MASK |
-			  TRACE_MODE_BASIC_MASK |
-			  TRACE_MODE_TIMELINE_MASK |
-			  TRACE_MODE_MONITOR_MASK)
+DEFINE_ANALYZER_ENTRY(nf, TRACE_MODE_ALL_MASK)
 {
 	define_pure_event(nf_hooks_event_t, event, e->event);
 	char *msg = malloc(1024), *extinfo;
@@ -708,10 +717,7 @@ out:
 }
 DEFINE_ANALYZER_EXIT_FUNC_DEFAULT(nf)
 
-DEFINE_ANALYZER_ENTRY(iptable, TRACE_MODE_DIAG_MASK |
-			       TRACE_MODE_BASIC_MASK |
-			       TRACE_MODE_TIMELINE_MASK |
-			       TRACE_MODE_MONITOR_MASK)
+DEFINE_ANALYZER_ENTRY(iptable, TRACE_MODE_ALL_MASK)
 {
 	define_pure_event(nf_event_t, event, e->event);
 	char *msg = malloc(1024);
@@ -730,10 +736,7 @@ DEFINE_ANALYZER_ENTRY(iptable, TRACE_MODE_DIAG_MASK |
 }
 DEFINE_ANALYZER_EXIT_FUNC_DEFAULT(iptable)
 
-DEFINE_ANALYZER_ENTRY(qdisc, TRACE_MODE_DIAG_MASK |
-			     TRACE_MODE_BASIC_MASK |
-			     TRACE_MODE_TIMELINE_MASK |
-			     TRACE_MODE_MONITOR_MASK)
+DEFINE_ANALYZER_ENTRY(qdisc, TRACE_MODE_ALL_MASK)
 {
 	define_pure_event(qdisc_event_t, event, e->event);
 	char *msg = malloc(1024);

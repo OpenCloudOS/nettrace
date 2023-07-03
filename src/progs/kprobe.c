@@ -50,19 +50,22 @@
 		return default_handle_entry(ctx);		\
 	}
 
-#define DEFINE_TP(name, cata, tp, offset)			\
+#define DEFINE_TP_INIT(name, cata, tp, ctx_init...)		\
 	DECLARE_FAKE_FUNC(fake__##name);			\
 	SEC("tp/"#cata"/"#tp)					\
 	int TRACE_NAME(name)(void *regs) {			\
 		context_t ctx = {				\
-			.skb = *(void **)(regs + offset),	\
 			.func = INDEX_##name,			\
 			.regs = regs,				\
 			.args = CONFIG(),			\
+			ctx_init				\
 		};						\
 		return fake__##name(&ctx, ctx.skb);		\
 	}							\
 	DECLARE_FAKE_FUNC(fake__##name)
+#define DEFINE_TP(name, cata, tp, offset)			\
+	DEFINE_TP_INIT(name, cata, tp,				\
+		       .skb = *(void **)(regs + offset))
 #define TP_DEFAULT(name, cata, tp, offset)			\
 	DEFINE_TP(name, cata, tp, offset)			\
 	{							\

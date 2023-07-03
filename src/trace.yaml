@@ -99,7 +99,7 @@ children:
     - tcf_classify:0
     - cls_bpf_classify:0
     - tcf_bpf_act:0
-  - name: ipvaln
+  - name: ipvlan
     desc: ipvlan network interface
     default: false
     visual: true
@@ -219,6 +219,7 @@ children:
     - resolve_normal_ct:2
     - tcp_packet:1
     - name: tcp_in_window:4
+      default: true
       analyzer: ret
       monitor: 1
       arg_count: 7
@@ -290,6 +291,7 @@ children:
     visual: true
     children:
     - name: fib_validate_source:0
+      monitor: 1
       rules:
       - <<: *rule_ret_err
         msg: source address valid failed (properly rp_filter fail)
@@ -317,13 +319,22 @@ children:
     - tcp_v6_send_reset:1
     - tcp_v4_do_rcv:1
     - tcp_v6_do_rcv:1
-    - tcp_rcv_established:1:0
-    - tcp_rcv_state_process:1:0
-    - tcp_queue_rcv:1:0
-    - tcp_ack_probe:-1:0
-    - tcp_ack:1:0
-    - tcp_probe_timer:-1:0
-    - tcp_send_probe0:-1:0
+    - tcp_rcv_established:1/0
+    - &tcp_rcv_state_process
+      name: tcp_rcv_state_process:1/0
+      rules:
+      - exp: any
+        level: info
+        msg: TCP socket state has changed
+    - tcp_queue_rcv:1/0
+    - tcp_ack_probe/0
+    - tcp_ack:1/0
+    - tcp_probe_timer/0
+    - name: tcp_send_probe0/0
+      rules:
+      - exp: any
+        level: info
+        msg: send zero-window probe packet
     - name: __inet_lookup_listener:2
       monitor: 1
       analyzer: ret
@@ -344,24 +355,13 @@ children:
     desc: tcp layer of packet out
     visiual: true
     children:
-    - name: __tcp_transmit_skb
-      sock: 0
+    - name: __tcp_transmit_skb/0
       rules:
       - exp: ne 0
         level: warn
         msg: failed to xmit skb to ip layer
-    - tcp_retransmit_timer:-1:0
-    - tcp_sendmsg_locked:-1:0
-    - __tcp_push_pending_frames:-1:0
-  - name: socket
-    desc: socket releated hooks
-    visiual: true
-    children:
-    - name: inet_listen:-1:0
-      custom: true
-    - tcp_write_timer_handler:-1:0
-    - tcp_v4_destroy_sock:-1:0
-    - tcp_close:-1:0
+    - tcp_sendmsg_locked/0
+    - __tcp_push_pending_frames/0
 - name: udp
   desc: udp protocol layer (L4) of the network stack
   children:
@@ -398,6 +398,59 @@ children:
         level: warn
         msg: icmp socket is not founded
         adv: not support
+- name: socket
+  desc: socket releated hooks
+  visiual: true
+  children:
+  - name: tcp-state
+    desc: TCP socket state releated hooks
+    children:
+    - name: inet_listen/0
+      custom: true
+      rules:
+      - exp: any
+        level: info
+        msg: TCP socket begin to listen
+    - tcp_v4_destroy_sock/0
+    - name: tcp_close/0
+      rules:
+      - exp: any
+        level: info
+        msg: TCP socket is closed
+    - *tcp_rcv_state_process
+  - name: tcp-congestion
+    desc: TCP congestion control releated hooks
+    children:
+    - tcp_write_timer_handler/0
+    - name: tcp_retransmit_timer/0
+      rules:
+      - exp: any
+        level: info
+        msg: TCP retransmission timer out
+    - name: tcp_enter_recovery/0
+      rules:
+      - exp: any
+        level: info
+        msg: TCP enter conguestion recover
+    - name: tcp_enter_loss/0
+      rules:
+      - exp: any
+        level: info
+        msg: TCP enter conguestion loss
+    - name: tcp_try_keep_open/0
+      rules:
+      - exp: any
+        level: info
+        msg: TCP enter conguestion open state
+    - name: tcp_enter_cwr/0
+      rules:
+      - exp: any
+        level: info
+        msg: TCP enter conguestion CWR state
+    - tcp_fastretrans_alert/0
+    - tcp_rearm_rto/0
+    - tcp_event_new_data_sent/0
+    - tcp_schedule_loss_probe/0
 - name: life
   desc: skb clone and free
   visual: true

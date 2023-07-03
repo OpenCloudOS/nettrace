@@ -7,6 +7,7 @@
 #define _LINUX_IN_H
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <netinet/tcp.h>
 
 #include <sys_utils.h>
 
@@ -158,6 +159,35 @@ static const char *timer_name[] = {
 	[ICSK_TIME_LOSS_PROBE] = "loss_probe",
 	[ICSK_TIME_REO_TIMEOUT] = "reo_timeout",
 };
+static const char *state_name[] = {
+	[0] = "UNKNOW",
+	[TCP_ESTABLISHED] = "ESTABLISHED",
+	[TCP_SYN_SENT] = "SYN_SENT",
+	[TCP_SYN_RECV] = "SYN_RECV",
+	[TCP_FIN_WAIT1] = "FIN_WAIT1",
+	[TCP_FIN_WAIT2] = "FIN_WAIT2",
+	[TCP_TIME_WAIT] = "TIME_WAIT",
+	[TCP_CLOSE] = "CLOSE",
+	[TCP_CLOSE_WAIT] = "CLOSE_WAIT",
+	[TCP_LAST_ACK] = "LAST_ACK",
+	[TCP_LISTEN] = "LISTEN",
+	[TCP_CLOSING] = "CLOSING",
+};
+static const char *ca_name[] = {
+	[TCP_CA_Open] = "CA_Open",
+	[TCP_CA_Disorder] = "CA_Disorder",
+	[TCP_CA_CWR] = "CA_CWR",
+	[TCP_CA_Recovery] = "CA_Recovery",
+	[TCP_CA_Loss] = "CA_Loss",
+};
+
+typedef struct {
+	u8	icsk_ca_state:5,
+		icsk_ca_initialized:1,
+		icsk_ca_setsockopt:1,
+		icsk_ca_dst_locked:1;
+
+} tcp_ca_data_t;
 
 int ts_print_sock(char *buf, sock_t *ske, char *minfo, bool date_format)
 {
@@ -221,9 +251,13 @@ print_ip:
 	}
 
 	switch (l4) {
-	case IPPROTO_TCP:
-		BUF_FMT(" info:(%u %u)", ske->l4.tcp.packets_out,
+	case IPPROTO_TCP: {
+		tcp_ca_data_t *ca_state = (void *)&ske->ca_state;
+		BUF_FMT(" %s %s info:(%u %u)", state_name[ske->state],
+			ca_name[ca_state->icsk_ca_state],
+			ske->l4.tcp.packets_out,
 			ske->l4.tcp.retrans_out);
+	}
 	case IPPROTO_UDP:
 		hz = kernel_hz();
 		hz = hz > 0 ? hz : 1;

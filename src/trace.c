@@ -22,15 +22,40 @@ extern trace_ops_t tracing_ops;
 extern trace_ops_t probe_ops;
 trace_ops_t *trace_ops_all[] = { &tracing_ops, &probe_ops };
 
+static bool trace_group_valid(trace_group_t *group)
+{
+	trace_list_t *trace_list;
+	trace_group_t *pos;
+
+	if (!list_empty(&group->traces)) {
+		list_for_each_entry(trace_list, &group->traces, list)
+			if (!trace_is_invalid(trace_list->trace))
+				return true;
+		return false;
+	}
+
+	if (!list_empty(&group->children)) {
+		list_for_each_entry(pos, &group->children, list)
+			if (trace_group_valid(pos))
+				return true;
+	}
+	return false;
+}
+
 static void __print_trace_group(trace_group_t *group, int level)
 {
 	char prefix[32] = {}, buf[32], *name;
+	trace_list_t *trace_list;
 	trace_group_t *pos;
 	trace_t *trace;
+	u32 status;
 	int i = 0;
 
 	for (; i< level; i++)
 		prefix[i] = '\t';
+
+	if (!trace_group_valid(group))
+		return;
 
 	pr_info("%s"PFMT_EMPH"%s"PFMT_END": %s\n", prefix, group->name,
 		group->desc);
@@ -45,8 +70,9 @@ static void __print_trace_group(trace_group_t *group, int level)
 
 	return;
 print_trace:
-	list_for_each_entry(trace, &group->traces, list) {
-		u32 status = trace->status;
+	list_for_each_entry(trace_list, &group->traces, list) {
+		trace = trace_list->trace;
+		status = trace->status;
 
 #if 1
 		if (trace_is_invalid(trace))
@@ -114,41 +140,69 @@ trace_t *search_trace_enabled(char *name)
 	return NULL;
 }
 
-int trace_enable(char *name)
+int trace_enable(char *name, int target)
 {
 	bool found = false;
+	int err = 0;
 	trace_t *t;
 
 	trace_for_each(t) {
 		if (strcmp(t->name, name))
 			continue;
-		trace_set_enable(t);
+		switch (target) {
+		case 1:
+			trace_set_enable(t);
+			break;
+		case 2:
+			err = trace_set_stack(t);
+			break;
+		}
+		if (err)
+			return err;
 		found = true;
 	}
+	if (!found)
+		pr_err("trace not found: %s\n", name);
 	return !found;
 }
 
-static void _trace_group_enable(trace_group_t *group)
+static int __trace_group_enable(trace_group_t *group, int target)
 {
 	trace_group_t *pos;
-	trace_t *t;
+	trace_list_t *t;
+	int err = 0;
 
-	list_for_each_entry(pos, &group->children, list)
-		_trace_group_enable(pos);
+	list_for_each_entry(pos, &group->children, list) {
+		err = __trace_group_enable(pos, target);
+		if (err)
+			return err;
+	}
 
-	list_for_each_entry(t, &group->traces, list)
-		trace_set_enable(t);
+	list_for_each_entry(t, &group->traces, list) {
+		switch (target) {
+		case 1:
+			trace_set_enable(t->trace);
+			break;
+		case 2:
+			err = trace_set_stack(t->trace);
+			break;
+		}
+		if (err)
+			return err;
+	}
+
+	return 0;
 }
 
 /* enable all traces in the group of 'name' */
-int trace_group_enable(char *name)
+int trace_group_enable(char *name, int target)
 {
 	trace_group_t *g = search_trace_group(name);
 
 	if (!g)
-		return -1;
-	_trace_group_enable(g);
-	return 0;
+		return trace_enable(name, target);
+
+	return __trace_group_enable(g, target);
 }
 
 bool trace_analyzer_enabled(analyzer_t *analyzer)
@@ -186,7 +240,7 @@ static int trace_check_force()
 	pkt_args_t *pkt_args = &bpf_args->pkt;
 	trace_args_t *args = &trace_ctx.args;
 
-	if (args->drop || args->force || args->monitor)
+	if (args->drop || args->force || args->monitor || args->show_traces)
 		return 0;
 
 	if (ARGS_ENABLED(bpf_args, pid) || ARGS_ENABLED(pkt_args, saddr) ||
@@ -205,6 +259,7 @@ static int trace_prepare_args()
 	trace_t *drop_trace = search_trace_enabled("kfree_skb");
 	bpf_args_t *bpf_args = &trace_ctx.bpf_args;
 	trace_args_t *args = &trace_ctx.args;
+	char *traces_stack = args->traces_stack;
 	char *traces = args->traces;
 	trace_t *trace;
 	char *tmp, *cur;
@@ -237,6 +292,20 @@ static int trace_prepare_args()
 		goto skip_trace;
 	}
 
+	if (traces_stack) {
+		tmp = calloc(strlen(traces_stack) + 1, 1);
+		strcpy(tmp, traces_stack);
+		cur = strtok(tmp, ",");
+		while (cur) {
+			if (trace_group_enable(cur, 2)) {
+				free(tmp);
+				goto err;
+			}
+			cur = strtok(NULL, ",");
+		}
+		free(tmp);
+	}
+
 	if (!traces) {
 		trace_for_each(trace)
 			if (trace->def)
@@ -253,8 +322,7 @@ static int trace_prepare_args()
 	strcpy(tmp, traces);
 	cur = strtok(tmp, ",");
 	while (cur) {
-		if (trace_group_enable(cur) && trace_enable(cur)) {
-			pr_err("trace not found: %s\n", cur);
+		if (trace_group_enable(cur, 1)) {
 			free(tmp);
 			goto err;
 		}
@@ -286,7 +354,7 @@ skip_trace:
 				trace_set_ret(trace);
 		/* enable skb free/drop trace */
 		if (!trace_has_end())
-			trace_group_enable("life");
+			trace_group_enable("life", 1);
 		break;
 	case TRACE_MODE_DROP:
 		if (!trace_ctx.drop_reason)
@@ -303,7 +371,7 @@ skip_trace:
 	case TRACE_MODE_MONITOR:
 		trace_for_each(trace) {
 			if (!trace->monitor) {
-				trace_set_invalid(trace);
+				trace_set_invalid_reason(trace, "monitor");
 				continue;
 			}
 			if (!trace_is_func(trace))
@@ -330,7 +398,7 @@ skip_trace:
 	trace_for_each_cond(trace, (!args->sock && trace->sk &&
 				    !trace->skb) ||
 				   (args->sock && !trace->sk))
-			trace_set_invalid(trace);
+			trace_set_invalid_reason(trace, "sock or sk mode");
 
 	if (args->ret) {
 		switch (trace_ctx.mode) {
@@ -374,7 +442,7 @@ static void trace_exec_cond()
 	trace_for_each(trace) {
 		if (trace->cond && execf(NULL, "%s; %s", cond_pre,
 					 trace->cond))
-			trace_set_invalid(trace);
+			trace_set_invalid_reason(trace, "cond");
 	}
 }
 
@@ -400,7 +468,7 @@ static int trace_prepare_traces()
 		if (sym_search_pattern(name, func, true) == SYM_NOT_EXIST) {
 			pr_verb("kernel function %s not founded, skipped\n",
 				trace->name);
-			trace_set_invalid(trace);
+			trace_set_invalid_reason(trace, "not found");
 			continue;
 		}
 		trace->status |= TRACE_ATTACH_MANUAL;

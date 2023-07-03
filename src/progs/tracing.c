@@ -71,19 +71,22 @@ typedef int (*fake_func)(context_t *ctx);
 	nt_ternary_take(acount, __KPROBE_DEFAULT,		\
 		KPROBE_DUMMY)(name, skb_index, sk_index, acount)
 
-#define DEFINE_TP(name, cata, tp, index)			\
+#define DEFINE_TP_INIT(name, cata, tp, ctx_init...)		\
 	DECLARE_FAKE_FUNC(fake__##name);			\
 	SEC("tp_btf/"#tp)					\
 	int TRACE_NAME(name)(void **regs) {			\
 		context_t ctx = {				\
-			.skb = nt_regs(regs, index),		\
 			.func = INDEX_##name,			\
 			.regs = regs,				\
 			.args = CONFIG(),			\
+			ctx_init				\
 		};						\
 		return fake__##name(&ctx);			\
 	}							\
 	DECLARE_FAKE_FUNC(fake__##name)
+#define DEFINE_TP(name, cata, tp, index)			\
+	DEFINE_TP_INIT(name, cata, tp,				\
+		       .skb = nt_regs(regs, index))
 #define TP_DEFAULT(name, cata, tp, offset)			\
 	DEFINE_TP(name, cata, tp, offset)			\
 	{							\

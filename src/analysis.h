@@ -114,7 +114,7 @@ typedef struct analyzer {
 #define DEFINE_ANALYZER_EXIT_FUNC_DEFAULT(name)				\
 DEFINE_ANALYZER_EXIT_FUNC(name)						\
 {									\
-	rule_run(e->entry, trace, e->event.val);			\
+	rule_run_ret(e->entry, trace, e->event.val);			\
 	return RESULT_CONT;						\
 }
 

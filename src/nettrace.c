@@ -42,9 +42,16 @@ static void do_parse_args(int argc, char *argv[])
 			.desc = "filter by current process id(pid)",
 		},
 		{
+			.lname = "min-latency", .dest = &trace_args->min_latency,
+			.type = OPTION_U32,
+			.desc = "filter by the minial time to live of the skb in ms",
+		},
+		{ .type = OPTION_BLANK },
+		{
 			.lname = "trace", .sname = 't',
 			.dest = &trace_args->traces,
-			.desc = "enable trace group or trace",
+			.desc = "enable trace group or trace. Some traces are "
+				"disabled by default, use \"all\" to enable all",
 		},
 		{
 			.lname = "force", .dest = &trace_args->force,
@@ -104,11 +111,6 @@ static void do_parse_args(int argc, char *argv[])
 		},
 #endif
 		{
-			.lname = "min-latency", .dest = &trace_args->min_latency,
-			.type = OPTION_U32,
-			.desc = "the minial time to live of the skb in ms",
-		},
-		{
 			.lname = "sock", .dest = &trace_args->sock,
 			.type = OPTION_BOOL,
 			.desc = "enable 'sock' mode",
@@ -124,6 +126,11 @@ static void do_parse_args(int argc, char *argv[])
 			.desc = "set this option if you are sure the target "
 				"packet is not NATed to get better "
 				"performance",
+		},
+		{
+			.lname = "trace-stack", .dest = &trace_args->traces_stack,
+			.type = OPTION_STRING,
+			.desc = "print call stack for traces or group",
 		},
 		{ .type = OPTION_BLANK },
 		{

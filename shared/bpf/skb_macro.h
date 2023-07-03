@@ -45,4 +45,23 @@
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 #endif
 
+#ifdef COMPAT_MODE
+#define bpf_core_helper_exist(name) false
+
+#undef bpf_core_type_exists
+#define bpf_core_type_exists(type) false
+
+#undef bpf_core_field_exists
+#define bpf_core_field_exists(field) false
+
+#undef bpf_core_enum_value_exists
+#define bpf_core_enum_value_exists(value) false
+
+#undef bpf_core_field_offset
+#define bpf_core_field_offset(type, field) offsetof(type, field)
+#else
+#define bpf_core_helper_exist(name)				\
+	bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_##name)
+#endif
+
 #endif
