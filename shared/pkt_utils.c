@@ -173,6 +173,21 @@ static const char *state_name[] = {
 	[TCP_LISTEN] = "LISTEN",
 	[TCP_CLOSING] = "CLOSING",
 };
+static const char *ca_name[] = {
+	[TCP_CA_Open] = "CA_Open",
+	[TCP_CA_Disorder] = "CA_Disorder",
+	[TCP_CA_CWR] = "CA_CWR",
+	[TCP_CA_Recovery] = "CA_Recovery",
+	[TCP_CA_Loss] = "CA_Loss",
+};
+
+typedef struct {
+	u8	icsk_ca_state:5,
+		icsk_ca_initialized:1,
+		icsk_ca_setsockopt:1,
+		icsk_ca_dst_locked:1;
+
+} tcp_ca_data_t;
 
 int ts_print_sock(char *buf, sock_t *ske, char *minfo, bool date_format)
 {
@@ -236,10 +251,13 @@ print_ip:
 	}
 
 	switch (l4) {
-	case IPPROTO_TCP:
-		BUF_FMT(" %s info:(%u %u)", state_name[ske->state],
+	case IPPROTO_TCP: {
+		tcp_ca_data_t *ca_state = (void *)&ske->ca_state;
+		BUF_FMT(" %s %s info:(%u %u)", state_name[ske->state],
+			ca_name[ca_state->icsk_ca_state],
 			ske->l4.tcp.packets_out,
 			ske->l4.tcp.retrans_out);
+	}
 	case IPPROTO_UDP:
 		hz = kernel_hz();
 		hz = hz > 0 ? hz : 1;

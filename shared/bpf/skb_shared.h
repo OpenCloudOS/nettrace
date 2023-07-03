@@ -118,6 +118,7 @@ typedef struct {
 	u8 proto_l4;
 	u8 timer_pending;
 	u8 state;
+	u8 ca_state;
 } sock_t;
 
 #define TCP_FLAGS_ACK	(1 << 4)

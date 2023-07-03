@@ -10,17 +10,12 @@
 #undef bpf_core_type_exists
 #undef bpf_core_field_exists
 #undef bpf_core_enum_value_exists
+#undef bpf_core_field_offset
 #include <bpf/bpf_core_read.h>
 
 #include "skb_macro.h"
 #include "skb_shared.h"
 
-#ifndef COMPAT_MODE
-#define bpf_core_helper_exist(name)				\
-	bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_##name)
-#else
-#define bpf_core_helper_exist(name) false
-#endif
 
 typedef struct {
 	pkt_args_t pkt;
@@ -416,6 +411,12 @@ static try_inline int __probe_parse_sk(parse_ctx_t *ctx)
 	ske->state = _C(skc, skc_state);
 
 	icsk = (void *)sk;
+	bpf_probe_read_kernel(&ske->ca_state, sizeof(u8),
+		(u8 *)icsk +
+		bpf_core_field_offset(struct inet_connection_sock,
+			icsk_retransmits) -
+		1);
+
 	if (bpf_core_helper_exist(jiffies64))
 		ske->timer_out = _C(icsk, icsk_timeout) - (unsigned long)bpf_jiffies64();
 
