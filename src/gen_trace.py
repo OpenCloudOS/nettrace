@@ -101,6 +101,8 @@ def gen_name(name, is_trace=False):
 
 
 btf_data = None
+
+
 def get_arg_count(name):
     global btf_data
     if not btf_data:
@@ -155,6 +157,7 @@ def append_trace_field(field, trace, type='string'):
             return f'\n\t.{field} = {trace[field]},'
     return ''
 
+
 def append_filed(field, value, type='string'):
     if type == 'string':
         return f'\n\t.{field} = "{value}",'
@@ -166,7 +169,34 @@ def append_filed(field, value, type='string'):
     return ''
 
 
+def gen_trace_list(trace, p_name):
+    name = trace['define_name']
+    list_count = trace.get('list_count', 1)
+    list_count += 1
+    trace['list_count'] = list_count
+    trace_name = 'trace_' + name
+    trace_list = f'{trace_name}_list_{list_count}'
+    define_str = f'''
+trace_list_t {trace_list} = {{
+\t.trace = &{trace_name},
+\t.list = LIST_HEAD_INIT({trace_list}.list)
+}};
+'''
+    init_str = f'\tlist_add_tail(&{trace_list}.list, &{p_name}.traces);\n'
+
+    return {
+        'define_str': define_str,
+        'init_str': init_str,
+        'probe_str': '',
+        'index_str': ''
+    }
+
+
 def gen_trace(trace, group, p_name):
+    # trace is already defined, just define corresponding trace_list for it
+    if 'define_name' in trace:
+        return gen_trace_list(trace, p_name)
+
     name = gen_name(trace["name"], True)
     trace_name = 'trace_' + name
     trace['define_name'] = name
@@ -197,7 +227,8 @@ def gen_trace(trace, group, p_name):
                 else:
                     arg_count = trace['arg_count']
                 if not arg_count:
-                    print(f"BTF not found for {target}, skip monitor", file=sys.stderr)
+                    print(
+                        f"BTF not found for {target}, skip monitor", file=sys.stderr)
                     trace['monitor'] = 0
                 else:
                     fields_str += append_trace_field('arg_count', trace, 'raw')
@@ -244,12 +275,16 @@ def gen_trace(trace, group, p_name):
 \t.prog = "__trace_{name}",
 \t.parent = &{p_name},
 \t.sk = {sk_index},
-\t.rules =  LIST_HEAD_INIT({trace_name}.rules),
+\t.rules = LIST_HEAD_INIT({trace_name}.rules),
+}};
+trace_list_t {trace_name}_list = {{
+\t.trace = &{trace_name},
+\t.list = LIST_HEAD_INIT({trace_name}_list.list)
 }};
 {rule_str}
 '''
 
-    init_str += f'''\tlist_add_tail(&{trace_name}.list, &{p_name}.traces);
+    init_str += f'''\tlist_add_tail(&{trace_name}_list.list, &{p_name}.traces);
 \tall_traces[INDEX_{name}] = &{trace_name};
 \tlist_add_tail(&{trace_name}.all, &trace_list);
 '''

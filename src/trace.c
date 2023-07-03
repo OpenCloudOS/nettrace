@@ -24,12 +24,12 @@ trace_ops_t *trace_ops_all[] = { &tracing_ops, &probe_ops };
 
 static bool trace_group_valid(trace_group_t *group)
 {
+	trace_list_t *trace_list;
 	trace_group_t *pos;
-	trace_t *trace;
 
 	if (!list_empty(&group->traces)) {
-		list_for_each_entry(trace, &group->traces, list)
-			if (!trace_is_invalid(trace))
+		list_for_each_entry(trace_list, &group->traces, list)
+			if (!trace_is_invalid(trace_list->trace))
 				return true;
 		return false;
 	}
@@ -45,8 +45,10 @@ static bool trace_group_valid(trace_group_t *group)
 static void __print_trace_group(trace_group_t *group, int level)
 {
 	char prefix[32] = {}, buf[32], *name;
+	trace_list_t *trace_list;
 	trace_group_t *pos;
 	trace_t *trace;
+	u32 status;
 	int i = 0;
 
 	for (; i< level; i++)
@@ -68,8 +70,9 @@ static void __print_trace_group(trace_group_t *group, int level)
 
 	return;
 print_trace:
-	list_for_each_entry(trace, &group->traces, list) {
-		u32 status = trace->status;
+	list_for_each_entry(trace_list, &group->traces, list) {
+		trace = trace_list->trace;
+		status = trace->status;
 
 #if 1
 		if (trace_is_invalid(trace))
@@ -154,13 +157,13 @@ int trace_enable(char *name)
 static void _trace_group_enable(trace_group_t *group)
 {
 	trace_group_t *pos;
-	trace_t *t;
+	trace_list_t *t;
 
 	list_for_each_entry(pos, &group->children, list)
 		_trace_group_enable(pos);
 
 	list_for_each_entry(t, &group->traces, list)
-		trace_set_enable(t);
+		trace_set_enable(t->trace);
 }
 
 /* enable all traces in the group of 'name' */

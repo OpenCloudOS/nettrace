@@ -83,6 +83,11 @@ typedef struct trace {
 	bool	def;
 } trace_t;
 
+typedef struct {
+	struct list_head list;
+	trace_t * trace;
+} trace_list_t;
+
 typedef struct trace_args {
 	bool timeline;
 	bool ret;
