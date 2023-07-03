@@ -94,10 +94,14 @@ nettrace \- Linux系统下的网络报文跟踪、网络问题诊断工具
 进行系统丢包监控，取代原先的\fB\fCdroptrace\fR
 .TP
 \fB\fC\-\-drop\-stack\fR
-打印kfree_skb内核函数的调用堆栈
+打印kfree\fIskb内核函数的调用堆栈，等价于`\-\-trace\-stack kfree\fPskb`
 .TP
-\fB\fC\-\-min\-latency\fR
+\fB\fC\-\-min\-latency\fR \fIlatency in ms\fP
 根据报文的寿命进行过滤，仅打印处理时长超过该值的报文，单位为ms。该参数仅在默认和\fB\fCdiag\fR模式下可用。
+.TP
+\fB\fC\-\-trace\-stack\fR \fItraces\fP
+指定需要进行堆栈打印的内核函数，可以指定多个，用“,”分隔。出于性能考虑，启用堆栈打印的
+内核函数不能超过16个。用法和格式与\fB\fC\-\-trace\fR完全一致。
 .TP
 \fB\fC\-v\fR
 显示程序启动的日志信息
@@ -115,6 +119,9 @@ nettrace \- Linux系统下的网络报文跟踪、网络问题诊断工具
 .TP
 显示详细信息：
 \fInettrace \-p icmp \-s 192.168.1.8 \-\-detail\fP
+.TP
+打印堆栈：
+\fInettrace \-p icmp \-s 192.168.1.8 \-\-trace\-stack consume\fIskb,icmp\fPrcv\fP
 .SS 诊断模式
 .PP
 使用方式与上面的一致，加个\fB\fCdiag\fR参数即可使用诊断模式。上文的生命周期模式对于使用者的

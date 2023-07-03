@@ -164,6 +164,7 @@ Usage:
     --monitor        enable 'monitor' mode
     --drop-stack     print the kernel function call stack of kfree_skb
     --min-latency       the minial time to live of the skb
+    --trace-stack    print call stack for traces or group
 
     -v               show log information
     --debug          show debug information
@@ -187,8 +188,9 @@ Usage:
 - `monitor`：启用监控模式。一种轻量化的实时监控系统中网络异常的模式（对内核版本有一定要求）。
 - `hooks`：结合netfilter做的适配，详见下文
 - `drop`：进行系统丢包监控，取代原先的`droptrace`
-- `drop-stack`: 打印kfree_skb内核函数的调用堆栈
+- `drop-stack`: 打印kfree_skb内核函数的调用堆栈，等价于`--trace-stack kfree_skb`
 - `min-latency`：根据报文的寿命进行过滤，仅打印处理时长超过该值的报文，单位为ms。该参数仅在默认和`diag`模式下可用。
+- `trace-stack`：指定需要进行堆栈打印的内核函数，可以指定多个，用“,”分隔。出于性能考虑，启用堆栈打印的内核函数不能超过16个。
 
 下面我们首先来看一下默认模式下的工具使用方法。
 
@@ -349,6 +351,76 @@ begin trace...
 [66.739011] [sch_direct_xmit     ] ICMP: 192.168.122.8 -> 192.168.122.1 ping reply, seq: 1, id: 32535
 [66.739287] [dev_hard_start_xmit ] ICMP: 192.168.122.8 -> 192.168.122.1 ping reply, seq: 1, id: 32535
 [66.740110] [consume_skb         ] ICMP: 192.168.122.8 -> 192.168.122.1 ping reply, seq: 1, id: 32535
+```
+
+#### 3.1.6 堆栈打印
+
+可以通过`--trace-stack`来指定需要进行内核堆栈打印的`traces`，使用方式与`--trace`完全一致。出于性能的考虑，目前启用堆栈打印的内核函数不能超过16个。基本用法：
+
+```shell
+$ sudo ./nettrace -p icmp --trace-stack consume_skb,icmp_rcv
+begin trace...
+***************** ffff88882cafd200,ffff88882cafdc00 ***************
+[2846531.810609] [nf_hook_slow        ] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956 *ipv4 in chain: OUTPUT*
+[2846531.810612] [ip_output           ] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956
+[2846531.810613] [nf_hook_slow        ] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956 *ipv4 in chain: POST_ROUTING*
+[2846531.810615] [ip_finish_output    ] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956
+[2846531.810617] [ip_finish_output2   ] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956
+[2846531.810619] [__dev_queue_xmit    ] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956
+[2846531.810621] [dev_hard_start_xmit ] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956 *skb is successfully sent to the NIC driver*
+[2846531.810623] [enqueue_to_backlog  ] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956
+[2846531.810630] [__netif_receive_skb_core.constprop.0] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956
+[2846531.810632] [ip_rcv              ] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956
+[2846531.810634] [ip_rcv_core         ] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956
+[2846531.810635] [nf_hook_slow        ] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956 *ipv4 in chain: PRE_ROUTING*
+[2846531.810637] [ip_local_deliver    ] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956
+[2846531.810639] [nf_hook_slow        ] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956 *ipv4 in chain: INPUT*
+[2846531.810640] [nft_do_chain        ] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956 *iptables table:filter, chain:INPUT*
+[2846531.810642] [ip_local_deliver_finish] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956
+[2846531.810644] [skb_clone           ] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956
+[2846531.810649] [icmp_rcv            ] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956
+Call Stack:
+    -> icmp_rcv+0x1
+    -> ip_local_deliver_finish+0x7f
+    -> ip_local_deliver+0xea
+    -> ip_rcv+0x16d
+    -> __netif_receive_skb_one_core+0x89
+    -> process_backlog+0xa9
+    -> __napi_poll+0x2e
+    -> net_rx_action+0x28f
+    -> __do_softirq+0xfb
+    -> do_softirq+0xa7
+    -> __local_bh_enable_ip+0x79
+    -> ip_finish_output2+0x170
+    -> __ip_finish_output+0xae
+    -> ip_finish_output+0x36
+    -> ip_output+0x73
+    -> ip_push_pending_frames+0xab
+    -> raw_sendmsg+0x651
+    -> inet_sendmsg+0x6e
+    -> sock_sendmsg+0x60
+    -> __sys_sendto+0x10a
+    -> __x64_sys_sendto+0x24
+    -> do_syscall_64+0x3f
+    -> entry_SYSCALL_64_after_hwframe+0x72
+
+[2846531.810651] [ping_rcv            ] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956
+[2846531.810653] [ping_lookup.isra.0  ] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956
+[2846531.810654] [kfree_skb           ] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956
+[2846531.810659] [consume_skb         ] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956
+Call Stack:
+    -> consume_skb+0xb8
+    -> consume_skb+0xb8
+    -> skb_free_datagram+0x11
+    -> raw_recvmsg+0xb2
+    -> inet_recvmsg+0x11d
+    -> sock_recvmsg+0x6e
+    -> ____sys_recvmsg+0x90
+    -> ___sys_recvmsg+0x7c
+    -> __sys_recvmsg+0x60
+    -> __x64_sys_recvmsg+0x1d
+    -> do_syscall_64+0x3f
+    -> entry_SYSCALL_64_after_hwframe+0x72
 ```
 
 ### 3.2 诊断模式
