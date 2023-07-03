@@ -105,6 +105,7 @@ typedef struct trace_args {
 	bool force;
 	u32  min_latency;
 	char *traces;
+	char *traces_stack;
 } trace_args_t;
 
 typedef struct {
@@ -266,8 +267,6 @@ static inline bool trace_mode_intel()
 void trace_show(trace_group_t *group);
 void init_trace_group();
 trace_group_t *search_trace_group(char *name);
-int trace_enable(char *name);
-int trace_group_enable(char *name);
 int trace_prepare();
 int trace_bpf_load_and_attach();
 int trace_poll();

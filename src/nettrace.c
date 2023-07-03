@@ -127,6 +127,11 @@ static void do_parse_args(int argc, char *argv[])
 				"packet is not NATed to get better "
 				"performance",
 		},
+		{
+			.lname = "trace-stack", .dest = &trace_args->traces_stack,
+			.type = OPTION_STRING,
+			.desc = "print call stack for traces or group",
+		},
 		{ .type = OPTION_BLANK },
 		{
 			.sname = 'v', .dest = &show_log,
