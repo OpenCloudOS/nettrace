@@ -65,6 +65,9 @@ def parse_group(group):
             parse_names(child, children)
             continue
         i += 1
+        if 'children' in child:
+            continue
+
         name_split = child['name'].split(':')
         if len(name_split) > 1:
             child['skb'] = int(re.match(r'\d+', name_split[1]).group())
