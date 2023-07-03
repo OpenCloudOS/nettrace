@@ -291,6 +291,7 @@ children:
     visual: true
     children:
     - name: fib_validate_source:0
+      monitor: 1
       rules:
       - <<: *rule_ret_err
         msg: source address valid failed (properly rp_filter fail)
@@ -319,7 +320,8 @@ children:
     - tcp_v4_do_rcv:1
     - tcp_v6_do_rcv:1
     - tcp_rcv_established:1/0
-    - name: tcp_rcv_state_process:1/0
+    - &tcp_rcv_state_process
+      name: tcp_rcv_state_process:1/0
       rules:
       - exp: any
         level: info
@@ -360,28 +362,6 @@ children:
         msg: failed to xmit skb to ip layer
     - tcp_sendmsg_locked/0
     - __tcp_push_pending_frames/0
-  - name: socket
-    desc: socket releated hooks
-    visiual: true
-    children:
-    - name: inet_listen/0
-      custom: true
-      rules:
-      - exp: any
-        level: info
-        msg: TCP socket begin to listen
-    - tcp_write_timer_handler/0
-    - tcp_v4_destroy_sock/0
-    - name: tcp_close/0
-      rules:
-      - exp: any
-        level: info
-        msg: TCP socket is closed
-    - name: tcp_retransmit_timer/0
-      rules:
-      - exp: any
-        level: info
-        msg: TCP retransmission timer out
 - name: udp
   desc: udp protocol layer (L4) of the network stack
   children:
@@ -418,6 +398,59 @@ children:
         level: warn
         msg: icmp socket is not founded
         adv: not support
+- name: socket
+  desc: socket releated hooks
+  visiual: true
+  children:
+  - name: tcp-state
+    desc: TCP socket state releated hooks
+    children:
+    - name: inet_listen/0
+      custom: true
+      rules:
+      - exp: any
+        level: info
+        msg: TCP socket begin to listen
+    - tcp_v4_destroy_sock/0
+    - name: tcp_close/0
+      rules:
+      - exp: any
+        level: info
+        msg: TCP socket is closed
+    - *tcp_rcv_state_process
+  - name: tcp-congestion
+    desc: TCP congestion control releated hooks
+    children:
+    - tcp_write_timer_handler/0
+    - name: tcp_retransmit_timer/0
+      rules:
+      - exp: any
+        level: info
+        msg: TCP retransmission timer out
+    - name: tcp_enter_recovery/0
+      rules:
+      - exp: any
+        level: info
+        msg: TCP enter conguestion recover
+    - name: tcp_enter_loss/0
+      rules:
+      - exp: any
+        level: info
+        msg: TCP enter conguestion loss
+    - name: tcp_try_keep_open/0
+      rules:
+      - exp: any
+        level: info
+        msg: TCP enter conguestion open state
+    - name: tcp_enter_cwr/0
+      rules:
+      - exp: any
+        level: info
+        msg: TCP enter conguestion CWR state
+    - tcp_fastretrans_alert/0
+    - tcp_rearm_rto/0
+    - tcp_event_new_data_sent/0
+    - tcp_schedule_loss_probe/0
 - name: life
   desc: skb clone and free
   visual: true
