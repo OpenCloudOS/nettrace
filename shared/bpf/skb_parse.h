@@ -7,11 +7,9 @@
 #ifndef _H_BPF_SKB_UTILS
 #define _H_BPF_SKB_UTILS
 
-#undef bpf_core_type_exists
-#undef bpf_core_field_exists
-#undef bpf_core_enum_value_exists
-#undef bpf_core_field_offset
+#ifndef COMPAT_MODE
 #include <bpf/bpf_core_read.h>
+#endif
 
 #include "skb_macro.h"
 #include "skb_shared.h"
