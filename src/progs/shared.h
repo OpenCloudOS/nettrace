@@ -32,8 +32,12 @@ typedef struct {
 } event_t;
 
 typedef struct {
-	packet_t	pkt;
+	union {
+		packet_t	pkt;
+		sock_t		ske;
+	};
 	u64		key;
+	u64		retval;
 	u32		func;
 #ifdef BPF_FEAT_STACK_TRACE
 	u32		stack_id;
