@@ -35,6 +35,14 @@
 #define ICSK_TIME_LOSS_PROBE	5
 #define ICSK_TIME_REO_TIMEOUT	6
 
+/* Codes for EXT_ECHO (PROBE) */
+#ifndef ICMPV6_EXT_ECHO_REQUEST
+#define ICMPV6_EXT_ECHO_REQUEST		160
+#endif
+#ifndef ICMPV6_EXT_ECHO_REQUEST
+#define ICMPV6_EXT_ECHO_REPLY		161
+#endif
+
 typedef struct {
 	u16	sport;
 	u16	dport;
