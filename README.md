@@ -66,7 +66,7 @@ sudo yum install nettrace
 对于ubuntu系统，使用以下命令安装依赖：
 
 ```shell
-sudo apt install libelf-dev libbpf-dev linux-headers-`uname -r` clang llvm gcc linux-tools-`uname -r` linux-tools-generic -y
+sudo apt install python3 python3-yaml libelf-dev libbpf-dev linux-headers-`uname -r` clang llvm gcc linux-tools-`uname -r` linux-tools-generic -y
 ```
 
 ##### opencloudos/tencentos/centos
@@ -74,7 +74,7 @@ sudo apt install libelf-dev libbpf-dev linux-headers-`uname -r` clang llvm gcc l
 对于opencloudos/tencentos/centos用户，使用以下命令来安装依赖：
 
 ```shell
-sudo yum install elfutils-devel elfutils-devel-static libbpf-devel libbpf-static kernel-headers kernel-devel clang llvm bpftool -y
+sudo yum install python3-yaml elfutils-devel elfutils-devel-static libbpf-devel libbpf-static kernel-headers kernel-devel clang llvm bpftool -y
 ```
 
 #### 2.3.2 编译
