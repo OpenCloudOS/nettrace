@@ -713,9 +713,9 @@ begin trace...
 |---|---|---|---|
 |5.4.119-19.0009 | 5.5 | TRACING | 可用，不可监控内核模块中的函数和参数个数超过6的内核函数 |
 | 开发中 | 5.11 | BTF_MODULES | 可用，不可监控参数个数超过6的内核函数 |
-| 开发中 | 开发中 | TRACING支持6+参数 | 完全可用 |
+| 开发中 | upstream | TRACING支持6+参数 | 完全可用 |
 
-其中，“TRACING支持6+参数”目前正在开发中，具体进展可参见：[bpf, x86: allow function arguments up to 12 for TRACING](https://lore.kernel.org/bpf/20230607125911.145345-1-imagedong@tencent.com/)
+其中，“TRACING支持6+参数”内核特性已经合入到upstream：[bpf, x86: allow function arguments up to 12 for TRACING](https://git.kernel.org/pub/scm/linux/kernel/git/bpf/bpf-next.git/commit/?id=f892cac2371447b3a26dad117c7bcdf2c93215e1)
 
 基本用法（在内核特性完全支持的情况下）：
 
