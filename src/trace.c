@@ -446,6 +446,35 @@ skip_trace:
 		}
 	}
 
+	if (args->tcp_flags) {
+		char *cur = args->tcp_flags;
+		u8 flags = 0;
+
+		while (*cur != '\0') {
+			switch (*cur) {
+			case 'S':
+				flags |= TCP_FLAGS_SYN;
+				break;
+			case 'A':
+				flags |= TCP_FLAGS_ACK;
+				break;
+			case 'P':
+				flags |= TCP_FLAGS_PSH;
+				break;
+			case 'R':
+				flags |= TCP_FLAGS_RST;
+				break;
+			default:
+				pr_err("--tcp-flags: invalid char, valid chars "
+				       "are: SAPR\n");
+				goto err;
+			}
+			cur++;
+		}
+		bpf_args->pkt.enable_tcp_flags = true;
+		bpf_args->pkt.tcp_flags = flags;
+	}
+
 	if (trace_check_force()) {
 		pr_err("\tdon't allow to trace 'all' without any filter condition,\n"
 		       "\tas it will cause performance problem.\n\n"

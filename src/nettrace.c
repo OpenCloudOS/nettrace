@@ -51,6 +51,11 @@ static void do_parse_args(int argc, char *argv[])
 			.type = OPTION_STRING,
 			.desc = "filter by the IP packet length (include header) in byte",
 		},
+		{
+			.lname = "tcp-flags", .dest = &trace_args->tcp_flags,
+			.type = OPTION_STRING,
+			.desc = "filter by TCP flags, such as: SAPR",
+		},
 		{ .type = OPTION_BLANK },
 		{
 			.lname = "trace", .sname = 't',

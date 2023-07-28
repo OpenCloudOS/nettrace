@@ -159,6 +159,7 @@ typedef struct {
 	DEFINE_FIELD(u16, port)
 	DEFINE_FIELD(u16, l3_proto)
 	DEFINE_FIELD(u8, l4_proto)
+	DEFINE_FIELD(u8, tcp_flags)
 } pkt_args_t;
 
 #define ARGS_ENABLED(args, name)	args->enable_##name

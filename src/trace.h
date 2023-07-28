@@ -107,6 +107,7 @@ typedef struct trace_args {
 	char *traces;
 	char *traces_stack;
 	char *pkt_len;
+	char *tcp_flags;
 } trace_args_t;
 
 typedef struct {
