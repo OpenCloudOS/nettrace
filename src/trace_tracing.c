@@ -218,7 +218,7 @@ static void tracing_print_stack(int key)
 		sym = sym_parse(ip[i]);
 		if (!sym)
 			break;
-		pr_info("    -> %s\n", sym->desc);
+		pr_info("    -> [%lx]%s\n", ip[i], sym->desc);
 	}
 	pr_info("\n");
 }
