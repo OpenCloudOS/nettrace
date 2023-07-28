@@ -16,6 +16,9 @@ Source0:%{name}-%{version}.tar.gz
 
 # URL:
 
+%define __strip ${CROSS_COMPILE}strip
+%define __objdump ${CROSS_COMPILE}objdump
+
 %description
 nettrace is is a powerful tool to trace network packet and diagnose
 network problem inside kernel on TencentOS.

@@ -16,6 +16,8 @@ HOST_CFLAGS	= \
 REMOTE_ROOT	:= https://raw.githubusercontent.com/xmmgithub/nettrace-eBPF/master/
 export REMOTE_ROOT
 
+CC		:= $(CROSS_COMPILE)gcc
+
 include $(ROOT)/script/arch.mk
 
 HEADERS		:= $(if $(KERNEL),$(KERNEL),/lib/modules/$(shell uname -r)/build/)
@@ -106,9 +108,9 @@ bpf: $(bpf_progs) $(bpf_progs_ext)
 
 $(progs): %: %.c bpf
 	@if [ -n "$(prog-$@)" ]; then				\
-		echo gcc $(prog-$@) -o $@ $(HOST_CFLAGS);	\
-		gcc $(prog-$@) -o $@ $(HOST_CFLAGS);		\
+		echo $(CC) $(prog-$@) -o $@ $(HOST_CFLAGS);	\
+		$(CC) $(prog-$@) -o $@ $(HOST_CFLAGS);		\
 	else							\
-		echo gcc $< -o $@ $(HOST_CFLAGS);		\
-		gcc $< -o $@ $(HOST_CFLAGS);			\
+		echo $(CC) $< -o $@ $(HOST_CFLAGS);		\
+		$(CC) $< -o $@ $(HOST_CFLAGS);			\
 	fi

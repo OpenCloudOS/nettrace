@@ -1,4 +1,4 @@
-ARCH := $(shell uname -m)
+ARCH ?= $(shell uname -m)
 SRCARCH := $(ARCH)
 
 # Additional ARCH settings for x86
