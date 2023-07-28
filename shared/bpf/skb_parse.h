@@ -241,7 +241,14 @@ static try_inline int probe_parse_ip(void *ip, parse_ctx_t *ctx)
 		l4 = l4 ?: ip + sizeof(*ipv6);
 	} else {
 		struct iphdr *ipv4 = ip;
-		u32 saddr, daddr;
+		u32 saddr, daddr, len;
+
+		len = bpf_ntohs(_C(ipv4, tot_len));
+		if (FILTER_ENABLED(ctx, pkt_len_1)) {
+			if (len < ARGS_GET(ctx->args, pkt_len_1) ||
+			    len > ARGS_GET(ctx->args, pkt_len_2))
+				goto err;
+		}
 
 		/* skip ipv4 if ipv6 is set */
 		if (FILTER_ITER_ENABLED(ctx, addr_v6))

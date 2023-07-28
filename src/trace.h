@@ -106,6 +106,7 @@ typedef struct trace_args {
 	u32  min_latency;
 	char *traces;
 	char *traces_stack;
+	char *pkt_len;
 } trace_args_t;
 
 typedef struct {

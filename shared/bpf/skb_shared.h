@@ -149,6 +149,8 @@ typedef struct {
 	DEFINE_FIELD(u32, saddr)
 	DEFINE_FIELD(u32, daddr)
 	DEFINE_FIELD(u32, addr)
+	DEFINE_FIELD(u32, pkt_len_1)
+	DEFINE_FIELD(u32, pkt_len_2)
 	DEFINE_FIELD(u8, saddr_v6, 16)
 	DEFINE_FIELD(u8, daddr_v6, 16)
 	DEFINE_FIELD(u8, addr_v6, 16)
