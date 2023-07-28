@@ -399,6 +399,13 @@ DEFINE_KPROBE_SKB(pfifo_enqueue, 1) {
 	return 0;
 }
 
+DEFINE_KPROBE_SKB(pfifo_fast_enqueue, 1) {
+	struct Qdisc *q = nt_regs_ctx(ctx, 2);
+	bpf_qdisc_handle(ctx, q);
+
+	return 0;
+}
+
 #ifndef NT_DISABLE_NFT
 
 /* use the 'ignored suffix rule' feature of CO-RE, as described in:
