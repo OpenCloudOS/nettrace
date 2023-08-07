@@ -68,8 +68,13 @@ ifneq ("$(shell bpftool gen help 2>&1 | grep skeleton)","")
 else
 ifeq ("$(shell uname -m)","x86_64")
 	BPFTOOL		:= $(ROOT)/script/bpftool-x86
-else
+endif
+
+ifeq ("$(shell uname -m)","aarch64")
 	BPFTOOL		:= $(ROOT)/script/bpftool-arm
+endif
+ifeq ("$(shell uname -m)","loongarch64")
+	BPFTOOL		:= $(ROOT)/script/bpftool-loongarch
 endif
 endif
 endif
