@@ -14,6 +14,11 @@ ifeq ($(ARCH),aarch64)
         SRCARCH := arm64
 endif
 
+# Additional ARCH settings for loongarch64
+ifeq ($(ARCH),loongarch64)
+        SRCARCH := loongarch
+endif
+
 # Additional ARCH settings for sparc
 ifeq ($(ARCH),sparc32)
        SRCARCH := sparc
