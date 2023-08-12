@@ -399,8 +399,10 @@ static try_inline int __probe_parse_sk(parse_ctx_t *ctx)
 	case IPPROTO_TCP: {
 		struct tcp_sock *tp = (void *)sk;
 
-		ske->l4.tcp.packets_out = _C(tp, packets_out);
-		ske->l4.tcp.retrans_out = _C(tp, retrans_out);
+		if (bpf_core_type_exists(struct tcp_sock)) {
+			ske->l4.tcp.packets_out = _C(tp, packets_out);
+			ske->l4.tcp.retrans_out = _C(tp, retrans_out);
+		}
 	}
 	case IPPROTO_UDP:
 		ske->l4.min.sport = bpf_htons(_C(skc, skc_num));
@@ -420,6 +422,9 @@ static try_inline int __probe_parse_sk(parse_ctx_t *ctx)
 	ske->proto_l3 = l3_proto;
 	ske->proto_l4 = l4_proto;
 	ske->state = _C(skc, skc_state);
+
+	if (!bpf_core_type_exists(struct inet_connection_sock))
+		return 0;
 
 	icsk = (void *)sk;
 	bpf_probe_read_kernel(&ske->ca_state, sizeof(u8),
