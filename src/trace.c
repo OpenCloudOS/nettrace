@@ -423,6 +423,58 @@ skip_trace:
 	bpf_args->trace_mode = 1 << trace_ctx.mode;
 	trace_ctx.detail = bpf_args->detail;
 
+	if (args->pkt_len) {
+		u32 len_1, len_2;
+		char buf[32];
+
+		if (sscanf(args->pkt_len, "%u-%u%s", &len_1, &len_2,
+			buf) == 2) {
+			bpf_args->pkt.enable_pkt_len_1 = true;
+			bpf_args->pkt.pkt_len_1 = len_1;
+			bpf_args->pkt.enable_pkt_len_2 = true;
+			bpf_args->pkt.pkt_len_2 = len_2;
+		} else if (sscanf(args->pkt_len, "%u%s", &len_1,
+			buf) == 1) {
+			bpf_args->pkt.enable_pkt_len_1 = true;
+			bpf_args->pkt.pkt_len_1 = len_1;
+			bpf_args->pkt.enable_pkt_len_2 = true;
+			bpf_args->pkt.pkt_len_2 = len_1;
+		} else {
+			pr_err("--pkt_len: invalid format. valid format: "
+			       "10 or 10-20\n");
+			goto err;
+		}
+	}
+
+	if (args->tcp_flags) {
+		char *cur = args->tcp_flags;
+		u8 flags = 0;
+
+		while (*cur != '\0') {
+			switch (*cur) {
+			case 'S':
+				flags |= TCP_FLAGS_SYN;
+				break;
+			case 'A':
+				flags |= TCP_FLAGS_ACK;
+				break;
+			case 'P':
+				flags |= TCP_FLAGS_PSH;
+				break;
+			case 'R':
+				flags |= TCP_FLAGS_RST;
+				break;
+			default:
+				pr_err("--tcp-flags: invalid char, valid chars "
+				       "are: SAPR\n");
+				goto err;
+			}
+			cur++;
+		}
+		bpf_args->pkt.enable_tcp_flags = true;
+		bpf_args->pkt.tcp_flags = flags;
+	}
+
 	if (trace_check_force()) {
 		pr_err("\tdon't allow to trace 'all' without any filter condition,\n"
 		       "\tas it will cause performance problem.\n\n"

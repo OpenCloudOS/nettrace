@@ -16,7 +16,7 @@ BCOMP		:= ${PREFIX}/usr/share/bash-completion/completions/
 export PREFIX
 SCRIPT		= $(ROOT)/script
 export SCRIPT
-ARCH		:= $(shell uname -m)
+ARCH		?= $(shell uname -m)
 SOURCE_DIR	:= ~/rpmbuild/SOURCES/nettrace-${VERSION}
 PACK_TARGET 	:= nettrace-$(VERSION)-1$(RELEASE).$(ARCH)
 PACK_PATH	:= $(abspath $(PREFIX)/$(PACK_TARGET))
@@ -63,6 +63,7 @@ rpm:
 	@sed -i 's/%{VERSION}/$(VERSION)/' ${SOURCE_DIR}/script/nettrace.spec
 	@cd ~/rpmbuild/SOURCES/ && tar -czf nettrace-${VERSION}.tar.gz	\
 		nettrace-${VERSION}
-	@rpmbuild -D 'dist $(RELEASE)' -ba ${SOURCE_DIR}/script/nettrace.spec
+	@rpmbuild -D 'dist $(RELEASE)' --target ${ARCH}			\
+		-ba ${SOURCE_DIR}/script/nettrace.spec
 
 .PHONY: $(targets)

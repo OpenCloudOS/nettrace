@@ -46,6 +46,16 @@ static void do_parse_args(int argc, char *argv[])
 			.type = OPTION_U32,
 			.desc = "filter by the minial time to live of the skb in ms",
 		},
+		{
+			.lname = "pkt-len", .dest = &trace_args->pkt_len,
+			.type = OPTION_STRING,
+			.desc = "filter by the IP packet length (include header) in byte",
+		},
+		{
+			.lname = "tcp-flags", .dest = &trace_args->tcp_flags,
+			.type = OPTION_STRING,
+			.desc = "filter by TCP flags, such as: SAPR",
+		},
 		{ .type = OPTION_BLANK },
 		{
 			.lname = "trace", .sname = 't',

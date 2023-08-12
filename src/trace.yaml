@@ -81,6 +81,13 @@ children:
       rules:
       - <<: *rule_msg
         msg: skb is successfully sent to the NIC driver
+  - name: sched
+    desc: TC(traffic control) module
+    visual: true
+    children:
+    - tcf_classify:0
+    - cls_bpf_classify:0
+    - tcf_bpf_act:0
     - name: pfifo_enqueue
       analyzer: qdisc
       monitor: 1
@@ -89,16 +96,16 @@ children:
       - exp: ne 0
         level: error
         msg: failed to queue packet to qdisc
+    - name: pfifo_fast_enqueue
+      analyzer: qdisc
+      target: pfifo_fast_enqueue
+      monitor: 1
+      rules:
+      - exp: ne 0
+        level: error
+        msg: failed to queue packet to qdisc
     - name: sch_direct_xmit
       analyzer: qdisc
-      target: sch_direct_xmit
-  - name: sched
-    desc: TC(traffic control) module
-    visual: true
-    children:
-    - tcf_classify:0
-    - cls_bpf_classify:0
-    - tcf_bpf_act:0
   - name: ipvlan
     desc: ipvlan network interface
     default: false

@@ -241,7 +241,14 @@ static try_inline int probe_parse_ip(void *ip, parse_ctx_t *ctx)
 		l4 = l4 ?: ip + sizeof(*ipv6);
 	} else {
 		struct iphdr *ipv4 = ip;
-		u32 saddr, daddr;
+		u32 saddr, daddr, len;
+
+		len = bpf_ntohs(_C(ipv4, tot_len));
+		if (FILTER_ENABLED(ctx, pkt_len_1)) {
+			if (len < ARGS_GET(ctx->args, pkt_len_1) ||
+			    len > ARGS_GET(ctx->args, pkt_len_2))
+				goto err;
+		}
 
 		/* skip ipv4 if ipv6 is set */
 		if (FILTER_ITER_ENABLED(ctx, addr_v6))
@@ -267,13 +274,19 @@ static try_inline int probe_parse_ip(void *ip, parse_ctx_t *ctx)
 		struct tcphdr *tcp = l4;
 		u16 sport = _(tcp->source);
 		u16 dport = _(tcp->dest);
+		u8 flags;
 
 		if (FILTER_ITER_CHECK(ctx, port, sport, dport))
 			goto err;
 
+		flags = _(((u8 *)tcp)[13]);
+		if (FILTER_ENABLED(ctx, tcp_flags) &&
+		    !(flags & ARGS_GET(ctx->args, tcp_flags)))
+			goto err;
+
 		pkt->l4.tcp.sport = sport;
 		pkt->l4.tcp.dport = dport;
-		pkt->l4.tcp.flags = _(((u8 *)tcp)[13]);
+		pkt->l4.tcp.flags = flags;
 		pkt->l4.tcp.seq = _(tcp->seq);
 		pkt->l4.tcp.ack = _(tcp->ack_seq);
 		break;
