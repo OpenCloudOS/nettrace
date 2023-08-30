@@ -72,6 +72,9 @@ static try_inline int filter_by_netns(context_t *ctx)
 	u32 inode, netns;
 	struct net *ns;
 
+	if (!bpf_core_field_exists(possible_net_t, net))
+		return 0;
+
 	netns = ctx->args->netns;
 	if (!netns && !ctx->args->detail)
 		return 0;
