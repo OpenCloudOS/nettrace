@@ -48,7 +48,7 @@
 #define bpf_core_type_exists(type) false
 
 #undef bpf_core_field_exists
-#define bpf_core_field_exists(field) false
+#define bpf_core_field_exists(field...) false
 
 #undef bpf_core_enum_value_exists
 #define bpf_core_enum_value_exists(value) false
