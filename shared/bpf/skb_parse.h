@@ -332,6 +332,7 @@ err:
 	return -1;
 }
 
+#if !defined(COMPAT_MODE) || defined(BPF_FEAT_SK_PRPTOCOL_LEGACY)
 static __always_inline u8 sk_get_protocol(struct sock *sk)
 {
 	u32 flags = _(((u32 *)(&sk->__sk_flags_offset))[0]);
@@ -344,6 +345,7 @@ static __always_inline u8 sk_get_protocol(struct sock *sk)
 #endif
 	return l4_proto;
 }
+#endif
 
 static try_inline int __probe_parse_sk(parse_ctx_t *ctx)
 {
