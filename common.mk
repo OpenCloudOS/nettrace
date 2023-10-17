@@ -99,7 +99,7 @@ progs/%.o: progs/%.c $(BPF_EXTRA_DEP)
 	@file $@ | grep eBPF > /dev/null || (rm $@ && exit 1)
 
 %.skel.h: %.o
-	$(BPFTOOL) gen skeleton $< > $@
+	$(BPFTOOL) gen skeleton $< > $@ || (rm -r $@ && exit 1)
 
 $(bpf_progs): %: %.skel.h
 	@:
