@@ -448,7 +448,7 @@ DEFINE_KPROBE_INIT(nft_do_chain, nft_do_chain, .arg_count = 2)
 		if (!bpf_core_field_exists(pkt->xt))
 			state = _C((struct nft_pktinfo___new *)pkt, state);
 		else
-			state = _C(&(pkt->xt), state);
+			state = _C(pkt, xt.state);
 	} else {
 		/* don't use CO-RE, as nft may be a module */
 		state = _(pkt->xt.state);
