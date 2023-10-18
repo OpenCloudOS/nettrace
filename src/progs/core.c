@@ -79,20 +79,20 @@ static try_inline int filter_by_netns(context_t *ctx)
 	if (!netns && !ctx->args->detail)
 		return 0;
 
-	dev = _(skb->dev);
+	dev = _C(skb, dev);
 	if (!dev) {
-		struct sock *sk = _(skb->sk);
+		struct sock *sk = _C(skb, sk);
 		if (!sk)
 			goto no_ns;
-		ns = _(sk->__sk_common.skc_net.net);
+		ns = _C(sk, __sk_common.skc_net.net);
 	} else {
-		ns = _(dev->nd_net.net);
+		ns = _C(dev, nd_net.net);
 	}
 
 	if (!ns)
 		goto no_ns;
 
-	inode = _(ns->ns.inum);
+	inode = _C(ns, ns.inum);
 	if (ctx->args->detail)
 		((detail_event_t *)ctx->e)->netns = inode;
 
