@@ -6,7 +6,7 @@ COMMON_SHARED	:= $(ROOT)/shared/pkt_utils.c $(COMPONENT)/net_utils.c	\
 CFLAGS		+= -I./ -I$(ROOT)/shared/bpf/
 BPF_CFLAGS	= $(CFLAGS) -Wno-unused-function			\
 		  -Wno-compare-distinct-pointer-types -Wuninitialized	\
-		  -D__TARGET_ARCH_$(SRCARCH)
+		  -D__TARGET_ARCH_$(SRCARCH) -DBPF_NO_PRESERVE_ACCESS_INDEX
 HOST_CFLAGS	= \
 		-lbpf -lelf -lz -O2 -static $(CFLAGS)			\
 		-Wno-deprecated-declarations -DVERSION=$(VERSION)	\
@@ -58,7 +58,7 @@ endif
 	kheaders_cmd	:= ln -s vmlinux_header.h kheaders.h
 	CFLAGS		+= -DCOMPAT_MODE
 	BPF_CFLAGS	+= $(KERNEL_CFLAGS) -DBPF_NO_GLOBAL_DATA \
-			   -DBPF_NO_PRESERVE_ACCESS_INDEX -g
+			   -g
 else
 	kheaders_cmd	:= ln -s ../shared/bpf/vmlinux.h kheaders.h
 	BPF_CFLAGS	+= -target bpf -g

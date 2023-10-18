@@ -79,20 +79,20 @@ static try_inline int filter_by_netns(context_t *ctx)
 	if (!netns && !ctx->args->detail)
 		return 0;
 
-	dev = _(skb->dev);
+	dev = _C(skb, dev);
 	if (!dev) {
-		struct sock *sk = _(skb->sk);
+		struct sock *sk = _C(skb, sk);
 		if (!sk)
 			goto no_ns;
-		ns = _(sk->__sk_common.skc_net.net);
+		ns = _C(sk, __sk_common.skc_net.net);
 	} else {
-		ns = _(dev->nd_net.net);
+		ns = _C(dev, nd_net.net);
 	}
 
 	if (!ns)
 		goto no_ns;
 
-	inode = _(ns->ns.inum);
+	inode = _C(ns, ns.inum);
 	if (ctx->args->detail)
 		((detail_event_t *)ctx->e)->netns = inode;
 
@@ -448,7 +448,7 @@ DEFINE_KPROBE_INIT(nft_do_chain, nft_do_chain, .arg_count = 2)
 		if (!bpf_core_field_exists(pkt->xt))
 			state = _C((struct nft_pktinfo___new *)pkt, state);
 		else
-			state = _C(&(pkt->xt), state);
+			state = _C(pkt, xt.state);
 	} else {
 		/* don't use CO-RE, as nft may be a module */
 		state = _(pkt->xt.state);
