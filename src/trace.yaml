@@ -425,6 +425,7 @@ children:
         level: info
         msg: TCP socket is closed
     - *tcp_rcv_state_process
+    - tcp_send_active_reset/0
   - name: tcp-congestion
     desc: TCP congestion control releated hooks
     children:
