@@ -94,7 +94,7 @@ progs/%.o: progs/%.c $(BPF_EXTRA_DEP)
 	opt -O2 -mtriple=bpf-pc-linux | 				\
 	llvm-dis |							\
 	llc -march=bpf -filetype=obj -o $@
-	@file $@ | grep eBPF > /dev/null || (rm $@ && exit 1)
+	@readelf -S $@ | grep BTF > /dev/null || (rm $@ && exit 1)
 
 %.skel.h: %.o
 	$(BPFTOOL) gen skeleton $< > $@ || (rm -r $@ && exit 1)
