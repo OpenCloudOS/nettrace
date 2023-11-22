@@ -3,8 +3,6 @@ export VERSION	= 1.2.7
 RELEASE		?= .tl3
 export RELEASE
 
-targets		:= nodetrace src legacy
-targets-call	= for i in $1; do make $2 -C $$i $@; done
 man-target 	:= script/zh_CN/nettrace.8
 
 ROOT		:= $(abspath .)
@@ -23,7 +21,7 @@ PACK_PATH	:= $(abspath $(PREFIX)/$(PACK_TARGET))
 PACK_NAME	:= $(PACK_TARGET).tar.bz2
 
 all clean:
-	$(call targets-call,$(targets))
+	make -C src $@
 
 %.8: %.md
 	md2man-roff $< > $@
@@ -32,7 +30,7 @@ man: $(man-target)
 
 install:
 	@mkdir -p $(PREFIX)
-	$(call targets-call,$(targets))
+	make -C src install
 
 	@mkdir -p ${MAN_DIR}/zh_CN/man8/; gzip -k $(SCRIPT)/zh_CN/*.8;	\
 		mv $(SCRIPT)/zh_CN/*.8.gz ${MAN_DIR}/zh_CN/man8
@@ -52,7 +50,7 @@ install:
 pack:
 	@make clean
 	@rm -rf $(PACK_PATH) && mkdir -p $(PACK_PATH)
-	$(call targets-call,$(targets),PREFIX=$(PACK_PATH))
+	make PREFIX=$(PACK_PATH) -C src pack
 	@cd $(PREFIX) && tar -cjf $(PACK_NAME) $(PACK_TARGET) &&	\
 		echo "$(PREFIX)/$(PACK_NAME) is generated"
 
@@ -65,5 +63,3 @@ rpm:
 		nettrace-${VERSION}
 	@rpmbuild -D 'dist $(RELEASE)' --target ${ARCH}			\
 		-ba ${SOURCE_DIR}/script/nettrace.spec
-
-.PHONY: $(targets)
