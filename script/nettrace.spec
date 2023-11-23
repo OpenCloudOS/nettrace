@@ -41,12 +41,7 @@ PREFIX=$RPM_BUILD_ROOT
 
 %files
 %defattr (-,root,root,0755)
-/opt/nettrace/
 /usr/bin/nettrace
-/usr/bin/nettrace-legacy
-/usr/bin/nodetrace-mark
-/usr/bin/nodetrace-watch
-/usr/share/man/man8/nettrace-legacy.8.gz
 /usr/share/man/zh_CN/man8/nettrace.8.gz
 /usr/share/man/man8/nettrace.8.gz
 /usr/share/man/man8/dropreason.8.gz

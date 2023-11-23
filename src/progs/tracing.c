@@ -103,8 +103,6 @@ typedef int (*fake_func)(context_t *ctx);
 
 #define ext_event_init() { }
 
-const volatile int func_ret_index[TRACE_MAX];
-
 
 static try_inline int
 handle_exit(context_t *ctx, void **regs, int func_index);

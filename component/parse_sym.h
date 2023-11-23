@@ -24,9 +24,9 @@ struct sym_result {
 
 struct sym_result *sym_parse_exact(__u64 pc);
 struct sym_result *sym_parse(__u64 pc);
-int sym_search_pattern(char *name, char *result, bool partial);
+int sym_search_pattern(const char *name, char *result, bool partial);
 
-static inline int sym_get_type(char *name)
+static inline int sym_get_type(const char *name)
 {
 	return sym_search_pattern(name, NULL, false);
 }

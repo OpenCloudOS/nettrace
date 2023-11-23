@@ -157,7 +157,7 @@ struct sym_result *sym_parse_exact(__u64 pc)
 	return sym_lookup_cache(pc, true) ?: sym_lookup_proc(pc, true);
 }
 
-int sym_search_pattern(char *name, char *result, bool partial)
+int sym_search_pattern(const char *name, char *result, bool partial)
 {
 	char func[128], module[128], search[128], *target;
 	int count;
