@@ -41,6 +41,13 @@ struct {
 	__uint(max_entries, 1);
 } m_config SEC(".maps");
 
+#ifndef BPF_NO_GLOBAL_DATA
+static const volatile bool bpf_func_exist[BPF_LOCAL_FUNC_MAX] = {0};
+#define bpf_core_helper_exist(name) bpf_func_exist[BPF_LOCAL_FUNC_##name]
+#else
+#define bpf_core_helper_exist(name) false
+#endif
+
 #define CONFIG() ({						\
 	int _key = 0;						\
 	void * _v = bpf_map_lookup_elem(&m_config, &_key);	\

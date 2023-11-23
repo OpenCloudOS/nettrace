@@ -88,6 +88,7 @@ static int probe_trace_load()
 
 	/* set the max entries of perf event map to current cpu count */
 	bpf_map__set_max_entries(skel->maps.m_event, get_nprocs_conf());
+	bpf_func_init(skel, BPF_PROG_TYPE_KPROBE);
 
 	trace_ctx.obj = skel->obj;
 	if (trace_pre_load() || kprobe__load(skel)) {

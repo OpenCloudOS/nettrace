@@ -54,9 +54,8 @@ ifeq ($(wildcard $(HEADERS)),)
 $(error kernel headers not exist in COMPAT mdoe, please install it)
 endif
 	kheaders_cmd	:= ln -s vmlinux_header.h kheaders.h
-	CFLAGS		+= -DCOMPAT_MODE
-	BPF_CFLAGS	+= $(KERNEL_CFLAGS) -DBPF_NO_GLOBAL_DATA \
-			   -g
+	CFLAGS		+= -DCOMPAT_MODE -DBPF_NO_GLOBAL_DATA
+	BPF_CFLAGS	+= $(KERNEL_CFLAGS) -g
 else
 	kheaders_cmd	:= ln -s ../shared/bpf/vmlinux.h kheaders.h
 	BPF_CFLAGS	+= -target bpf -g

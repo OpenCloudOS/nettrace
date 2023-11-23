@@ -176,4 +176,15 @@ typedef struct {
 #endif
 typedef __u64 stack_trace_t[PERF_MAX_STACK_DEPTH];
 
+#define BPF_LOCAL_FUNC_MAPPER(FN, args...)	\
+	FN(jiffies64, ##args)			\
+	FN(get_func_ret, ##args)
+
+#define FN(name) BPF_LOCAL_FUNC_##name,
+enum {
+	BPF_LOCAL_FUNC_MAPPER(FN)
+	BPF_LOCAL_FUNC_MAX,
+};
+#undef FN
+
 #endif
