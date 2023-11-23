@@ -152,7 +152,7 @@ typedef struct {
 
 static try_inline u8 get_ip_header_len(u8 h)
 {
-	u8 len = (h & 0xF0) * 4;
+	u8 len = (h & 0x0F) * 4;
 	return len > IP_H_LEN ? len: IP_H_LEN;
 }
 
