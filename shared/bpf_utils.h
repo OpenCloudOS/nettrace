@@ -66,4 +66,16 @@ int compat_bpf_attach_kprobe(int fd, char *name, bool ret);
 const struct btf_type *btf_get_type(char *name);
 int btf_get_arg_count(char *name);
 
+#ifndef BPF_NO_GLOBAL_DATA
+#undef BPF_FUNC_CHECK
+#define BPF_FUNC_CHECK(name, data, type)			\
+data[BPF_LOCAL_FUNC_##name] = libbpf_probe_bpf_helper(type,	\
+	BPF_FUNC_##name, NULL);
+
+#define bpf_func_init(skel, type)				\
+	BPF_LOCAL_FUNC_MAPPER(BPF_FUNC_CHECK, skel->rodata->bpf_func_exist, type)
+#else
+#define bpf_func_init(data, type)
+#endif
+
 #endif
