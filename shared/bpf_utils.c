@@ -12,7 +12,6 @@
 
 #include <sys_utils.h>
 #include <bpf/btf.h>
-#include <parse_sym.h>
 
 #include "bpf_utils.h"
 
@@ -140,30 +139,9 @@ int btf_get_arg_count(char *name)
 	if (!t)
 		return -ENOENT;
 
-	/* find kfunction proto of this function */
 	t = btf__type_by_id(local_btf, t->type);
 	if (!t)
 		return -ENOENT;
 
 	return btf_vlen(t);
-}
-
-/* This is the way we check the exist of kernel function/symbol, before
- * the araise of "bpf_core_function_exist()"
- */
-#define DEF_BPF_SYM(name) #name,
-static const char *bpf_ksyms[] = {
-	BPF_SYM_MAPPER(DEF_BPF_SYM)
-};
-#undef DEF_BPF_SYM
-
-void bpf_syms_init(bool *data)
-{
-	const char *sym;
-	int i;
-
-	for (i = 0; i < BPF_SYM_MAX; i++) {
-		sym = bpf_ksyms[i];
-		data[i] = sym_get_type(sym) != SYM_NOT_EXIST;
-	}
 }

@@ -646,9 +646,6 @@ err:
 	return err;
 }
 
-/* This function is called after BPF is open and not loaded to the kernel
- * yet.
- */
 int trace_pre_load()
 {
 	char kret_name[128], regex[128], *func;

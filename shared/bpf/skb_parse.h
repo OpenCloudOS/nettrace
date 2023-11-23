@@ -41,9 +41,6 @@ struct {
 	__uint(max_entries, 1);
 } m_config SEC(".maps");
 
-const volatile bool bpf_syms_exist[BPF_SYM_MAX];
-#define bpf_core_helper_exist(name) bpf_syms_exist[BPF_SYM_bpf_##name##_proto]
-
 #define CONFIG() ({						\
 	int _key = 0;						\
 	void * _v = bpf_map_lookup_elem(&m_config, &_key);	\

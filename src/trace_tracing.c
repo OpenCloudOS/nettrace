@@ -152,7 +152,6 @@ static int tracing_trace_load()
 
 	/* set the max entries of perf event map to current cpu count */
 	bpf_map__set_max_entries(skel->maps.m_event, get_nprocs_conf());
-	bpf_syms_init(skel->rodata->bpf_syms_exist);
 
 	trace_ctx.obj = skel->obj;
 	tracing_load_rules();

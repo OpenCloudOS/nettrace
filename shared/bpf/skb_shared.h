@@ -176,15 +176,4 @@ typedef struct {
 #endif
 typedef __u64 stack_trace_t[PERF_MAX_STACK_DEPTH];
 
-#define BPF_SYM_MAPPER(FN)				\
-	FN(bpf_jiffies64_proto)				\
-	FN(bpf_get_func_ret_proto)
-
-#define FN(name) BPF_SYM_##name,
-enum {
-	BPF_SYM_MAPPER(FN)
-	BPF_SYM_MAX,
-};
-#undef FN
-
 #endif
