@@ -42,7 +42,7 @@ struct {
 } m_config SEC(".maps");
 
 #ifndef BPF_NO_GLOBAL_DATA
-static const volatile bool bpf_func_exist[BPF_LOCAL_FUNC_MAX] = {0};
+const volatile bool bpf_func_exist[BPF_LOCAL_FUNC_MAX] = {0};
 #define bpf_core_helper_exist(name) bpf_func_exist[BPF_LOCAL_FUNC_##name]
 #else
 #define bpf_core_helper_exist(name) false
