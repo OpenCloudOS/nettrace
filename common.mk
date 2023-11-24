@@ -51,7 +51,7 @@ endif
 
 ifdef COMPAT
 ifeq ($(wildcard $(HEADERS)),)
-$(error kernel headers not exist in COMPAT mdoe, please install it)
+$(error kernel headers not exist in COMPAT mode, please install it)
 endif
 	kheaders_cmd	:= ln -s vmlinux_header.h kheaders.h
 	CFLAGS		+= -DCOMPAT_MODE -DBPF_NO_GLOBAL_DATA
