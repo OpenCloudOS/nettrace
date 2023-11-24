@@ -356,5 +356,5 @@ Menglong Dong
 
 ## SEE ALSO
 
-nettrace-legacy(8), dropreason(8)
+dropreason(8)
 
