@@ -49,6 +49,10 @@ ifdef KERN_VER
 	CFLAGS		+= -DKERN_VER=$(KERN_VER)
 endif
 
+ifdef NO_GLOBAL_DATA
+	CFLAGS		+= -DBPF_NO_GLOBAL_DATA
+endif
+
 ifdef COMPAT
 ifeq ($(wildcard $(HEADERS)),)
 $(error kernel headers not exist in COMPAT mode, please install it)
