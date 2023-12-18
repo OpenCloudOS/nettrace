@@ -61,7 +61,7 @@ sudo yum install nettrace
 
 2. clang版本要在10+
 
-##### ubuntu
+##### ubuntu/debian
 
 对于ubuntu系统，使用以下命令安装依赖：
 
@@ -108,6 +108,8 @@ make KERNEL=/home/ubuntu/kernel COMPAT=1 all
 ```shell
 make KERN_VER=266002 COMPAT=1 all
 ```
+
+**注意：** 这里最后一个版本号如果过大，超过了255，那么就取255。例如，对于4.19.282，就要按照`(4<<16) + (19<<8) + 255`的方式来计算。
 
 #### 2.3.3 打包
 
