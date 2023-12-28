@@ -369,6 +369,7 @@ children:
         msg: failed to xmit skb to ip layer
     - tcp_sendmsg_locked/0
     - __tcp_push_pending_frames/0
+    - __tcp_retransmit_skb/0:1
 - name: udp
   desc: udp protocol layer (L4) of the network stack
   children:
