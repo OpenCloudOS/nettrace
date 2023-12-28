@@ -108,6 +108,7 @@ typedef struct trace_args {
 	char *traces_stack;
 	char *pkt_len;
 	char *tcp_flags;
+	u32  count;
 } trace_args_t;
 
 typedef struct {
@@ -254,6 +255,11 @@ static inline bool trace_is_func(trace_t *t)
 static inline void trace_stop()
 {
 	trace_ctx.stop = true;
+}
+
+static inline bool trace_stopped()
+{
+	return trace_ctx.stop;
 }
 
 static inline bool trace_mode_timeline()

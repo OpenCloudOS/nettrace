@@ -21,6 +21,7 @@ trace_context_t trace_ctx = {
 extern trace_ops_t tracing_ops;
 extern trace_ops_t probe_ops;
 trace_ops_t *trace_ops_all[] = { &tracing_ops, &probe_ops };
+u32 skb_count = 0;
 
 static bool trace_group_valid(trace_group_t *group)
 {
@@ -730,12 +731,23 @@ static void trace_on_lost(void *ctx, int cpu, __u64 cnt)
 	exit(-1);
 }
 
+static inline void poll_handler_wrap(void *ctx, int cpu, void *data,
+				     u32 size)
+{
+	if (trace_stopped())
+		return;
+
+	trace_ctx.ops->trace_poll(ctx, cpu, data, size);
+	if (trace_ctx.args.count && trace_ctx.args.count <= skb_count)
+		trace_stop();
+}
+
 int trace_poll()
 {
 	int map_fd = bpf_object__find_map_fd_by_name(trace_ctx.obj, "m_event");
 
 	if (!map_fd)
 		return -1;
-	perf_output_cond(map_fd, trace_ctx.ops->trace_poll, trace_on_lost,
+	perf_output_cond(map_fd, poll_handler_wrap, trace_on_lost,
 			 &trace_ctx.stop);
 }

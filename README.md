@@ -156,6 +156,7 @@ Usage:
     --ret            show function return value
     --detail         show extern packet info, such as pid, ifname, etc
     --date           print timestamp in date-time format
+    -c, --count      exit after receiving count packets
     --basic          use 'basic' trace mode, don't trace skb's life
     --diag           enable 'diagnose' mode
     --diag-quiet     only print abnormal packet

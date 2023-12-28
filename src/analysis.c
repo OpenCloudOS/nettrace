@@ -23,6 +23,7 @@ const char *level_mark[] = {
 	[RULE_ERROR] = PFMT_ERROR"ERROR"PFMT_END,
 };
 static u32 ctx_count = 0;
+extern u32 skb_count;
 
 static inline struct hlist_head *get_ctx_hash_head(u64 key)
 {
@@ -287,6 +288,7 @@ out:
 	pr_info("\n");
 free_ctx:
 	analy_ctx_free(ctx);
+	skb_count++;
 }
 
 static int try_run_entry(trace_t *trace, analyzer_t *analyzer,
@@ -497,6 +499,7 @@ static inline void do_basic_poll(analy_entry_t *entry)
 	}
 
 	analy_entry_handle(entry);
+	skb_count++;
 }
 
 void basic_poll_handler(void *ctx, int cpu, void *data, u32 size)

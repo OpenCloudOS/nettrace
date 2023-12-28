@@ -84,6 +84,11 @@ static void do_parse_args(int argc, char *argv[])
 			.desc = "print timestamp in date-time format",
 		},
 		{
+			.lname = "count", .sname = 'c', .dest = &trace_args->count,
+			.type = OPTION_U32,
+			.desc = "exit after receiving count packets",
+		},
+		{
 			.lname = "basic", .dest = &trace_args->basic,
 			.type = OPTION_BOOL,
 			.desc = "use 'basic' trace mode, don't trace skb's life",
