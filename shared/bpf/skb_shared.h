@@ -133,6 +133,7 @@ typedef struct {
 #define TCP_FLAGS_PSH	(1 << 3)
 #define TCP_FLAGS_RST	(1 << 2)
 #define TCP_FLAGS_SYN	(1 << 1)
+#define TCP_FLAGS_FIN	(1 << 0)
 
 #define DEFINE_FIELD_STD(type, name)		\
 	type name;				\

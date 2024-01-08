@@ -465,6 +465,9 @@ skip_trace:
 			case 'R':
 				flags |= TCP_FLAGS_RST;
 				break;
+			case 'F':
+				flags |= TCP_FLAGS_FIN;
+				break;
 			default:
 				pr_err("--tcp-flags: invalid char, valid chars "
 				       "are: SAPR\n");
