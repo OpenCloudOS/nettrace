@@ -376,6 +376,7 @@ static inline void rule_run_any(analy_entry_t *entry, trace_t *trace)
 void tl_poll_handler(void *raw_ctx, int cpu, void *data, u32 size)
 {
 	static char buf[1024], tinfo[128];
+	analy_exit_t analy_exit;
 	fake_analy_ctx_t *fake;
 	analy_ctx_t *analy_ctx;
 	analy_entry_t *entry;
@@ -435,8 +436,8 @@ void tl_poll_handler(void *raw_ctx, int cpu, void *data, u32 size)
 	list_add_tail(&entry->list, &analy_ctx->entries);
 	goto check_pending;
 
-do_ret:;
-	analy_exit_t analy_exit = {
+do_ret:
+	analy_exit = (analy_exit_t) {
 		.event = *(retevent_t *)data,
 		.cpu = cpu,
 	};
