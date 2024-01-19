@@ -127,7 +127,7 @@ static try_inline int handle_entry(context_t *ctx)
 		}
 	}
 
-	if (ARGS_CHECK(args, pid, pid) || filter_by_netns(ctx))
+	if (args_check(args, pid, pid) || filter_by_netns(ctx))
 		goto err;
 
 	if (args->trace_mode == TRACE_MODE_SOCK_MASK) {

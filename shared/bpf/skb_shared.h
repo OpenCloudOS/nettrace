@@ -147,28 +147,23 @@ typedef struct {
 
 /* used for packet filter condition */
 typedef struct {
-	DEFINE_FIELD(u32, saddr)
-	DEFINE_FIELD(u32, daddr)
-	DEFINE_FIELD(u32, addr)
-	DEFINE_FIELD(u32, pkt_len_1)
-	DEFINE_FIELD(u32, pkt_len_2)
-	DEFINE_FIELD(u8, saddr_v6, 16)
-	DEFINE_FIELD(u8, daddr_v6, 16)
-	DEFINE_FIELD(u8, addr_v6, 16)
-	DEFINE_FIELD(u16, sport)
-	DEFINE_FIELD(u16, dport)
-	DEFINE_FIELD(u16, port)
-	DEFINE_FIELD(u16, l3_proto)
-	DEFINE_FIELD(u8, l4_proto)
-	DEFINE_FIELD(u8, tcp_flags)
+	u32	saddr;
+	u32	daddr;
+	u32	addr;
+	u32	pkt_len_1;
+	u32	pkt_len_2;
+	u32	saddr_v6[4];
+	u32	daddr_v6[4];
+	u32	addr_v6[4];
+	u16	sport;
+	u16	dport;
+	u16	port;
+	u16	l3_proto;
+	u8	l4_proto;
+	u8	tcp_flags;
 } pkt_args_t;
 
-#define ARGS_ENABLED(args, name)	args->enable_##name
-#define ARGS_GET(args, name)		(args)->name
-#define ARGS_CHECK(args, name, value)		\
-	(ARGS_ENABLED(args, name) && args->name != (value))
-#define ARGS_CHECK_OPS(args, name, value, ops)	\
-	(ARGS_ENABLED(args, name) && ops(args->name, value))
+#define args_check(args, attr, value) (args->attr && args->attr != value)
 
 #define CONFIG_MAP_SIZE	1024
 

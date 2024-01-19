@@ -53,7 +53,6 @@ static void do_parse_args(int argc, char *argv[])
 			.sname = 'S',
 			.dest = &pkt_args->sport,
 			.type = OPTION_U16BE,
-			.set = &pkt_args->enable_sport,
 			.desc = "filter source TCP/UDP port",
 		},
 		{
@@ -61,7 +60,6 @@ static void do_parse_args(int argc, char *argv[])
 			.sname = 'D',
 			.dest = &pkt_args->dport,
 			.type = OPTION_U16BE,
-			.set = &pkt_args->enable_dport,
 			.desc = "filter dest TCP/UDP port",
 		},
 		{
@@ -69,7 +67,6 @@ static void do_parse_args(int argc, char *argv[])
 			.sname = 'P',
 			.dest = &pkt_args->port,
 			.type = OPTION_U16BE,
-			.set = &pkt_args->enable_port,
 			.desc = "filter source or dest TCP/UDP port",
 		},
 		{
@@ -94,7 +91,7 @@ static void do_parse_args(int argc, char *argv[])
 		},
 		{
 			.lname = "pid", .type = OPTION_U32,
-			.dest = &bpf_args->pid, .set = &bpf_args->enable_pid,
+			.dest = &bpf_args->pid,
 			.desc = "filter by current process id(pid)",
 		},
 		{
@@ -257,12 +254,10 @@ static void do_parse_args(int argc, char *argv[])
 #define FILL_ADDR_PROTO(name, subfix, args, pf) if (name##_pf == pf) {	\
 	memcpy(&(args)->name##subfix, name##_buf,			\
 	       sizeof((args)->name##subfix));				\
-	(args)->enable_##name##subfix = true;				\
-	if ((args)->enable_l3_proto && (args)->l3_proto != pf) { 	\
+	if ((args)->l3_proto && (args)->l3_proto != pf) { 		\
 		pr_err("ip" #subfix " protocol is excepted!\n");	\
 		goto err;						\
 	}								\
-	(args)->enable_l3_proto = true;					\
 	(args)->l3_proto = pf;						\
 }
 #define FILL_ADDR(name, args)						\
@@ -271,11 +266,9 @@ static void do_parse_args(int argc, char *argv[])
 
 	switch (proto_l) {
 	case 3:
-		pkt_args->enable_l3_proto = true;
 		pkt_args->l3_proto = proto;
 		break;
 	case 4:
-		pkt_args->enable_l4_proto = true;
 		pkt_args->l4_proto = proto;
 		break;
 	default:
