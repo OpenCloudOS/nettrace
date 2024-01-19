@@ -148,6 +148,19 @@ children:
     desc: bonding netdevice
     children:
     - bond_dev_queue_xmit:1
+  - name: vxlan
+    visual: true
+    desc: vxlan model
+    children:
+    - __iptunnel_pull_header:0
+    - vxlan_rcv/0:1
+    - vxlan_xmit_one:0
+  - name: vlan
+    visual: true
+    desc: vlan model
+    children:
+    - vlan_do_receive:0
+    - vlan_dev_hard_start_xmit:0
 - name: packet
   desc: the process of skb of type PF_PACKET
   children:
