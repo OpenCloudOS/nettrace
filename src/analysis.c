@@ -576,11 +576,8 @@ DEFINE_ANALYZER_ENTRY(free, TRACE_MODE_CTX_MASK)
 {
 	put_fake_analy_ctx(e->fake_ctx);
 	hlist_del(&e->fake_ctx->hash);
-	if (!trace_mode_intel())
-		goto out;
+	rule_run_any(e, trace);
 
-	rule_run_ret(e, trace, 0);
-out:
 	return RESULT_CONT;
 }
 
@@ -594,24 +591,25 @@ DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_ALL_MASK)
 	sym = sym_parse(event->location);
 	sym_str = sym ? sym->desc : "unknow";
 
-	if (!mode_has_context()) {
-		info = malloc(1024);
-		if (trace_ctx.drop_reason)
-			sprintf(info, ", reason: %s, %s", reason, sym_str);
-		else
-			sprintf(info, ", %s", sym_str);
-		entry_set_msg(e, info);
-		goto out;
+	info = malloc(1024);
+	if (trace_ctx.drop_reason)
+		sprintf(info, PFMT_EMPH_STR(" *reason: %s, %s*"), reason,
+			sym_str);
+	else
+		sprintf(info, PFMT_EMPH_STR(" *%s*"), sym_str);
+	entry_set_msg(e, info);
+
+	rule_run_any(e, trace);
+	if (mode_has_context()) {
+		put_fake_analy_ctx(e->fake_ctx);
+		hlist_del(&e->fake_ctx->hash);
 	}
 
-	put_fake_analy_ctx(e->fake_ctx);
-	hlist_del(&e->fake_ctx->hash);
 	if (!trace_mode_intel())
 		goto out;
 
+	/* generate the information in the analysis result part */
 	info = malloc(1024);
-	info[0] = '\0';
-	rule_run_ret(e, trace, 0);
 	sprintf(info, PFMT_EMPH_STR("    location")":\n\t%s", sym_str);
 	if (trace_ctx.drop_reason) {
 		sprintf_end(info, PFMT_EMPH_STR("\n    drop reason")":\n\t%s",
