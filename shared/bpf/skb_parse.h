@@ -118,7 +118,6 @@ typedef struct {
 	u16 mac_header;
 	u16 network_header;
 	u16 trans_header;
-	bool filter;
 } parse_ctx_t;
 
 #define TCP_H_LEN	(sizeof(struct tcphdr))
@@ -188,12 +187,12 @@ static try_inline bool skb_l4_check(u16 l4, u16 l3)
 
 /* used to do basic filter */
 #define filter_enabled(ctx, attr)					\
-	(ctx->filter && ctx->args->attr)
+	(ctx->args && ctx->args->attr)
 #define filter_check(ctx, attr, value)					\
 	(filter_enabled(ctx, attr) && ctx->args->attr != value)
 #define filter_any_enabled(ctx, attr)					\
-	(ctx->filter && (ctx->args->attr || ctx->args->s##attr ||	\
-			 ctx->args->d##attr))
+	(ctx->args && (ctx->args->attr || ctx->args->s##attr ||	\
+		       ctx->args->d##attr))
 
 static try_inline bool is_ipv6_equal(void *addr1, void *addr2)
 {
@@ -206,7 +205,7 @@ static try_inline int filter_ipv6_check(parse_ctx_t *ctx, void *saddr,
 {
 	pkt_args_t *args = ctx->args;
 
-	if (!ctx->filter)
+	if (!args)
 		return 0;
 
 	return (args->saddr_v6[0] && !is_ipv6_equal(args->saddr_v6, saddr)) ||
@@ -220,7 +219,7 @@ static try_inline int filter_ipv4_check(parse_ctx_t *ctx, u32 saddr,
 {
 	pkt_args_t *args = ctx->args;
 
-	if (!ctx->filter)
+	if (!args)
 		return 0;
 
 	return (args->saddr && args->saddr != saddr) ||
@@ -232,7 +231,7 @@ static try_inline int filter_port(parse_ctx_t *ctx, u32 sport, u32 dport)
 {
 	pkt_args_t *args = ctx->args;
 
-	if (!ctx->filter)
+	if (!args)
 		return 0;
 
 	return (args->sport && args->sport != sport) ||
@@ -269,7 +268,7 @@ static try_inline int probe_parse_ip(void *ip, parse_ctx_t *ctx)
 		u32 saddr, daddr, len;
 
 		len = bpf_ntohs(_C(ipv4, tot_len));
-		if (ctx->filter && (args->pkt_len_1 || args->pkt_len_2)) {
+		if (args && (args->pkt_len_1 || args->pkt_len_2)) {
 			if (len < args->pkt_len_1 || len > args->pkt_len_2)
 				goto err;
 		}
@@ -532,7 +531,6 @@ static try_inline int probe_parse_skb(struct sk_buff *skb, packet_t *pkt)
 {
 	parse_ctx_t ctx = {
 		.args = (void *)CONFIG(),
-		.filter = true,
 		.skb = skb,
 		.pkt = pkt,
 	};
@@ -543,7 +541,6 @@ static try_inline int probe_parse_sk(struct sock *sk, sock_t *ske)
 {
 	parse_ctx_t ctx = {
 		.args = (void *)CONFIG(),
-		.filter = true,
 		.ske = ske,
 		.sk = sk,
 	};
@@ -554,8 +551,6 @@ static try_inline int probe_parse_skb_always(struct sk_buff *skb,
 					     packet_t *pkt)
 {
 	parse_ctx_t ctx = {
-		.args = (void *)CONFIG(),
-		.filter = false,
 		.skb = skb,
 		.pkt = pkt,
 	};
