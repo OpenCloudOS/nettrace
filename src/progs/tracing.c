@@ -34,7 +34,7 @@ typedef int (*fake_func)(context_t *ctx);
 			.args = CONFIG(),			\
 			ctx_init				\
 		};						\
-		if (handle_exit(&ctx, regs, INDEX_##name))	\
+		if (handle_exit(&ctx))				\
 			return 0;				\
 		return fake__##name(&ctx);			\
 	}							\
@@ -104,29 +104,36 @@ typedef int (*fake_func)(context_t *ctx);
 #define ext_event_init() { }
 
 
-static try_inline int
-handle_exit(context_t *ctx, void **regs, int func_index);
+static try_inline int handle_exit(context_t *ctx);
 #define get_ret(func)
 
 #include "core.c"
 
 rules_ret_t rules_all[TRACE_MAX];
 
-static int
-handle_exit(context_t *ctx, void **regs, int func_index)
+static try_inline int handle_exit(context_t *ctx)
 {
 	int i, expected, ret;
+	rules_ret_t *rules;
 	bool hit = false;
+	int func_index;
+	void *ret_ptr;
 
-	rules_ret_t *rules = &rules_all[func_index];
+	func_index = ctx->func;
+	/* this can't happen */
+	if (func_index >= TRACE_MAX)
+		goto no_match;
+
+	rules = &rules_all[func_index];
 	if (!rules)
 		goto no_match;
 
-	if (bpf_core_helper_exist(get_func_ret))
+	if (bpf_core_helper_exist(get_func_ret)) {
 		bpf_get_func_ret(ctx->regs, &ctx->retval);
-	else
-		bpf_probe_read_kernel(&ctx->retval, sizeof(u64),
-			regs + ctx->arg_count);
+	} else {
+		ret_ptr = ctx->regs + ctx->arg_count * 8;
+		bpf_probe_read_kernel(&ctx->retval, sizeof(u64), ret_ptr);
+	}
 
 	ret = (int)ctx->retval;
 	for (i = 0; i < MAX_RULE_COUNT; i++) {
