@@ -473,6 +473,17 @@ children:
     - tcp_rearm_rto/0
     - tcp_event_new_data_sent/0
     - tcp_schedule_loss_probe/0
+  - name: tcp-retrans
+    desc: TCP retransmission releated hooks
+    children:
+    - tcp_rtx_synack/0
+    - tcp_retransmit_skb/0
+    - tcp_rcv_spurious_retrans/0:1
+    - name: tcp_dsack_set/0
+      rules:
+      - exp: any
+        level: info
+        msg: spurious retransmission happened
 - name: life
   desc: skb clone and free
   visual: true
