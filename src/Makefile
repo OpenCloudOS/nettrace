@@ -11,7 +11,7 @@ ifndef COMPAT
 	bpf_progs += progs/tracing progs/feat_args_ext
 endif
 
-BPF_EXTRA_DEP := kheaders.h
+BPF_EXTRA_DEP := kheaders.h progs/core.c progs/core.h
 include ../common.mk
 
 ifdef COMPAT

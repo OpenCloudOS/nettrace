@@ -126,17 +126,17 @@ trace.yaml -- gen_trace.py                                      |
 ```c
 
 DEFINE_KPROBE_SKB(sch_direct_xmit, 1) {
-	struct Qdisc *q = nt_regs_ctx(ctx, 2);
+	struct Qdisc *q = info_get_arg(info, 2);
   struct netdev_queue *txq;
   DECLARE_EVENT(qdisc_event_t, e)
 
   txq = _C(q, dev_queue);
   e->state = _C(txq, state);
   xxxxxx
-	return handle_entry(ctx);
+	return handle_entry(info, e_size);
 ```
 
-`DEFINE_KPROBE_SKB`第一个参数是内核函数名称，第二个是skb的索引。*注意*：这里的索引是从1开始的，和yaml里的不一样。`nt_regs_ctx`用于获取内核函数的参数，第一个参数是固定的，第二个参数代表要获取内核函数参数的索引，也是从1开始的。在这个函数里面，我们就可以编写自己的BPF代码来获取数据。
+`DEFINE_KPROBE_SKB`第一个参数是内核函数名称，第二个是skb的索引。*注意*：这里的索引是从1开始的，和yaml里的不一样。`info_get_arg`用于获取内核函数的参数，第一个参数是固定的，第二个参数代表要获取内核函数参数的索引，也是从1开始的。在这个函数里面，我们就可以编写自己的BPF代码来获取数据。
 
 如果当前已经定义好的事件的结构体没有能满足要求的，那还需要定义自己的用于传递给用户态的结构体。其定义在`progs/shared.h`中，定义的方式可参考其中的`qdisc_event_t`：
 

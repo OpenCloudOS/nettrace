@@ -38,36 +38,36 @@ struct {
 } m_matched SEC(".maps");
 
 #ifdef BPF_FEAT_STACK_TRACE
-static try_inline void try_trace_stack(context_t *ctx)
+static try_inline void try_trace_stack(context_info_t *info)
 {
 	int i = 0, key;
 	u16 *funcs;
 
-	if (!ctx->args->stack)
+	if (!info->args->stack)
 		return;
 
-	funcs = ctx->args->stack_funs;
+	funcs = info->args->stack_funs;
 
 #pragma unroll
 	for (; i < MAX_FUNC_STACK; i++) {
 		if (!funcs[i])
 			break;
-		if (funcs[i] == ctx->func)
+		if (funcs[i] == info->func)
 			goto do_stack;
 	}
 	return;
 
 do_stack:
-	key = bpf_get_stackid(ctx->regs, &m_stack, 0);
-	ctx->e->stack_id = key;
+	key = bpf_get_stackid(info->ctx, &m_stack, 0);
+	info->e->stack_id = key;
 }
 #else
-static try_inline void try_trace_stack(context_t *ctx) { }
+static try_inline void try_trace_stack(context_info_t *info) { }
 #endif
 
-static try_inline int filter_by_netns(context_t *ctx)
+static try_inline int filter_by_netns(context_info_t *info)
 {	
-	struct sk_buff *skb = ctx->skb;
+	struct sk_buff *skb = info->skb;
 	struct net_device *dev;
 	u32 inode, netns;
 	struct net *ns;
@@ -75,8 +75,8 @@ static try_inline int filter_by_netns(context_t *ctx)
 	if (!bpf_core_field_exists(possible_net_t, net))
 		return 0;
 
-	netns = ctx->args->netns;
-	if (!netns && !ctx->args->detail)
+	netns = info->args->netns;
+	if (!netns && !info->args->detail)
 		return 0;
 
 	dev = _C(skb, dev);
@@ -93,27 +93,39 @@ static try_inline int filter_by_netns(context_t *ctx)
 		goto no_ns;
 
 	inode = _C(ns, ns.inum);
-	if (ctx->args->detail)
-		((detail_event_t *)ctx->e)->netns = inode;
+	if (info->args->detail)
+		((detail_event_t *)info->e)->netns = inode;
 
 	return netns ? netns != inode : 0;
 no_ns:
 	return !!netns;
 }
 
-static try_inline int handle_entry(context_t *ctx)
+static __always_inline void handle_event_output(context_info_t *info,
+						const int size)
 {
-	bpf_args_t *args = (void *)ctx->args;
-	struct sk_buff *skb = ctx->skb;
+	if (!size)
+		return;
+
+	EVENT_OUTPUT_PTR(info->ctx, info->e, size);
+}
+
+/* The event_size here is to be compatible with 4.X kernel, the compiler
+ * will optimize it to imm.
+ */
+static try_inline int handle_entry(context_info_t *info, const int event_size)
+{
+	bpf_args_t *args = (void *)info->args;
+	struct sk_buff *skb = info->skb;
 	bool *matched, skip_life;
-	event_t *e = ctx->e;
+	event_t *e = info->e;
 	packet_t *pkt;
 	u32 pid;
 
 	if (!args->ready)
 		goto err;
 
-	pr_debug_skb("begin to handle, func=%d", ctx->func);
+	pr_debug_skb("begin to handle, func=%d", info->func);
 	skip_life = (args->trace_mode & MODE_SKIP_LIFE_MASK) ||
 		args->pkt_fixed;
 	pid = (u32)bpf_get_current_pid_tgid();
@@ -122,16 +134,16 @@ static try_inline int handle_entry(context_t *ctx)
 		matched = bpf_map_lookup_elem(&m_matched, &skb);
 		if (matched && *matched) {
 			probe_parse_skb_always(skb, pkt);
-			filter_by_netns(ctx);
+			filter_by_netns(info);
 			goto skip_filter;
 		}
 	}
 
-	if (args_check(args, pid, pid) || filter_by_netns(ctx))
+	if (args_check(args, pid, pid) || filter_by_netns(info))
 		goto err;
 
 	if (args->trace_mode == TRACE_MODE_SOCK_MASK) {
-		if (probe_parse_sk(ctx->sk, &e->ske))
+		if (probe_parse_sk(info->sk, &e->ske))
 			goto err;
 	} else {
 		if (probe_parse_skb(skb, pkt))
@@ -159,57 +171,61 @@ skip_filter:
 		detail->ifindex = _C(dev, ifindex);
 	} else {
 		detail->ifindex = _C(skb, skb_iif);
+		detail->ifname[0] = '\0';
 	}
 
 out:
 	pr_debug_skb("pkt matched");
-	try_trace_stack(ctx);
+	try_trace_stack(info);
 	pkt->ts = bpf_ktime_get_ns();
 	e->key = (u64)(void *)skb;
-	e->func = ctx->func;
+	e->func = info->func;
 
-	if (ctx->size)
-		EVENT_OUTPUT_PTR(ctx->regs, ctx->e, ctx->size);
+	handle_event_output(info, event_size);
 
 #ifdef BPF_FEAT_TRACING
-	e->retval = ctx->retval;
+	e->retval = info->retval;
 #endif
 
 	if (!skip_life)
-		get_ret(ctx->func);
+		get_ret(info->func);
 	return 0;
 err:
 	return -1;
 }
 
-static try_inline int handle_destroy(context_t *ctx)
+static try_inline int handle_destroy(context_info_t *info)
 {
-	if (!(ctx->args->trace_mode & MODE_SKIP_LIFE_MASK))
-		bpf_map_delete_elem(&m_matched, &ctx->skb);
+	if (!(info->args->trace_mode & MODE_SKIP_LIFE_MASK))
+		bpf_map_delete_elem(&m_matched, &info->skb);
 	return 0;
 }
 
-static try_inline int default_handle_entry(context_t *ctx)
+static try_inline int default_handle_entry(context_info_t *info)
 {
 #ifdef COMPAT_MODE
-	if (ctx->args->detail) {
-		detail_event_t e = { };
-		ctx_event(ctx, e);
-		handle_entry(ctx);
+	detail_event_t __e;
+
+	/* the kernel of version 4.X can't spill const variable to stack,
+	 * so we can't pass the e_size to handle_entry() in this case.
+	 */
+	info->e = (void *)&__e;
+	if (info->args->detail) {
+		__e = (detail_event_t) {0};
+		handle_entry(info, sizeof(detail_event_t));
 	} else {
-		event_t e = { };
-		ctx_event(ctx, e);
-		handle_entry(ctx);
+		*(event_t *)&__e = (event_t) {0};
+		handle_entry(info, sizeof(event_t));
 	}
 #else
 	DECLARE_EVENT(event_t, e)
-	handle_entry(ctx);
+	handle_entry(info, e_size);
 #endif
 
-	switch (ctx->func) {
+	switch (info->func) {
 	case INDEX_consume_skb:
 	case INDEX___kfree_skb:
-		handle_destroy(ctx);
+		handle_destroy(info);
 		break;
 	default:
 		break;
@@ -249,7 +265,7 @@ struct kfree_skb_args {
 
 DEFINE_TP_INIT(kfree_skb, skb, kfree_skb)
 {
-	struct kfree_skb_args *args = ctx->regs;
+	struct kfree_skb_args *args = info->ctx;
 	int reason = 0;
 
 	if (bpf_core_type_exists(enum skb_drop_reason))
@@ -261,82 +277,78 @@ DEFINE_TP_INIT(kfree_skb, skb, kfree_skb)
 
 	e->location = (unsigned long)args->location;
 	e->reason = reason;
-	ctx->skb = args->skb;
+	info->skb = args->skb;
 
-	handle_entry(ctx);
-	handle_destroy(ctx);
+	handle_entry(info, e_size);
+	handle_destroy(info);
 	return 0;
 }
 
 DEFINE_KPROBE_INIT(__netif_receive_skb_core_pskb,
 		   __netif_receive_skb_core,
-		   .skb = _(*(void **)(nt_regs(regs, 1))))
+		   .skb = _(*(void **)(ctx_get_arg(ctx, 1))))
 {
-	return default_handle_entry(ctx);
+	return default_handle_entry(info);
 }
 
-static try_inline int bpf_ipt_do_table(context_t *ctx, struct xt_table *table,
+static try_inline int bpf_ipt_do_table(context_info_t *info, struct xt_table *table,
 				       struct nf_hook_state *state)
 {
 	char *table_name;
-	DECLARE_EVENT(nf_event_t, e, .hook = _C(state, hook))
+	DECLARE_EVENT(nf_event_t, e)
 
+	e->hook = _C(state, hook);
 	if (bpf_core_type_exists(struct xt_table))
 		table_name = _C(table, name);
 	else
 		table_name = _(table->name);
 
 	bpf_probe_read(e->table, sizeof(e->table) - 1, table_name);
-	return handle_entry(ctx);
+	return handle_entry(info, e_size);
 }
 
 DEFINE_KPROBE_SKB_TARGET(ipt_do_table_legacy, ipt_do_table, 1)
 {
-	struct nf_hook_state *state = nt_regs_ctx(ctx, 2);
-	struct xt_table *table = nt_regs_ctx(ctx, 3);
+	struct nf_hook_state *state = info_get_arg(info, 2);
+	struct xt_table *table = info_get_arg(info, 3);
 
-	bpf_ipt_do_table(ctx, table, state);
+	bpf_ipt_do_table(info, table, state);
 	return 0;
 }
 
 DEFINE_KPROBE_SKB(ipt_do_table, 2)
 {
-	struct nf_hook_state *state = nt_regs_ctx(ctx, 3);
-	struct xt_table *table = nt_regs_ctx(ctx, 1);
+	struct nf_hook_state *state = info_get_arg(info, 3);
+	struct xt_table *table = info_get_arg(info, 1);
 
-	bpf_ipt_do_table(ctx, table, state);
+	bpf_ipt_do_table(info, table, state);
 	return 0;
 }
 
 DEFINE_KPROBE_SKB(nf_hook_slow, 1)
 {
 	struct nf_hook_state *state;
-	size_t size;
 	int num;
 
-	state = nt_regs_ctx(ctx, 2);
-	if (ctx->args->hooks)
+	state = info_get_arg(info, 2);
+	if (info->args->hooks)
 		goto on_hooks;
 
 	DECLARE_EVENT(nf_event_t, e)
 
-	size = ctx->size;
-	ctx->size = 0;
-	if (handle_entry(ctx))
+	if (handle_entry(info, 0))
 		return 0;
 
 	e->hook = _C(state, hook);
 	e->pf = _C(state, pf);
-	EVENT_OUTPUT_PTR(ctx->regs, ctx->e, size);
+	handle_event_output(info, e_size);
 	return 0;
 
 on_hooks:;
-	struct nf_hook_entries *entries = nt_regs_ctx(ctx, 3);
-	__DECLARE_EVENT(hooks, nf_hooks_event_t, hooks_event)
+	struct nf_hook_entries *entries = info_get_arg(info, 3);
+	DECLARE_EVENT(nf_hooks_event_t, hooks_event)
 
-	size = ctx->size;
-	ctx->size = 0;
-	if (handle_entry(ctx))
+	if (handle_entry(info, 0))
 		return 0;
 
 	hooks_event->hook = _C(state, hook);
@@ -362,12 +374,12 @@ on_hooks:;
 	 * 		COPY_HOOK(i);
 	 */
 out:
-	EVENT_OUTPUT_PTR(ctx->regs, ctx->e, size);
+	handle_event_output(info, hooks_event_size);
 	return 0;
 }
 
 static __always_inline int
-bpf_qdisc_handle(context_t *ctx, struct Qdisc *q)
+bpf_qdisc_handle(context_info_t *info, struct Qdisc *q)
 {
 	struct netdev_queue *txq;
 	unsigned long start;
@@ -385,26 +397,26 @@ bpf_qdisc_handle(context_t *ctx, struct Qdisc *q)
 	e->state = _C(txq, state);
 	e->flags = _C(q, flags);
 
-	return handle_entry(ctx);
+	return handle_entry(info, e_size);
 }
 
 DEFINE_KPROBE_SKB(sch_direct_xmit, 1) {
-	struct Qdisc *q = nt_regs_ctx(ctx, 2);
-	bpf_qdisc_handle(ctx, q);
+	struct Qdisc *q = info_get_arg(info, 2);
+	bpf_qdisc_handle(info, q);
 
 	return 0;
 }
 
 DEFINE_KPROBE_SKB(pfifo_enqueue, 1) {
-	struct Qdisc *q = nt_regs_ctx(ctx, 2);
-	bpf_qdisc_handle(ctx, q);
+	struct Qdisc *q = info_get_arg(info, 2);
+	bpf_qdisc_handle(info, q);
 
 	return 0;
 }
 
 DEFINE_KPROBE_SKB(pfifo_fast_enqueue, 1) {
-	struct Qdisc *q = nt_regs_ctx(ctx, 2);
-	bpf_qdisc_handle(ctx, q);
+	struct Qdisc *q = info_get_arg(info, 2);
+	bpf_qdisc_handle(info, q);
 
 	return 0;
 }
@@ -430,18 +442,15 @@ struct nft_pktinfo___new {
  */
 DEFINE_KPROBE_INIT(nft_do_chain, nft_do_chain, .arg_count = 2)
 {
-	struct nft_pktinfo *pkt = nt_regs_ctx(ctx, 1);
+	struct nft_pktinfo *pkt = info_get_arg(info, 1);
 	void *chain_name, *table_name;
 	struct nf_hook_state *state;
 	struct nft_chain *chain;
 	struct nft_table *table;
-	size_t size;
 	DECLARE_EVENT(nf_event_t, e)
 
-	ctx->skb = (struct sk_buff *)_(pkt->skb);
-	size = ctx->size;
-	ctx->size = 0;
-	if (handle_entry(ctx))
+	info->skb = (struct sk_buff *)_(pkt->skb);
+	if (handle_entry(info, 0))
 		return 0;
 
 	if (bpf_core_type_exists(struct nft_pktinfo)) {
@@ -454,7 +463,7 @@ DEFINE_KPROBE_INIT(nft_do_chain, nft_do_chain, .arg_count = 2)
 		state = _(pkt->xt.state);
 	}
 
-	chain = nt_regs_ctx(ctx, 2);
+	chain = info_get_arg(info, 2);
 	if (bpf_core_type_exists(struct nft_chain)) {
 		table = _C(chain, table);
 		chain_name = _C(chain, name);
@@ -470,7 +479,7 @@ DEFINE_KPROBE_INIT(nft_do_chain, nft_do_chain, .arg_count = 2)
 	bpf_probe_read_kernel_str(e->chain, sizeof(e->chain), chain_name);
 	bpf_probe_read_kernel_str(e->table, sizeof(e->table), table_name);
 
-	EVENT_OUTPUT_PTR(ctx->regs, ctx->e, size);
+	handle_event_output(info, e_size);
 	return 0;
 }
 #endif
@@ -483,9 +492,9 @@ DEFINE_KPROBE_INIT(nft_do_chain, nft_do_chain, .arg_count = 2)
  *******************************************************************/
 
 DEFINE_KPROBE_INIT(inet_listen, inet_listen,
-		   .sk = _C((struct socket *)nt_regs(regs, 1), sk))
+		   .sk = _C((struct socket *)ctx_get_arg(ctx, 1), sk))
 {
-	return default_handle_entry(ctx);
+	return default_handle_entry(info);
 }
 
 char _license[] SEC("license") = "GPL";
