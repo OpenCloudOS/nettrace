@@ -368,7 +368,19 @@ static inline void rule_run_any(analy_entry_t *entry, trace_t *trace)
 	list_for_each_entry(rule, &trace->rules, list) {
 		if (rule->type == RULE_RETURN_ANY) {
 			entry->rule = rule;
-			return;
+			if (!mode_has_context())
+				break;
+			switch (rule->level) {
+			case RULE_INFO:
+				break;
+			case RULE_WARN:
+				entry->ctx->status |= ANALY_CTX_WARN;
+				break;
+			case RULE_ERROR:
+				entry->ctx->status |= ANALY_CTX_ERROR;
+				break;
+			}
+			break;
 		}
 	}
 }
