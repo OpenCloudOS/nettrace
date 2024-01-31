@@ -3,7 +3,7 @@ COMMON_SHARED	:= $(ROOT)/shared/pkt_utils.c $(COMPONENT)/net_utils.c	\
 		   $(COMPONENT)/arg_parse.c $(COMPONENT)/sys_utils.c	\
 		   $(ROOT)/shared/bpf_utils.c
 
-CFLAGS		+= -I./ -I$(ROOT)/shared/bpf/
+CFLAGS		+= -I./ -I$(ROOT)/shared/bpf/ -g
 BPF_CFLAGS	= $(CFLAGS) -Wno-unused-function			\
 		  -Wno-compare-distinct-pointer-types -Wuninitialized	\
 		  -D__TARGET_ARCH_$(SRCARCH) -DBPF_NO_PRESERVE_ACCESS_INDEX
@@ -59,10 +59,10 @@ $(error kernel headers not exist in COMPAT mode, please install it)
 endif
 	kheaders_cmd	:= ln -s vmlinux_header.h kheaders.h
 	CFLAGS		+= -DCOMPAT_MODE -DBPF_NO_GLOBAL_DATA
-	BPF_CFLAGS	+= $(KERNEL_CFLAGS) -g
+	BPF_CFLAGS	+= $(KERNEL_CFLAGS)
 else
 	kheaders_cmd	:= ln -s ../shared/bpf/vmlinux.h kheaders.h
-	BPF_CFLAGS	+= -target bpf -g
+	BPF_CFLAGS	+= -target bpf
 endif
 
 ifndef BPFTOOL
