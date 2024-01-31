@@ -670,7 +670,8 @@ const char *hook_names[][8] = {
 		[NF_ARP_IN]	= "ARP_IN",
 		[NF_ARP_OUT]	= "ARP_OUT",
 		[NF_ARP_FORWARD]= "ARP_FORWARD",
-	}
+	},
+	[NFPROTO_NUMPROTO] = {},
 };
 const char **inet_hook_names = hook_names[NFPROTO_IPV4];
 const char *pf_names[] = {
@@ -681,6 +682,7 @@ const char *pf_names[] = {
 	[NFPROTO_BRIDGE]	= "bridge",
 	[NFPROTO_IPV6]		= "ipv6",
 	[NFPROTO_DECNET]	= "decnet",
+	[NFPROTO_NUMPROTO]	= "invalid"
 };
 DEFINE_ANALYZER_ENTRY(nf, TRACE_MODE_ALL_MASK)
 {
@@ -690,8 +692,14 @@ DEFINE_ANALYZER_ENTRY(nf, TRACE_MODE_ALL_MASK)
 	int i = 0;
 
 	msg[0] = '\0';
-	sprintf(msg, PFMT_EMPH_STR(" *%s in chain: %s*"), pf_names[event->pf],
-		hook_names[event->pf][event->hook]);
+	if (event->pf > NFPROTO_NUMPROTO || event->hook > 7) {
+		pr_err("invalid pf=%d and hook=%d received in netfilter\n",
+		       (int)event->pf, (int)event->hook);
+	} else {
+		sprintf(msg, PFMT_EMPH_STR(" *%s in chain: %s*"),
+			pf_names[event->pf],
+			hook_names[event->pf][event->hook]);
+	}
 	entry_set_msg(e, msg);
 
 	if (!BPF_ARG_GET(hooks) || !e->status)
