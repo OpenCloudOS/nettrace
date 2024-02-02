@@ -26,7 +26,8 @@ children:
     children:
     - name: napi_gro_receive_entry
       tp: net:napi_gro_receive_entry
-      skb: 24
+      skboffset: 24
+      skb: 3
     - name: dev_gro_receive:1
       rules:
       - exp: eq 4
@@ -66,6 +67,8 @@ children:
         cond: '[ ! $(verlte "$(uname -r)" "5.4") -eq -1 ]' # valid when kernel >= 5.4
         backup: *__netif_receive_skb_core
       target: __netif_receive_skb_core
+      custom: 1
+      skb: 0
   - name: link-out
     desc: link layer (L2) of packet out
     visual: true
@@ -88,7 +91,8 @@ children:
     - tcf_classify:0
     - cls_bpf_classify:0
     - tcf_bpf_act:0
-    - name: pfifo_enqueue
+    - name: pfifo_enqueue:0
+      custom: 1
       analyzer: qdisc
       monitor: 1
       target: pfifo_enqueue
@@ -96,15 +100,17 @@ children:
       - exp: ne 0
         level: error
         msg: failed to queue packet to qdisc
-    - name: pfifo_fast_enqueue
+    - name: pfifo_fast_enqueue:0
       analyzer: qdisc
+      custom: 1
       target: pfifo_fast_enqueue
       monitor: 1
       rules:
       - exp: ne 0
         level: error
         msg: failed to queue packet to qdisc
-    - name: sch_direct_xmit
+    - name: sch_direct_xmit:0
+      custom: 1
       analyzer: qdisc
   - name: ipvlan
     desc: ipvlan network interface
@@ -190,6 +196,8 @@ children:
         backup: *ipt_do_table
       analyzer: iptable
       monitor: 1
+      skb: 1
+      custom: 
       target: ipt_do_table
       rules:
       - exp: eq 0
@@ -199,9 +207,10 @@ children:
       - exp: eq 1
         level: info
         msg: packet is accepted
-    - name: nft_do_chain
+    - name: nft_do_chain:0
       analyzer: iptable
       monitor: 1
+      custom: 1
       rules:
       - exp: eq 0
         level: error
@@ -216,9 +225,10 @@ children:
       - exp: any
         msg: NAT happens (packet address will change)
         level: warn
-    - name: nf_hook_slow
+    - name: nf_hook_slow:0
       monitor: 1
       analyzer: nf
+      custom: 1
       rules:
       - exp: eq -1
         level: error
@@ -445,19 +455,20 @@ children:
     children:
     - tcp_write_timer_handler/0
     - name: tcp_retransmit_timer/0
+      monitor: 2
       rules:
       - exp: any
-        level: info
+        level: warn
         msg: TCP retransmission timer out
     - name: tcp_enter_recovery/0
       rules:
       - exp: any
-        level: info
+        level: warn
         msg: TCP enter conguestion recover
     - name: tcp_enter_loss/0
       rules:
       - exp: any
-        level: info
+        level: warn
         msg: TCP enter conguestion loss
     - name: tcp_try_keep_open/0
       rules:
@@ -476,13 +487,19 @@ children:
   - name: tcp-retrans
     desc: TCP retransmission releated hooks
     children:
-    - tcp_rtx_synack/0
-    - tcp_retransmit_skb/0
-    - tcp_rcv_spurious_retrans/0:1
+    - name: tcp_rtx_synack/0
+      monitor: 2
+    - name: tcp_retransmit_skb/0
+      monitor: 2
+    - name: tcp_rcv_spurious_retrans/0:1
+      monitor: 2
+      arg_count: 2
     - name: tcp_dsack_set/0
+      monitor: 2
+      arg_count: 3
       rules:
       - exp: any
-        level: info
+        level: warn
         msg: spurious retransmission happened
 - name: life
   desc: skb clone and free
@@ -498,16 +515,18 @@ children:
     - exp: any
       level: info
       msg: packet is cloned
-  - name: consume_skb
+  - name: consume_skb:0
     tp: skb:consume_skb
-    skb: 8
+    skboffset: 8
     analyzer: free
     rules:
     - exp: any
       level: info
       msg: packet is freed (normally)
-  - name: kfree_skb
+  - name: kfree_skb:0
     tp: skb:kfree_skb
+    skboffset: 8
+    custom: 1
     analyzer: drop
     monitor: 1
     rules:

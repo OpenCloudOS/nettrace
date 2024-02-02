@@ -166,10 +166,10 @@ static void analy_entry_handle(analy_entry_t *entry)
 		sprintf(tinfo, "[%-20s] ", t->name);
 	}
 
-	if (trace_ctx.mode != TRACE_MODE_SOCK)
-		ts_print_packet(buf, &e->pkt, tinfo, trace_ctx.args.date);
-	else
+	if (trace_using_sk(t))
 		ts_print_sock(buf, &e->ske, tinfo, trace_ctx.args.date);
+	else
+		ts_print_packet(buf, &e->pkt, tinfo, trace_ctx.args.date);
 
 	if ((entry->status & ANALY_ENTRY_RETURNED) && trace_ctx.args.ret)
 		sprintf_end(buf, PFMT_EMPH_STR(" *return: %d*"),
@@ -494,6 +494,12 @@ check_pending:
 	}
 }
 
+static inline bool trace_analyse_ret(trace_t *trace)
+{
+	return trace_ctx.mode == TRACE_MODE_MONITOR && trace_is_func(trace) &&
+	       trace->monitor == TRACE_MONITOR_EXIT;
+}
+
 static inline void do_basic_poll(analy_entry_t *entry)
 {
 	trace_t *trace;
@@ -501,7 +507,7 @@ static inline void do_basic_poll(analy_entry_t *entry)
 	trace = get_trace_from_analy_entry(entry);
 	try_run_entry(trace, trace->analyzer, entry);
 
-	if (trace_ctx.mode == TRACE_MODE_MONITOR) {
+	if (trace_analyse_ret(trace)) {
 		analy_exit_t analy_exit = {
 			.event = {
 				.val = entry->event->retval,

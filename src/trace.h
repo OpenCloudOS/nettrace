@@ -47,7 +47,6 @@ typedef struct trace_group {
 enum {
 	TRACE_MONITOR_EXIT = 1,
 	TRACE_MONITOR_ENTRY,
-	TRACE_MONITOR_ALL,
 };
 
 typedef struct trace {
@@ -61,8 +60,14 @@ typedef struct trace {
 	char	*cond;
 	char	*regex;
 	char	*tp;
-	int	skb;
-	int	sk;
+	/* index of skb in function args, start from 1, 0 means no skb */
+	u8	skb;
+	/* offset of skb in ftrace event */
+	u8	skboffset;
+	/* the same as skb */
+	u8	sk;
+	/* the same as skb_offset */
+	u8	skoffset;
 	/* traces in a global list */
 	struct list_head all;
 	/* traces in the same group */
@@ -73,14 +78,16 @@ typedef struct trace {
 	struct trace *backup;
 	bool	is_backup;
 	bool	probe;
+	/* if this trace should be enabled by default */
+	bool	def;
+	/* if the BPF program is custom of this trace */
+	bool	custom;
 	int	monitor;
 	int	index;
 	int	arg_count;
 	u32	status;
 	trace_group_t *parent;
 	struct analyzer *analyzer;
-	/* if this trace should be enabled by default */
-	bool	def;
 } trace_t;
 
 typedef struct {
@@ -123,6 +130,7 @@ typedef struct {
 	void (*print_stack)(int key);
 	void (*trace_feat_probe)();
 	bool (*trace_supported)();
+	void (*prepare_traces)();
 	struct analyzer *analyzer;
 } trace_ops_t;
 
@@ -220,6 +228,12 @@ static inline void trace_set_retonly(trace_t *t)
 static inline bool trace_is_retonly(trace_t *t)
 {
 	return t->status & TRACE_RET_ONLY;
+}
+
+static inline bool trace_using_sk(trace_t *t)
+{
+	return (trace_ctx.mode == TRACE_MODE_MONITOR && !t->skb) ||
+	       trace_ctx.mode == TRACE_MODE_SOCK;
 }
 
 static inline int trace_set_stack(trace_t *t)

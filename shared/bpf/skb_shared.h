@@ -8,6 +8,7 @@
 #define nt_take_2th(ignored, a, ...)	a
 #define nt_take_3th(ignored, a, b, ...)	b
 
+#define __nt_placehold_arg_0		0,
 #define __nt_placehold_arg_1		1,
 #define __nt_placehold_arg_2		2,
 #define __nt_placehold_arg_3		3,
@@ -25,7 +26,7 @@
 #define __nt_ternary_take(a, b, c)	\
 	____nt_ternary_take(__nt_placehold_arg_##a, b, c)
 
-/* take b if a >= 1; else, take c */
+/* take b if a offered; else, take c */
 #define nt_ternary_take(a, b, c) __nt_ternary_take(a, b, c)
 
 #define ICSK_TIME_RETRANS	1
@@ -83,10 +84,10 @@ typedef struct {
 			u16	op;
 		} arp_ext;
 		struct
-        	{
-                	u32 spi;
-                	u32 seq;
-        	} espheader;
+		{
+			u32 spi;
+			u32 seq;
+		} espheader;
 #define field_udp l4.udp
 	} l4;
 	u16 proto_l3;

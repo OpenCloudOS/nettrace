@@ -527,34 +527,26 @@ err:
 	return -1;
 }
 
-static try_inline int probe_parse_skb(struct sk_buff *skb, packet_t *pkt)
+static __always_inline int probe_parse_skb(struct sk_buff *skb, packet_t *pkt,
+					   void *filter_args)
 {
 	parse_ctx_t ctx = {
-		.args = (void *)CONFIG(),
+		.args = filter_args,
 		.skb = skb,
 		.pkt = pkt,
 	};
 	return __probe_parse_skb(&ctx);
 }
 
-static try_inline int probe_parse_sk(struct sock *sk, sock_t *ske)
+static __always_inline int probe_parse_sk(struct sock *sk, sock_t *ske,
+					  void *filter_args)
 {
 	parse_ctx_t ctx = {
-		.args = (void *)CONFIG(),
+		.args = filter_args,
 		.ske = ske,
 		.sk = sk,
 	};
 	return __probe_parse_sk(&ctx);
-}
-
-static try_inline int probe_parse_skb_always(struct sk_buff *skb,
-					     packet_t *pkt)
-{
-	parse_ctx_t ctx = {
-		.skb = skb,
-		.pkt = pkt,
-	};
-	return __probe_parse_skb(&ctx);
 }
 
 static try_inline int direct_parse_skb(struct __sk_buff *skb, packet_t *pkt,

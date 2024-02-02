@@ -380,7 +380,6 @@ skip_trace:
 			switch (trace->monitor) {
 			case TRACE_MONITOR_EXIT:
 				trace_set_retonly(trace);
-			case TRACE_MONITOR_ALL:
 				trace_set_ret(trace);
 				break;
 			default:
@@ -394,10 +393,10 @@ skip_trace:
 	}
 
 	/* disable traces that don't support sk in SOCK_MODE, and disable
-	 * traces that don't support skb in !SOCK_MODE.
+	 * traces that don't support skb in !(SOCK_MODE || MONITOR_MODE).
 	 */
-	trace_for_each_cond(trace, (!args->sock && trace->sk &&
-				    !trace->skb) ||
+	trace_for_each_cond(trace, (!args->sock && !args->monitor &&
+				    trace->sk && !trace->skb) ||
 				   (args->sock && !trace->sk))
 			trace_set_invalid_reason(trace, "sock or sk mode");
 
@@ -526,6 +525,9 @@ static int trace_prepare_traces()
 		strcpy(trace->name, func);
 		pr_debug("%s is made manual attach\n", trace->name);
 	}
+
+	if (trace_ctx.ops->prepare_traces)
+		trace_ctx.ops->prepare_traces();
 
 	pr_debug("finished to resolve kernel symbol\n");
 

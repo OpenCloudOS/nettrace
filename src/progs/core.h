@@ -5,16 +5,14 @@ typedef struct {
 	/* the bpf context args */
 	void *ctx;
 	struct sk_buff *skb;
+	struct sock *sk;
 	event_t *e;
 	/* the filter condition stored in map */
 	bpf_args_t *args;
-	union {
-		struct sock *sk;
-		u64 arg_count;
-		u64 retval;
-	};
+	/* used by fexit to pass the retval to event */
+	u64 retval;
 	u16 func;
-} context_info_t ;
+} context_info_t;
 
 #define MODE_SKIP_LIFE_MASK (TRACE_MODE_BASIC_MASK |	\
 			     TRACE_MODE_DROP_MASK |	\
@@ -22,27 +20,9 @@ typedef struct {
 			     TRACE_MODE_MONITOR_MASK)
 
 /* init the skb by the index of func args */
-#define DEFINE_KPROBE_SKB(name, skb_index)			\
-	DEFINE_KPROBE_INIT(name, name,				\
+#define DEFINE_KPROBE_SKB(name, skb_index, arg_count)		\
+	DEFINE_KPROBE_INIT(name, name, arg_count,		\
 			   .skb = ctx_get_arg(ctx, skb_index))
-
-/* the same as DEFINE_KPROBE_SKB(), but can set a different target */
-#define DEFINE_KPROBE_SKB_TARGET(name, target, skb_index)	\
-	DEFINE_KPROBE_INIT(name, target,			\
-			   .skb = ctx_get_arg(ctx, skb_index))
-
-#define DEFINE_KPROBE_SKB_SK(name, skb_index, sk_index)		\
-	DEFINE_KPROBE_INIT(name, name,				\
-		.skb = nt_ternary_take(skb_index,		\
-				       ctx_get_arg(ctx, skb_index),\
-				       NULL),			\
-		.sk = nt_ternary_take(sk_index,			\
-				      ctx_get_arg(ctx, sk_index),\
-				      NULL))
-
-#define DEFINE_KPROBE_SK(name, ignored, sk_index)		\
-	DEFINE_KPROBE_INIT(name, name,				\
-			   .sk = ctx_get_arg(ctx, sk_index))
 
 #ifndef COMPAT_MODE
 #define DECLARE_EVENT(type, name)			\
