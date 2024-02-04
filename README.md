@@ -747,3 +747,17 @@ map 'kprobe.rodata': failed to create: Invalid argument(-22)
 ```
 make NO_GLOBAL_DATA=1 all
 ```
+
+### 4.2 bpf_jiffies64不支持
+
+启动程序报错：
+```
+unknown func bpf_jiffies64#118
+```
+
+这个是当前内核对于`DEAD CODE`的检查机制不完善导致的，需要重新编译nettrace，在编译的时候加上`NO_GLOBAL_DATA=1`即可：
+
+
+```
+make NO_GLOBAL_DATA=1 all
+```
