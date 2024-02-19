@@ -152,6 +152,10 @@ Usage:
     --netns          filter by net namespace inode
     --netns-current  filter by current net namespace
     --pid            filter by current process id(pid)
+    --min-latency    filter by the minial time to live of the skb in ms
+    --pkt-len        filter by the IP packet length (include header) in byte
+    --tcp-flags      filter by TCP flags, such as: SAPR
+
     -t, --trace      enable trace group or trace
     --ret            show function return value
     --detail         show extern packet info, such as pid, ifname, etc
@@ -163,10 +167,10 @@ Usage:
     --diag-keep      don't quit when abnormal packet found
     --hooks          print netfilter hooks if dropping by netfilter
     --drop           skb drop monitor mode, for replace of 'droptrace'
+    --drop-stack     print the kernel function call stack of kfree_skb
     --sock           enable 'sock' mode
     --monitor        enable 'monitor' mode
-    --drop-stack     print the kernel function call stack of kfree_skb
-    --min-latency       the minial time to live of the skb
+    --pkt-fixed      set this option if you are sure the target packet is not NATed to get better performance
     --trace-stack    print call stack for traces or group
 
     -v               show log information
