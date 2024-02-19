@@ -381,6 +381,14 @@ children:
         level: warn
         msg: tcp port is not listened
         adv: check your target tcp port
+    - name: tcp_bad_csum:0
+      tp: tcp:tcp_bad_csum
+      skboffset: 8
+      monitor: 2
+      rules:
+      - exp: any
+        level: error
+        msg: TCP packet has bad csum
   - name: tcp-out
     desc: tcp layer of packet out
     visiual: true
