@@ -73,7 +73,7 @@ def parse_group(group):
             child['skb'] = int(re.match(r'\d+', name_split[1]).group())
         name_split = child['name'].split('/')
         if len(name_split) > 1:
-            child['sock'] = int(re.match(r'\d+', name_split[1]).group())
+            child['sk'] = int(re.match(r'\d+', name_split[1]).group())
         child['name'] = re.match(r'[a-zA-Z_0-9]+', child['name']).group()
 
 
@@ -213,13 +213,14 @@ def gen_trace(trace, group, p_name):
     if 'tp' in trace:
         trace_type = 'TRACE_TP'
         tp = trace['tp'].split(':')
-        skb_str = f'\n\t.tp = "{trace["tp"]}",'
-        if 'skb' in trace:
-            probe_str = f'\tFN_tp({name}, {tp[0]}, {tp[1]}, {trace["skb"]})\t\\\n'
+        if 'skb' in trace and 'custom' not in trace:
+            probe_str = f'\tFN_tp({name}, {tp[0]}, {tp[1]}, {trace["skb"]}, {trace["skboffset"]})\t\\\n'
+        else:
+            probe_str = f'\tFNC({name})\t\\\n'
     else:
         trace_type = 'TRACE_FUNCTION'
-        if 'skb' in trace or 'sock' in trace:
-            arg_count = '0'
+        if 'skb' in trace or 'sk' in trace:
+            arg_count = ''
             if 'monitor' in trace:
                 if 'arg_count' not in trace:
                     trace['arg_count'] = get_arg_count(target)
@@ -232,17 +233,16 @@ def gen_trace(trace, group, p_name):
                     trace['monitor'] = 0
                 else:
                     fields_str += append_trace_field('arg_count', trace, 'raw')
-            if 'skb' in trace:
-                skb_index = int(trace["skb"]) + 1
-                skb_str = f'\n\t.skb = {skb_index},'
-            if 'sock' in trace:
-                sk_index = int(trace["sock"]) + 1
+            skb = trace['skb'] if 'skb' in trace else ''
+            sk = trace['sk'] if 'sk' in trace else ''
             if 'custom' not in trace:
-                probe_str = f'\tFN({name}, {skb_index}, {sk_index}, {arg_count})\t\\\n'
+                probe_str = f'\tFN({name}, {skb}, {sk}, {arg_count})\t\\\n'
             else:
                 probe_str = f'\tFNC({name})\t\\\n'
         else:
             probe_str = f'\tFNC({name})\t\\\n'
+            trace['custom'] = True
+
     if 'analyzer' in trace:
         analyzer = f'\n\t.analyzer = &ANALYZER({trace["analyzer"]}),'
     else:
@@ -253,6 +253,11 @@ def gen_trace(trace, group, p_name):
         (rule_str, _init_str) = gen_rules(rules, trace_name)
         init_str += _init_str
 
+    if 'skb' in trace:
+        trace['skb'] = int(trace.get('skb') or 0) + 1
+    if 'sk' in trace:
+        trace['sk'] = int(trace.get('sk') or 0) + 1
+
     fields_str += append_trace_field('cond', trace)
     fields_str += append_trace_field('regex', trace)
     fields_str += append_trace_field('msg', trace)
@@ -260,6 +265,12 @@ def gen_trace(trace, group, p_name):
     fields_str += append_trace_field('probe', trace, 'bool')
     fields_str += append_trace_field('monitor', trace, 'raw')
     fields_str += append_filed('name', target)
+    fields_str += append_trace_field('skb', trace, 'raw')
+    fields_str += append_trace_field('sk', trace, 'raw')
+    fields_str += append_trace_field('skboffset', trace, 'raw')
+    fields_str += append_trace_field('skoffset', trace, 'raw')
+    fields_str += append_trace_field('custom', trace, 'bool')
+    fields_str += append_trace_field('tp', trace)
 
     default = True
     if 'default' in trace:
@@ -269,12 +280,11 @@ def gen_trace(trace, group, p_name):
     fields_str += append_filed('def', default, 'bool')
 
     define_str = f'''trace_t {trace_name} = {{
-\t.desc = "{trace.get('desc') or ''}",{skb_str}
+\t.desc = "{trace.get('desc') or ''}",
 \t.type = {trace_type},{analyzer}{fields_str}
 \t.index = INDEX_{name},
 \t.prog = "__trace_{name}",
 \t.parent = &{p_name},
-\t.sk = {sk_index},
 \t.rules = LIST_HEAD_INIT({trace_name}.rules),
 }};
 trace_list_t {trace_name}_list = {{

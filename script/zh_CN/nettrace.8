@@ -45,6 +45,15 @@ nettrace \- Linux系统下的网络报文跟踪、网络问题诊断工具
 \fB\fC\-\-pid\fR \fIpid\fP
 根据进程号进行过滤
 .TP
+\fB\fC\-\-min\-latency\fR \fIlatency in ms\fP
+根据报文的寿命进行过滤，仅打印处理时长超过该值的报文，单位为ms。该参数仅在默认和\fB\fCdiag\fR模式下可用。
+.TP
+\fB\fC\-\-pkt\-len\fR \fIpkt_len\fP
+根据报文长度进行过滤，可以指定范围，如\fB\fC\-\-pkt\-len 10\-20\fR；也可以指定确切的值，如\fB\fC\-\-pkt\-len 64\fR
+.TP
+\fB\fC\-\-tcp\-flags\fR \fIflags\fP
+根据TCP报文中的flag进行过滤，有效的flag包括\fB\fCSARF\fR，可以指定多个，如：\fB\fC\-\-tcp\-flags FA\fR
+.TP
 \fB\fC\-t,\-\-trace\fR \fItraces\fP
 要启用（跟踪）的内核函数、tracepoint。
 .IP
@@ -87,6 +96,9 @@ nettrace \- Linux系统下的网络报文跟踪、网络问题诊断工具
 \fB\fC\-\-monitor\fR
 启用监控模式。一种轻量化的实时监控系统中网络异常的模式（对内核版本有一定要求）。
 .TP
+\fB\fC\-c,\-\-count\fR
+抓取count个报文后退出程序
+.TP
 \fB\fC\-\-hooks\fR
 打印netfilter上的钩子函数
 .TP
@@ -95,9 +107,6 @@ nettrace \- Linux系统下的网络报文跟踪、网络问题诊断工具
 .TP
 \fB\fC\-\-drop\-stack\fR
 打印kfree\fIskb内核函数的调用堆栈，等价于`\-\-trace\-stack kfree\fPskb`
-.TP
-\fB\fC\-\-min\-latency\fR \fIlatency in ms\fP
-根据报文的寿命进行过滤，仅打印处理时长超过该值的报文，单位为ms。该参数仅在默认和\fB\fCdiag\fR模式下可用。
 .TP
 \fB\fC\-\-trace\-stack\fR \fItraces\fP
 指定需要进行堆栈打印的内核函数，可以指定多个，用“,”分隔。出于性能考虑，启用堆栈打印的

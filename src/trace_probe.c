@@ -75,6 +75,26 @@ static int probe_trace_attach()
 	return kprobe__attach(skel);
 }
 
+/* In kprobe, we only enable the monitor for the traces with "any" rule */
+static void probe_check_monitor()
+{
+	trace_t *trace;
+
+	if (trace_ctx.mode != TRACE_MODE_MONITOR)
+		return;
+
+	trace_for_each(trace) {
+		if (!trace_is_func(trace) || trace_is_invalid(trace))
+			continue;
+
+		/* kprobe don't support to monitor function exit */
+		if (trace->monitor == TRACE_MONITOR_EXIT) {
+			pr_debug("disabled monitor_exit for kprobe\n");
+			trace_set_invalid_reason(trace, "monitor");
+		}
+	}
+}
+
 static int probe_trace_load()
 {
 	int i = 0;
@@ -105,6 +125,7 @@ static int probe_trace_load()
 	switch (trace_ctx.mode) {
 	case TRACE_MODE_BASIC:
 	case TRACE_MODE_DROP:
+	case TRACE_MODE_MONITOR:
 		probe_ops.trace_poll = basic_poll_handler;
 		break;
 	case TRACE_MODE_SOCK:
@@ -113,6 +134,8 @@ static int probe_trace_load()
 	case TRACE_MODE_DIAG:
 	case TRACE_MODE_TIMELINE:
 		probe_ops.trace_poll = tl_poll_handler;
+		break;
+	default:
 		break;
 	}
 
@@ -256,8 +279,6 @@ static void probe_print_stack(int key) { }
 
 static bool probe_trace_supported()
 {
-	if (trace_ctx.mode == TRACE_MODE_MONITOR)
-		return false;
 	return true;
 }
 
@@ -275,5 +296,6 @@ trace_ops_t probe_ops = {
 	.trace_feat_probe = probe_trace_feat_probe,
 	.trace_supported = probe_trace_supported,
 	.print_stack = probe_print_stack,
+	.prepare_traces = probe_check_monitor,
 	.analyzer = &probe_analyzer,
 };

@@ -48,8 +48,10 @@ static inline int kv_compare(int major, int minor, int patch)
 
 #define pr_level(level, target, fmt, args...)	\
 do {						\
-	if (level <= log_level)			\
+	if (level <= log_level) {		\
 		fprintf(target, fmt, ##args);	\
+		fflush(target);			\
+	}					\
 } while (0)
 
 #define pr_info(fmt, args...)	pr_level(0, stdout, fmt, ##args)

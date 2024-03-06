@@ -152,20 +152,25 @@ Usage:
     --netns          filter by net namespace inode
     --netns-current  filter by current net namespace
     --pid            filter by current process id(pid)
+    --min-latency    filter by the minial time to live of the skb in ms
+    --pkt-len        filter by the IP packet length (include header) in byte
+    --tcp-flags      filter by TCP flags, such as: SAPR
+
     -t, --trace      enable trace group or trace
     --ret            show function return value
     --detail         show extern packet info, such as pid, ifname, etc
     --date           print timestamp in date-time format
+    -c, --count      exit after receiving count packets
     --basic          use 'basic' trace mode, don't trace skb's life
     --diag           enable 'diagnose' mode
     --diag-quiet     only print abnormal packet
     --diag-keep      don't quit when abnormal packet found
     --hooks          print netfilter hooks if dropping by netfilter
     --drop           skb drop monitor mode, for replace of 'droptrace'
+    --drop-stack     print the kernel function call stack of kfree_skb
     --sock           enable 'sock' mode
     --monitor        enable 'monitor' mode
-    --drop-stack     print the kernel function call stack of kfree_skb
-    --min-latency       the minial time to live of the skb
+    --pkt-fixed      set this option if you are sure the target packet is not NATed to get better performance
     --trace-stack    print call stack for traces or group
 
     -v               show log information
@@ -741,6 +746,20 @@ map 'kprobe.rodata': failed to create: Invalid argument(-22)
 ```
 
 这个是由于当前的内核不支持BPF_GLOBAL_DATA导致的，需要重新编译nettrace，在编译的时候加上`NO_GLOBAL_DATA=1`即可：
+
+
+```
+make NO_GLOBAL_DATA=1 all
+```
+
+### 4.2 bpf_jiffies64不支持
+
+启动程序报错：
+```
+unknown func bpf_jiffies64#118
+```
+
+这个是当前内核对于`DEAD CODE`的检查机制不完善导致的，需要重新编译nettrace，在编译的时候加上`NO_GLOBAL_DATA=1`即可：
 
 
 ```

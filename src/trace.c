@@ -21,6 +21,7 @@ trace_context_t trace_ctx = {
 extern trace_ops_t tracing_ops;
 extern trace_ops_t probe_ops;
 trace_ops_t *trace_ops_all[] = { &tracing_ops, &probe_ops };
+u32 skb_count = 0;
 
 static bool trace_group_valid(trace_group_t *group)
 {
@@ -243,12 +244,12 @@ static int trace_check_force()
 	if (args->drop || args->force || args->monitor || args->show_traces)
 		return 0;
 
-	if (ARGS_ENABLED(bpf_args, pid) || ARGS_ENABLED(pkt_args, saddr) ||
-	    ARGS_ENABLED(pkt_args, daddr) || ARGS_ENABLED(pkt_args, addr) ||
-	    ARGS_ENABLED(pkt_args, saddr_v6) || ARGS_ENABLED(pkt_args, daddr_v6) ||
-	    ARGS_ENABLED(pkt_args, addr_v6)|| ARGS_ENABLED(pkt_args, sport) ||
-	    ARGS_ENABLED(pkt_args, dport)|| ARGS_ENABLED(pkt_args, port)||
-	    ARGS_ENABLED(pkt_args, l3_proto) || ARGS_ENABLED(pkt_args, l4_proto))
+	if (bpf_args->pid || pkt_args->saddr ||
+	    pkt_args->daddr || pkt_args->addr ||
+	    pkt_args->saddr_v6[0] || pkt_args->daddr_v6[0] ||
+	    pkt_args->addr_v6[0]|| pkt_args->sport ||
+	    pkt_args->dport|| pkt_args->port||
+	    pkt_args->l3_proto || pkt_args->l4_proto)
 		return 0;
 
 	return -1;
@@ -379,7 +380,6 @@ skip_trace:
 			switch (trace->monitor) {
 			case TRACE_MONITOR_EXIT:
 				trace_set_retonly(trace);
-			case TRACE_MONITOR_ALL:
 				trace_set_ret(trace);
 				break;
 			default:
@@ -393,10 +393,10 @@ skip_trace:
 	}
 
 	/* disable traces that don't support sk in SOCK_MODE, and disable
-	 * traces that don't support skb in !SOCK_MODE.
+	 * traces that don't support skb in !(SOCK_MODE || MONITOR_MODE).
 	 */
-	trace_for_each_cond(trace, (!args->sock && trace->sk &&
-				    !trace->skb) ||
+	trace_for_each_cond(trace, (!args->sock && !args->monitor &&
+				    trace->sk && !trace->skb) ||
 				   (args->sock && !trace->sk))
 			trace_set_invalid_reason(trace, "sock or sk mode");
 
@@ -429,15 +429,11 @@ skip_trace:
 
 		if (sscanf(args->pkt_len, "%u-%u%s", &len_1, &len_2,
 			buf) == 2) {
-			bpf_args->pkt.enable_pkt_len_1 = true;
 			bpf_args->pkt.pkt_len_1 = len_1;
-			bpf_args->pkt.enable_pkt_len_2 = true;
 			bpf_args->pkt.pkt_len_2 = len_2;
 		} else if (sscanf(args->pkt_len, "%u%s", &len_1,
 			buf) == 1) {
-			bpf_args->pkt.enable_pkt_len_1 = true;
 			bpf_args->pkt.pkt_len_1 = len_1;
-			bpf_args->pkt.enable_pkt_len_2 = true;
 			bpf_args->pkt.pkt_len_2 = len_1;
 		} else {
 			pr_err("--pkt_len: invalid format. valid format: "
@@ -464,6 +460,9 @@ skip_trace:
 			case 'R':
 				flags |= TCP_FLAGS_RST;
 				break;
+			case 'F':
+				flags |= TCP_FLAGS_FIN;
+				break;
 			default:
 				pr_err("--tcp-flags: invalid char, valid chars "
 				       "are: SAPR\n");
@@ -471,7 +470,6 @@ skip_trace:
 			}
 			cur++;
 		}
-		bpf_args->pkt.enable_tcp_flags = true;
 		bpf_args->pkt.tcp_flags = flags;
 	}
 
@@ -510,11 +508,25 @@ static int trace_prepare_traces()
 	 * load manually.
 	 */
 	trace_for_each(trace) {
+		char *sym_name;
+
 		if (trace_is_invalid(trace) || !trace_is_enable(trace))
 			continue;
 
-		if (!trace_is_func(trace) || sym_get_type(trace->name) != SYM_NOT_EXIST)
+		if (!trace_is_func(trace)) {
+			sprintf(name, "event_%s", trace->name);
+			sym_name = name;
+		} else {
+			sym_name = trace->name;
+		}
+
+		if (sym_get_type(sym_name) != SYM_NOT_EXIST)
 			continue;
+
+		if (!trace_is_func(trace)) {
+			trace_set_invalid(trace);
+			continue;
+		}
 
 		sprintf(name, "%s.", trace->name);
 		if (sym_search_pattern(name, func, true) == SYM_NOT_EXIST) {
@@ -527,6 +539,9 @@ static int trace_prepare_traces()
 		strcpy(trace->name, func);
 		pr_debug("%s is made manual attach\n", trace->name);
 	}
+
+	if (trace_ctx.ops->prepare_traces)
+		trace_ctx.ops->prepare_traces();
 
 	pr_debug("finished to resolve kernel symbol\n");
 
@@ -730,12 +745,23 @@ static void trace_on_lost(void *ctx, int cpu, __u64 cnt)
 	exit(-1);
 }
 
+static inline void poll_handler_wrap(void *ctx, int cpu, void *data,
+				     u32 size)
+{
+	if (trace_stopped())
+		return;
+
+	trace_ctx.ops->trace_poll(ctx, cpu, data, size);
+	if (trace_ctx.args.count && trace_ctx.args.count <= skb_count)
+		trace_stop();
+}
+
 int trace_poll()
 {
 	int map_fd = bpf_object__find_map_fd_by_name(trace_ctx.obj, "m_event");
 
 	if (!map_fd)
 		return -1;
-	perf_output_cond(map_fd, trace_ctx.ops->trace_poll, trace_on_lost,
+	perf_output_cond(map_fd, poll_handler_wrap, trace_on_lost,
 			 &trace_ctx.stop);
 }

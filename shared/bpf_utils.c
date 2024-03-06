@@ -42,9 +42,10 @@ perf_output_cond(int fd, perf_buffer_sample_fn callback,
 		return err;
 	}
 
-	while ((err = perf_buffer__poll(pb, 1000)) >= 0)
+	while ((err = perf_buffer__poll(pb, 1000)) >= 0) {
 		if (stop && *stop)
 			break;
+	}
 	return 0;
 }
 

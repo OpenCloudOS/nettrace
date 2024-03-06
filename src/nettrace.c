@@ -3,7 +3,6 @@
 #include <arpa/inet.h>
 
 #include <arg_parse.h>
-#include <common_args.h>
 
 #include "nettrace.h"
 #include "trace.h"
@@ -20,10 +19,64 @@ static void do_parse_args(int argc, char *argv[])
 	trace_args_t *trace_args = &trace_ctx.args;
 	bpf_args_t *bpf_args = &trace_ctx.bpf_args;
 	pkt_args_t *pkt_args = &bpf_args->pkt;
-	COMMON_PROG_ARGS_BEGIN()
+	u8 addr_buf[16], saddr_buf[16], daddr_buf[16];
+	u16 addr_pf = 0, saddr_pf = 0, daddr_pf = 0;
+	int proto_l = 0;
+	u16 proto;
 
 	option_item_t opts[] = {
-		COMMON_PROG_ARGS_DEFINE(pkt_args),
+		{
+			.lname = "saddr",
+			.sname = 's',
+			.dest = saddr_buf,
+			.type = OPTION_IPV4ORIPV6,
+			.set = &saddr_pf,
+			.desc = "filter source ip/ipv6 address",
+		},
+		{
+			.lname = "daddr",
+			.sname = 'd',
+			.dest = daddr_buf,
+			.type = OPTION_IPV4ORIPV6,
+			.set = &daddr_pf,
+			.desc = "filter dest ip/ipv6 address",
+		},
+		{
+			.lname = "addr",
+			.dest = addr_buf,
+			.type = OPTION_IPV4ORIPV6,
+			.set = &addr_pf,
+			.desc = "filter source or dest ip/ipv6 address",
+		},
+		{
+			.lname = "sport",
+			.sname = 'S',
+			.dest = &pkt_args->sport,
+			.type = OPTION_U16BE,
+			.desc = "filter source TCP/UDP port",
+		},
+		{
+			.lname = "dport",
+			.sname = 'D',
+			.dest = &pkt_args->dport,
+			.type = OPTION_U16BE,
+			.desc = "filter dest TCP/UDP port",
+		},
+		{
+			.lname = "port",
+			.sname = 'P',
+			.dest = &pkt_args->port,
+			.type = OPTION_U16BE,
+			.desc = "filter source or dest TCP/UDP port",
+		},
+		{
+			.lname = "proto",
+			.sname = 'p',
+			.dest = &proto,
+			.type = OPTION_PROTO,
+			.set = &proto_l,
+			.desc = "filter L3/L4 protocol, such as 'tcp', 'arp'",
+		},
 		{
 			.lname = "netns",
 			.dest = &bpf_args->netns,
@@ -38,7 +91,7 @@ static void do_parse_args(int argc, char *argv[])
 		},
 		{
 			.lname = "pid", .type = OPTION_U32,
-			.dest = &bpf_args->pid, .set = &bpf_args->enable_pid,
+			.dest = &bpf_args->pid,
 			.desc = "filter by current process id(pid)",
 		},
 		{
@@ -82,6 +135,11 @@ static void do_parse_args(int argc, char *argv[])
 			.lname = "date", .dest = &trace_args->date,
 			.type = OPTION_BOOL,
 			.desc = "print timestamp in date-time format",
+		},
+		{
+			.lname = "count", .sname = 'c', .dest = &trace_args->count,
+			.type = OPTION_U32,
+			.desc = "exit after receiving count packets",
 		},
 		{
 			.lname = "basic", .dest = &trace_args->basic,
@@ -180,18 +238,45 @@ static void do_parse_args(int argc, char *argv[])
 	if (show_log)
 		set_log_level(1);
 
-	if (!debug)
+	if (!debug) {
 		/* turn off warning of libbpf */
 		libbpf_set_print(NULL);
-	else
+	} else {
 		set_log_level(2);
+	}
 
 	if (version) {
 		pr_version();
 		exit(0);
 	}
 
-	COMMON_PROG_ARGS_END(pkt_args)
+/* convert the args to the eBPF pkt_arg struct */
+#define FILL_ADDR_PROTO(name, subfix, args, pf) if (name##_pf == pf) {	\
+	memcpy(&(args)->name##subfix, name##_buf,			\
+	       sizeof((args)->name##subfix));				\
+	if ((args)->l3_proto && (args)->l3_proto != pf) { 		\
+		pr_err("ip" #subfix " protocol is excepted!\n");	\
+		goto err;						\
+	}								\
+	(args)->l3_proto = pf;						\
+}
+#define FILL_ADDR(name, args)						\
+	FILL_ADDR_PROTO(name, _v6, args, ETH_P_IPV6)			\
+	FILL_ADDR_PROTO(name, , args, ETH_P_IP)
+
+	switch (proto_l) {
+	case 3:
+		pkt_args->l3_proto = proto;
+		break;
+	case 4:
+		pkt_args->l4_proto = proto;
+		break;
+	default:
+		break;
+	}
+	FILL_ADDR(saddr, pkt_args)
+	FILL_ADDR(daddr, pkt_args)
+	FILL_ADDR(addr, pkt_args)
 
 	return;
 err:

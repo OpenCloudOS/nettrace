@@ -8,6 +8,7 @@
 #define nt_take_2th(ignored, a, ...)	a
 #define nt_take_3th(ignored, a, b, ...)	b
 
+#define __nt_placehold_arg_0		0,
 #define __nt_placehold_arg_1		1,
 #define __nt_placehold_arg_2		2,
 #define __nt_placehold_arg_3		3,
@@ -25,7 +26,7 @@
 #define __nt_ternary_take(a, b, c)	\
 	____nt_ternary_take(__nt_placehold_arg_##a, b, c)
 
-/* take b if a >= 1; else, take c */
+/* take b if a offered; else, take c */
 #define nt_ternary_take(a, b, c) __nt_ternary_take(a, b, c)
 
 #define ICSK_TIME_RETRANS	1
@@ -83,10 +84,10 @@ typedef struct {
 			u16	op;
 		} arp_ext;
 		struct
-        	{
-                	u32 spi;
-                	u32 seq;
-        	} espheader;
+		{
+			u32 spi;
+			u32 seq;
+		} espheader;
 #define field_udp l4.udp
 	} l4;
 	u16 proto_l3;
@@ -133,6 +134,7 @@ typedef struct {
 #define TCP_FLAGS_PSH	(1 << 3)
 #define TCP_FLAGS_RST	(1 << 2)
 #define TCP_FLAGS_SYN	(1 << 1)
+#define TCP_FLAGS_FIN	(1 << 0)
 
 #define DEFINE_FIELD_STD(type, name)		\
 	type name;				\
@@ -146,28 +148,23 @@ typedef struct {
 
 /* used for packet filter condition */
 typedef struct {
-	DEFINE_FIELD(u32, saddr)
-	DEFINE_FIELD(u32, daddr)
-	DEFINE_FIELD(u32, addr)
-	DEFINE_FIELD(u32, pkt_len_1)
-	DEFINE_FIELD(u32, pkt_len_2)
-	DEFINE_FIELD(u8, saddr_v6, 16)
-	DEFINE_FIELD(u8, daddr_v6, 16)
-	DEFINE_FIELD(u8, addr_v6, 16)
-	DEFINE_FIELD(u16, sport)
-	DEFINE_FIELD(u16, dport)
-	DEFINE_FIELD(u16, port)
-	DEFINE_FIELD(u16, l3_proto)
-	DEFINE_FIELD(u8, l4_proto)
-	DEFINE_FIELD(u8, tcp_flags)
+	u32	saddr;
+	u32	daddr;
+	u32	addr;
+	u32	pkt_len_1;
+	u32	pkt_len_2;
+	u32	saddr_v6[4];
+	u32	daddr_v6[4];
+	u32	addr_v6[4];
+	u16	sport;
+	u16	dport;
+	u16	port;
+	u16	l3_proto;
+	u8	l4_proto;
+	u8	tcp_flags;
 } pkt_args_t;
 
-#define ARGS_ENABLED(args, name)	args->enable_##name
-#define ARGS_GET(args, name)		(args)->name
-#define ARGS_CHECK(args, name, value)		\
-	(ARGS_ENABLED(args, name) && args->name != (value))
-#define ARGS_CHECK_OPS(args, name, value, ops)	\
-	(ARGS_ENABLED(args, name) && ops(args->name, value))
+#define args_check(args, attr, value) (args->attr && args->attr != value)
 
 #define CONFIG_MAP_SIZE	1024
 

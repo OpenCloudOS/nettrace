@@ -23,6 +23,7 @@ const char *level_mark[] = {
 	[RULE_ERROR] = PFMT_ERROR"ERROR"PFMT_END,
 };
 static u32 ctx_count = 0;
+extern u32 skb_count;
 
 static inline struct hlist_head *get_ctx_hash_head(u64 key)
 {
@@ -165,10 +166,10 @@ static void analy_entry_handle(analy_entry_t *entry)
 		sprintf(tinfo, "[%-20s] ", t->name);
 	}
 
-	if (trace_ctx.mode != TRACE_MODE_SOCK)
-		ts_print_packet(buf, &e->pkt, tinfo, trace_ctx.args.date);
-	else
+	if (trace_using_sk(t))
 		ts_print_sock(buf, &e->ske, tinfo, trace_ctx.args.date);
+	else
+		ts_print_packet(buf, &e->pkt, tinfo, trace_ctx.args.date);
 
 	if ((entry->status & ANALY_ENTRY_RETURNED) && trace_ctx.args.ret)
 		sprintf_end(buf, PFMT_EMPH_STR(" *return: %d*"),
@@ -287,6 +288,7 @@ out:
 	pr_info("\n");
 free_ctx:
 	analy_ctx_free(ctx);
+	skb_count++;
 }
 
 static int try_run_entry(trace_t *trace, analyzer_t *analyzer,
@@ -366,7 +368,19 @@ static inline void rule_run_any(analy_entry_t *entry, trace_t *trace)
 	list_for_each_entry(rule, &trace->rules, list) {
 		if (rule->type == RULE_RETURN_ANY) {
 			entry->rule = rule;
-			return;
+			if (!mode_has_context())
+				break;
+			switch (rule->level) {
+			case RULE_INFO:
+				break;
+			case RULE_WARN:
+				entry->ctx->status |= ANALY_CTX_WARN;
+				break;
+			case RULE_ERROR:
+				entry->ctx->status |= ANALY_CTX_ERROR;
+				break;
+			}
+			break;
 		}
 	}
 }
@@ -374,6 +388,7 @@ static inline void rule_run_any(analy_entry_t *entry, trace_t *trace)
 void tl_poll_handler(void *raw_ctx, int cpu, void *data, u32 size)
 {
 	static char buf[1024], tinfo[128];
+	analy_exit_t analy_exit;
 	fake_analy_ctx_t *fake;
 	analy_ctx_t *analy_ctx;
 	analy_entry_t *entry;
@@ -433,8 +448,8 @@ void tl_poll_handler(void *raw_ctx, int cpu, void *data, u32 size)
 	list_add_tail(&entry->list, &analy_ctx->entries);
 	goto check_pending;
 
-do_ret:;
-	analy_exit_t analy_exit = {
+do_ret:
+	analy_exit = (analy_exit_t) {
 		.event = *(retevent_t *)data,
 		.cpu = cpu,
 	};
@@ -479,6 +494,12 @@ check_pending:
 	}
 }
 
+static inline bool trace_analyse_ret(trace_t *trace)
+{
+	return trace_ctx.mode == TRACE_MODE_MONITOR && trace_is_func(trace) &&
+	       trace->monitor == TRACE_MONITOR_EXIT;
+}
+
 static inline void do_basic_poll(analy_entry_t *entry)
 {
 	trace_t *trace;
@@ -486,7 +507,7 @@ static inline void do_basic_poll(analy_entry_t *entry)
 	trace = get_trace_from_analy_entry(entry);
 	try_run_entry(trace, trace->analyzer, entry);
 
-	if (trace_ctx.mode == TRACE_MODE_MONITOR) {
+	if (trace_analyse_ret(trace)) {
 		analy_exit_t analy_exit = {
 			.event = {
 				.val = entry->event->retval,
@@ -497,6 +518,7 @@ static inline void do_basic_poll(analy_entry_t *entry)
 	}
 
 	analy_entry_handle(entry);
+	skb_count++;
 }
 
 void basic_poll_handler(void *ctx, int cpu, void *data, u32 size)
@@ -572,11 +594,8 @@ DEFINE_ANALYZER_ENTRY(free, TRACE_MODE_CTX_MASK)
 {
 	put_fake_analy_ctx(e->fake_ctx);
 	hlist_del(&e->fake_ctx->hash);
-	if (!trace_mode_intel())
-		goto out;
+	rule_run_any(e, trace);
 
-	rule_run_ret(e, trace, 0);
-out:
 	return RESULT_CONT;
 }
 
@@ -590,24 +609,25 @@ DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_ALL_MASK)
 	sym = sym_parse(event->location);
 	sym_str = sym ? sym->desc : "unknow";
 
-	if (!mode_has_context()) {
-		info = malloc(1024);
-		if (trace_ctx.drop_reason)
-			sprintf(info, ", reason: %s, %s", reason, sym_str);
-		else
-			sprintf(info, ", %s", sym_str);
-		entry_set_msg(e, info);
-		goto out;
+	info = malloc(1024);
+	if (trace_ctx.drop_reason)
+		sprintf(info, PFMT_EMPH_STR(" *reason: %s, %s*"), reason,
+			sym_str);
+	else
+		sprintf(info, PFMT_EMPH_STR(" *%s*"), sym_str);
+	entry_set_msg(e, info);
+
+	rule_run_any(e, trace);
+	if (mode_has_context()) {
+		put_fake_analy_ctx(e->fake_ctx);
+		hlist_del(&e->fake_ctx->hash);
 	}
 
-	put_fake_analy_ctx(e->fake_ctx);
-	hlist_del(&e->fake_ctx->hash);
 	if (!trace_mode_intel())
 		goto out;
 
+	/* generate the information in the analysis result part */
 	info = malloc(1024);
-	info[0] = '\0';
-	rule_run_ret(e, trace, 0);
 	sprintf(info, PFMT_EMPH_STR("    location")":\n\t%s", sym_str);
 	if (trace_ctx.drop_reason) {
 		sprintf_end(info, PFMT_EMPH_STR("\n    drop reason")":\n\t%s",

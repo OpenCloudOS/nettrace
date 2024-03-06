@@ -49,6 +49,15 @@ nettrace - Linux系统下的网络报文跟踪、网络问题诊断工具
 `--pid` *pid*
   根据进程号进行过滤
 
+`--min-latency` *latency in ms*
+  根据报文的寿命进行过滤，仅打印处理时长超过该值的报文，单位为ms。该参数仅在默认和`diag`模式下可用。
+
+`--pkt-len` *pkt_len*
+  根据报文长度进行过滤，可以指定范围，如`--pkt-len 10-20`；也可以指定确切的值，如`--pkt-len 64`
+
+`--tcp-flags` *flags*
+  根据TCP报文中的flag进行过滤，有效的flag包括`SARF`，可以指定多个，如：`--tcp-flags FA`
+
 `-t,--trace` *traces*
   要启用（跟踪）的内核函数、tracepoint。
 
@@ -91,6 +100,9 @@ nettrace - Linux系统下的网络报文跟踪、网络问题诊断工具
 `--monitor`
   启用监控模式。一种轻量化的实时监控系统中网络异常的模式（对内核版本有一定要求）。
 
+`-c,--count`
+  抓取count个报文后退出程序
+
 `--hooks`
   打印netfilter上的钩子函数
 
@@ -99,9 +111,6 @@ nettrace - Linux系统下的网络报文跟踪、网络问题诊断工具
 
 `--drop-stack`
   打印kfree_skb内核函数的调用堆栈，等价于`--trace-stack kfree_skb`
-
-`--min-latency` *latency in ms*
-  根据报文的寿命进行过滤，仅打印处理时长超过该值的报文，单位为ms。该参数仅在默认和`diag`模式下可用。
 
 `--trace-stack` *traces*
   指定需要进行堆栈打印的内核函数，可以指定多个，用“,”分隔。出于性能考虑，启用堆栈打印的

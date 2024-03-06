@@ -8,15 +8,22 @@
 
 static bool tracing_trace_supported()
 {
+#ifdef COMPAT_MODE
+	goto failed;
+#endif
+
 	/* for now, monitor mode only */
 	if (trace_ctx.mode != TRACE_MODE_MONITOR)
-		return false;
+		goto failed;
 
-#ifdef COMPAT_MODE
-	pr_err("--monitor is not supported in compat mode!\n");
-	return false;
-#endif
+	/* TRACING is not supported, skip this handle */
+	if (!libbpf_probe_bpf_prog_type(BPF_PROG_TYPE_TRACING, NULL))
+		goto failed;
+
 	return true;
+failed:
+	pr_verb("TRACING is not supported, trying others\n");
+	return false;
 }
 
 #ifndef COMPAT_MODE

@@ -23,6 +23,7 @@ typedef struct {
 		sock_t		ske;
 	};
 	u64		key;
+	/* For FEXIT program only for now */
 	u64		retval;
 	u32		func;
 #ifdef BPF_FEAT_STACK_TRACE
