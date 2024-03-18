@@ -1,10 +1,10 @@
 #define KBUILD_MODNAME ""
+#define __PROG_TYPE_TRACING 1
+
 #include <kheaders.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
 #include <bpf/bpf_tracing.h>
-
-#define BPF_FEAT_TRACING 1
 
 #include "shared.h"
 #include <skb_parse.h>

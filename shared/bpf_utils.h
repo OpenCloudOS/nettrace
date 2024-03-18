@@ -70,7 +70,7 @@ int btf_get_arg_count(char *name);
 #undef BPF_FUNC_CHECK
 #define BPF_FUNC_CHECK(name, data, type)			\
 data[BPF_LOCAL_FUNC_##name] = libbpf_probe_bpf_helper(type,	\
-	BPF_FUNC_##name, NULL);
+	BPF_FUNC_##name, NULL) == 1;
 
 #define bpf_func_init(skel, type)				\
 	BPF_LOCAL_FUNC_MAPPER(BPF_FUNC_CHECK, skel->rodata->bpf_func_exist, type)

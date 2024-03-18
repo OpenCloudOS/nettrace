@@ -197,7 +197,7 @@ out:
 
 	handle_event_output(info, event_size);
 
-#ifdef BPF_FEAT_TRACING
+#ifdef __PROG_TYPE_TRACING
 	e->retval = info->retval;
 #endif
 
@@ -228,7 +228,7 @@ static try_inline int handle_destroy(context_info_t *info)
 
 DEFINE_ALL_PROBES(KPROBE_DEFAULT, TP_DEFAULT, FNC)
 
-#ifndef BPF_FEAT_TRACING
+#ifndef __PROG_TYPE_TRACING
 struct kfree_skb_args {
 	u64 pad;
 	void *skb;
