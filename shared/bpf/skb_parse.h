@@ -43,7 +43,16 @@ struct {
 
 #ifndef BPF_NO_GLOBAL_DATA
 const volatile bool bpf_func_exist[BPF_LOCAL_FUNC_MAX] = {0};
+
+/* TRACING is not supported by libbpf_probe_bpf_helper, so fallback with the
+ * CO-RE checking.
+ */
+#ifdef __PROG_TYPE_TRACING
+#define bpf_core_helper_exist(name) \
+	bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_##name)
+#else
 #define bpf_core_helper_exist(name) bpf_func_exist[BPF_LOCAL_FUNC_##name]
+#endif
 #else
 #define bpf_core_helper_exist(name) false
 #endif
