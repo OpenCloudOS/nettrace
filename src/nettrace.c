@@ -306,7 +306,7 @@ int main(int argc, char *argv[])
 		goto err;
 
 	if (trace_bpf_load_and_attach()) {
-		pr_err("failed to load kprobe-based bpf\n");
+		pr_err("failed to load bpf\n");
 		goto err;
 	}
 

@@ -6,6 +6,14 @@
 #include "nettrace.h"
 #include "analysis.h"
 
+/* check whether trampoline is supported by current arch */
+static bool tracing_arch_supported()
+{
+	return simple_exec("cat /proc/kallsyms | "
+			   "grep arch_prepare_bpf_trampoline | "
+			   "grep T") == 0;
+}
+
 static bool tracing_trace_supported()
 {
 #ifdef COMPAT_MODE
@@ -19,6 +27,11 @@ static bool tracing_trace_supported()
 	/* TRACING is not supported, skip this handle */
 	if (!libbpf_probe_bpf_prog_type(BPF_PROG_TYPE_TRACING, NULL))
 		goto failed;
+
+	if (!tracing_arch_supported()) {
+		pr_warn("trampoline is not supported, skip TRACING\n");
+		goto failed;
+	}
 
 	return true;
 failed:
@@ -62,7 +75,7 @@ static void tracing_trace_attach_manual(char *prog_name, char *func)
 	bpf_program__set_attach_target(prog, 0, func);
 }
 
-static int tracing_trace_attach()
+static void tracing_adjust_target()
 {
 	char kret_name[128];
 	trace_t *trace;
@@ -79,6 +92,10 @@ static int tracing_trace_attach()
 		sprintf(kret_name, "ret%s", trace->prog);
 		tracing_trace_attach_manual(kret_name, trace->name);
 	}
+}
+
+static int tracing_trace_attach()
+{
 	return tracing__attach(skel);
 }
 
@@ -165,7 +182,13 @@ static int tracing_trace_load()
 	tracing_load_rules();
 	tracing_check_args();
 
-	if (trace_pre_load() || tracing__load(skel)) {
+	if (trace_pre_load()) {
+		pr_err("failed to prepare load\n");
+		goto err;
+	}
+
+	tracing_adjust_target();
+	if (tracing__load(skel)) {
 		pr_err("failed to load tracing-based eBPF\n");
 		goto err;
 	}
