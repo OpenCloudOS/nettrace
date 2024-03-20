@@ -25,7 +25,7 @@ children:
     visual: true
     children:
     - name: napi_gro_receive_entry
-      tp: net:napi_gro_receive_entry
+      tp: net/napi_gro_receive_entry
       skboffset: 24
       skb: 3
     - name: dev_gro_receive:1
@@ -382,7 +382,7 @@ children:
         msg: tcp port is not listened
         adv: check your target tcp port
     - name: tcp_bad_csum:0
-      tp: tcp:tcp_bad_csum
+      tp: tcp/tcp_bad_csum
       skboffset: 8
       monitor: 2
       rules:
@@ -524,7 +524,7 @@ children:
       level: info
       msg: packet is cloned
   - name: consume_skb:0
-    tp: skb:consume_skb
+    tp: skb/consume_skb
     skboffset: 8
     analyzer: free
     rules:
@@ -532,7 +532,7 @@ children:
       level: info
       msg: packet is freed (normally)
   - name: kfree_skb:0
-    tp: skb:kfree_skb
+    tp: skb/kfree_skb
     skboffset: 8
     custom: 1
     analyzer: drop
