@@ -508,19 +508,19 @@ static int trace_prepare_traces()
 	 * load manually.
 	 */
 	trace_for_each(trace) {
-		char *sym_name;
-
 		if (trace_is_invalid(trace) || !trace_is_enable(trace))
 			continue;
 
 		if (!trace_is_func(trace)) {
-			sprintf(name, "event_%s", trace->name);
-			sym_name = name;
-		} else {
-			sym_name = trace->name;
+			/* For tracepoint, check the exist of the path */
+			sprintf(name, "/sys/kernel/debug/tracing/events/%s",
+				trace->tp);
+			if (!file_exist(name))
+				trace_set_invalid_reason(trace, "tp not found");
+			continue;
 		}
 
-		if (sym_get_type(sym_name) != SYM_NOT_EXIST)
+		if (sym_get_type(trace->name) != SYM_NOT_EXIST)
 			continue;
 
 		if (!trace_is_func(trace)) {

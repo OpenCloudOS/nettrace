@@ -212,7 +212,7 @@ def gen_trace(trace, group, p_name):
 
     if 'tp' in trace:
         trace_type = 'TRACE_TP'
-        tp = trace['tp'].split(':')
+        tp = trace['tp'].split('/')
         if 'skb' in trace and 'custom' not in trace:
             probe_str = f'\tFN_tp({name}, {tp[0]}, {tp[1]}, {trace["skb"]}, {trace["skboffset"]})\t\\\n'
         else:
