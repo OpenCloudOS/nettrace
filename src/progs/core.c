@@ -479,4 +479,27 @@ DEFINE_KPROBE_INIT(inet_listen, inet_listen, 2,
 	return default_handle_entry(info);
 }
 
+DEFINE_KPROBE_INIT(tcp_ack_update_rtt, tcp_ack_update_rtt, 6,
+		   .sk = ctx_get_arg(ctx, 0))
+{
+	struct tcp_sock *tp = (void *)info->sk;
+	u64 rtt = (u64)info_get_arg(info, 2);
+	u32 srtt;
+
+	if ((long)rtt < 0)
+		return 0;
+
+	srtt = (_C(tp, srtt_us) / 1000) >> 3;
+	rtt = rtt / 1000;
+
+	if (rtt < info->args->rtt_min || srtt < info->args->srtt_min)
+		return 0;
+
+	DECLARE_EVENT(rtt_event_t, e)
+	e->rtt = rtt;
+	e->srtt = srtt;
+
+	return handle_entry(info, e_size);
+}
+
 char _license[] SEC("license") = "GPL";

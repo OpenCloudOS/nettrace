@@ -782,3 +782,18 @@ DEFINE_ANALYZER_ENTRY(qdisc, TRACE_MODE_ALL_MASK)
 	return RESULT_CONT;
 }
 DEFINE_ANALYZER_EXIT_FUNC_DEFAULT(qdisc)
+
+DEFINE_ANALYZER_ENTRY(rtt, TRACE_MODE_ALL_MASK)
+{
+	define_pure_event(rtt_event_t, event, e->event);
+	char *msg = malloc(1024);
+	int hz;
+
+	msg[0] = '\0';
+	sprintf(msg, PFMT_EMPH_STR(" *srtt:%ums, rtt:%ums*"), event->srtt,
+		event->rtt);
+	entry_set_msg(e, msg);
+
+	return RESULT_CONT;
+}
+DEFINE_ANALYZER_EXIT_FUNC_DEFAULT(rtt)

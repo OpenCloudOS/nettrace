@@ -249,7 +249,9 @@ static int trace_check_force()
 	    pkt_args->saddr_v6[0] || pkt_args->daddr_v6[0] ||
 	    pkt_args->addr_v6[0]|| pkt_args->sport ||
 	    pkt_args->dport|| pkt_args->port||
-	    pkt_args->l3_proto || pkt_args->l4_proto)
+	    pkt_args->l3_proto || pkt_args->l4_proto ||
+	    bpf_args->rtt_min || bpf_args->srtt_min ||
+	    (args->traces && strcmp(args->traces, "all") != 0))
 		return 0;
 
 	return -1;
@@ -344,6 +346,10 @@ skip_trace:
 		trace_ctx.drop_reason = true;
 		get_drop_reason(1);
 	}
+
+	/* enable tcp_ack_update_rtt as monitor if rtt set */
+	if (bpf_args->rtt_min || bpf_args->srtt_min)
+		trace_tcp_ack_update_rtt.monitor = 2;
 
 	switch (trace_ctx.mode) {
 	case TRACE_MODE_DIAG:

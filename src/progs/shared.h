@@ -13,7 +13,9 @@
 	bool ready;			\
 	bool stack;			\
 	bool pkt_fixed;			\
-	u16  stack_funs[MAX_FUNC_STACK];
+	u16  stack_funs[MAX_FUNC_STACK];\
+	u32  rtt_min;			\
+	u32  srtt_min;
 
 #include <skb_shared.h>
 
@@ -95,6 +97,11 @@ DEFINE_EVENT(qdisc_event_t,
 	event_field(u32, state)
 	event_field(u32, qlen)
 	event_field(u32, flags)
+)
+
+DEFINE_EVENT(rtt_event_t,
+	event_field(u32, srtt)
+	event_field(u32, rtt)
 )
 
 #define MAX_EVENT_SIZE sizeof(detail_nf_hooks_event_t)
