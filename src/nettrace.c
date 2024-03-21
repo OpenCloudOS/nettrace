@@ -109,6 +109,16 @@ static void do_parse_args(int argc, char *argv[])
 			.type = OPTION_STRING,
 			.desc = "filter by TCP flags, such as: SAPR",
 		},
+		{
+			.lname = "tcp-rtt", .dest = &bpf_args->rtt_min,
+			.type = OPTION_U32,
+			.desc = "filter by the minial rtt in ms",
+		},
+		{
+			.lname = "tcp-srtt", .dest = &bpf_args->srtt_min,
+			.type = OPTION_U32,
+			.desc = "filter by the minial srtt in ms",
+		},
 		{ .type = OPTION_BLANK },
 		{
 			.lname = "trace", .sname = 't',

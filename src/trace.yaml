@@ -458,6 +458,9 @@ children:
         msg: TCP socket is closed
     - *tcp_rcv_state_process
     - tcp_send_active_reset/0
+    - name: tcp_ack_update_rtt/0
+      custom: 1
+      analyzer: rtt
   - name: tcp-congestion
     desc: TCP congestion control releated hooks
     children:

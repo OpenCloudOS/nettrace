@@ -58,6 +58,12 @@ nettrace - Linux系统下的网络报文跟踪、网络问题诊断工具
 `--tcp-flags` *flags*
   根据TCP报文中的flag进行过滤，有效的flag包括`SARF`，可以指定多个，如：`--tcp-flags FA`
 
+`--tcp-rtt` *rtt*
+  sock和monitor模式下可用，筛选出rtt高于该参数的事件，单位ms
+
+`--tcp-srtt` *rtt*
+  sock和monitor模式下可用，筛选出srtt高于该参数的事件，单位ms
+
 `-t,--trace` *traces*
   要启用（跟踪）的内核函数、tracepoint。
 

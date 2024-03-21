@@ -54,6 +54,12 @@ nettrace \- Linux系统下的网络报文跟踪、网络问题诊断工具
 \fB\fC\-\-tcp\-flags\fR \fIflags\fP
 根据TCP报文中的flag进行过滤，有效的flag包括\fB\fCSARF\fR，可以指定多个，如：\fB\fC\-\-tcp\-flags FA\fR
 .TP
+\fB\fC\-\-tcp\-rtt\fR \fIrtt\fP
+sock和monitor模式下可用，筛选出rtt高于该参数的事件，单位ms
+.TP
+\fB\fC\-\-tcp\-srtt\fR \fIrtt\fP
+sock和monitor模式下可用，筛选出srtt高于该参数的事件，单位ms
+.TP
 \fB\fC\-t,\-\-trace\fR \fItraces\fP
 要启用（跟踪）的内核函数、tracepoint。
 .IP
