@@ -295,6 +295,13 @@ static int trace_prepare_args()
 		goto skip_trace;
 	}
 
+	if (bpf_args->rate_limit && (trace_ctx.mode == TRACE_MODE_TIMELINE ||
+				     trace_ctx.mode == TRACE_MODE_DIAG)) {
+		pr_err("--rate-limit can't be used in timeline(default)/diag mode\n");
+		goto err;
+	}
+	bpf_args->__rate_limit = bpf_args->rate_limit;
+
 	if (traces_stack) {
 		tmp = calloc(strlen(traces_stack) + 1, 1);
 		strcpy(tmp, traces_stack);
