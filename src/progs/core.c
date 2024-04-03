@@ -110,6 +110,35 @@ static __always_inline void handle_event_output(context_info_t *info,
 	EVENT_OUTPUT_PTR(info->ctx, info->e, size);
 }
 
+static __always_inline int check_rate_limit(bpf_args_t *args)
+{
+	u64 last_ts = args->__last_update, ts = 0;
+	int budget = args->__rate_limit;
+	int limit = args->rate_limit;
+
+	if (!limit)
+		return 0;
+
+	if (!last_ts) {
+		last_ts = bpf_ktime_get_ns();
+		args->__last_update = last_ts;
+	}
+
+	if (budget <= 0) {
+		ts = bpf_ktime_get_ns();
+		budget = (((ts - last_ts) / 1000000) * limit) / 1000;
+		budget = budget < limit ? budget : limit;
+		if (budget <= 0)
+			return -1;
+		args->__last_update = ts;
+	}
+
+	budget--;
+	args->__rate_limit = budget;
+
+	return 0;
+}
+
 /* The event_size here is to be compatible with 4.X kernel, the compiler
  * will optimize it to imm.
  */
@@ -125,7 +154,7 @@ static try_inline int handle_entry(context_info_t *info, const int event_size)
 	u32 pid;
 	int err;
 
-	if (!args->ready)
+	if (!args->ready || check_rate_limit(args))
 		goto err;
 
 	pr_debug_skb("begin to handle, func=%d", info->func);

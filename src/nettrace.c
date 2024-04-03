@@ -210,6 +210,11 @@ static void do_parse_args(int argc, char *argv[])
 			.type = OPTION_STRING,
 			.desc = "print call stack for traces or group",
 		},
+		{
+			.lname = "rate-limit", .dest = &bpf_args->rate_limit,
+			.type = OPTION_U32,
+			.desc = "limit the output to N/s, not valid in diag/default mode",
+		},
 		{ .type = OPTION_BLANK },
 		{
 			.sname = 'v', .dest = &show_log,

@@ -15,7 +15,10 @@
 	bool pkt_fixed;			\
 	u16  stack_funs[MAX_FUNC_STACK];\
 	u32  rtt_min;			\
-	u32  srtt_min;
+	u32  srtt_min;			\
+	u32  rate_limit;		\
+	int  __rate_limit;		\
+	u64  __last_update;
 
 #include <skb_shared.h>
 
