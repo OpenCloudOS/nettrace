@@ -239,7 +239,7 @@ tracing_analy_entry(trace_t *trace, analy_entry_t *e)
 
 static void tracing_trace_ready()
 {
-	bpf_set_config_field(skel, bss, ready, true);
+	bpf_set_config_field(skel, bss, bpf_args_t, ready, true);
 }
 
 static void tracing_print_stack(int key)

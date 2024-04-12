@@ -162,6 +162,10 @@ typedef struct {
 	u16	l3_proto;
 	u8	l4_proto;
 	u8	tcp_flags;
+
+#ifdef BPF_DEBUG
+	bool	bpf_debug;
+#endif
 } pkt_args_t;
 
 #define args_check(args, attr, value) (args->attr && args->attr != value)

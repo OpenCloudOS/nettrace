@@ -280,7 +280,7 @@ DEFINE_TP_INIT(kfree_skb, skb, kfree_skb)
 
 	if (bpf_core_type_exists(enum skb_drop_reason))
 		reason = (int)args->reason;
-	else if (ARGS_GET_CONFIG(drop_reason))
+	else if (info->args->drop_reason)
 		reason = (int)_(args->reason);
 
 	DECLARE_EVENT(drop_event_t, e)
