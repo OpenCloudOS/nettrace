@@ -32,7 +32,7 @@
 		info = (context_info_t) {			\
 			.func = INDEX_##name,			\
 			.ctx = ctx,				\
-			.args = CONFIG(),			\
+			.args = (void *)CONFIG(),		\
 			.retval = info.retval,			\
 			info_init				\
 		};						\
@@ -44,7 +44,7 @@
 		context_info_t info = {				\
 			.func = INDEX_##name,			\
 			.ctx = ctx,				\
-			.args = CONFIG(),			\
+			.args = (void *)CONFIG(),		\
 			info_init				\
 		};						\
 		return fake__##name(&info);			\
@@ -80,7 +80,7 @@
 		context_info_t info = {				\
 			.func = INDEX_##name,			\
 			.ctx = ctx,				\
-			.args = CONFIG(),			\
+			.args = (void *)CONFIG(),		\
 			info_init				\
 		};						\
 		return fake__##name(&info);			\

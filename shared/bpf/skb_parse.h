@@ -15,16 +15,6 @@
 #include "skb_shared.h"
 
 
-typedef struct {
-	pkt_args_t pkt;
-#ifdef BPF_DEBUG
-	bool bpf_debug;
-#endif
-#ifdef DEFINE_BPF_ARGS
-	DEFINE_BPF_ARGS();
-#endif
-} bpf_args_t;
-
 #define MAX_ENTRIES 256
 
 struct {
@@ -37,7 +27,7 @@ struct {
 struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);
 	__uint(key_size, sizeof(int));
-	__uint(value_size, sizeof(bpf_args_t));
+	__uint(value_size, CONFIG_MAP_SIZE);
 	__uint(max_entries, 1);
 } m_config SEC(".maps");
 
@@ -62,7 +52,7 @@ const volatile bool bpf_func_exist[BPF_LOCAL_FUNC_MAX] = {0};
 	void * _v = bpf_map_lookup_elem(&m_config, &_key);	\
 	if (!_v)						\
 		return 0; /* this can't happen */		\
-	(bpf_args_t*)_v;					\
+	(pkt_args_t *)_v;					\
 })
 
 #define EVENT_OUTPUT_PTR(ctx, data, size)			\
@@ -93,7 +83,7 @@ const volatile bool bpf_func_exist[BPF_LOCAL_FUNC_MAX] = {0};
 
 #ifdef BPF_DEBUG
 #define pr_bpf_debug(fmt, args...) {				\
-	if (ARGS_GET_CONFIG(bpf_debug))				\
+	if (CONFIG()->bpf_debug)				\
 		bpf_printk("nettrace: "fmt"\n", ##args);	\
 }
 #else
@@ -101,9 +91,6 @@ const volatile bool bpf_func_exist[BPF_LOCAL_FUNC_MAX] = {0};
 #endif
 #define pr_debug_skb(fmt, ...)	\
 	pr_bpf_debug("skb=%llx, "fmt, (u64)(void *)skb, ##__VA_ARGS__)
-
-
-#define ARGS_GET_CONFIG(name)		((bpf_args_t *)CONFIG())->name
 
 typedef struct {
 	u64 pad;

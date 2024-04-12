@@ -36,7 +36,7 @@
 		context_info_t info = {				\
 			.func = INDEX_##name,			\
 			.ctx = ctx,				\
-			.args = CONFIG(),			\
+			.args = (void *)CONFIG(),		\
 			info_init				\
 		};						\
 		return fake__##name(&info);			\
@@ -65,7 +65,7 @@
 		context_info_t info = {				\
 			.func = INDEX_##name,			\
 			.ctx = ctx,				\
-			.args = CONFIG(),			\
+			.args = (void *)CONFIG(),		\
 			info_init				\
 		};						\
 		return fake__##name(&info);			\
@@ -141,7 +141,7 @@ static try_inline int handle_exit(struct pt_regs *ctx, int func)
 {
 	retevent_t event;
 
-	if (!ARGS_GET_CONFIG(ready) || put_ret(func))
+	if (!((bpf_args_t *)CONFIG())->ready || put_ret(func))
 		return 0;
 
 	event = (retevent_t) {

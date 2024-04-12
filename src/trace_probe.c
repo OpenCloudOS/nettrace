@@ -248,7 +248,7 @@ out:
 
 static void probe_trace_ready()
 {
-	bpf_set_config_field(skel, bss, ready, true);
+	bpf_set_config_field(skel, bss, bpf_args_t, ready, true);
 }
 
 #ifdef BPF_FEAT_STACK_TRACE

@@ -3,24 +3,26 @@
 
 #define MAX_FUNC_STACK 16
 
-#define DEFINE_BPF_ARGS()		\
-	DEFINE_FIELD(u32, trace_mode)	\
-	DEFINE_FIELD(u32, pid)		\
-	u32  netns;			\
-	bool drop_reason;		\
-	bool detail;			\
-	bool hooks;			\
-	bool ready;			\
-	bool stack;			\
-	bool pkt_fixed;			\
-	u16  stack_funs[MAX_FUNC_STACK];\
-	u32  rtt_min;			\
-	u32  srtt_min;			\
-	u32  rate_limit;		\
-	int  __rate_limit;		\
-	u64  __last_update;
-
 #include <skb_shared.h>
+
+typedef struct {
+	pkt_args_t pkt;
+	u32  trace_mode;
+	u32  pid;
+	u32  netns;
+	bool drop_reason;
+	bool detail;
+	bool hooks;
+	bool ready;
+	bool stack;
+	bool pkt_fixed;
+	u16  stack_funs[MAX_FUNC_STACK];
+	u32  rtt_min;
+	u32  srtt_min;
+	u32  rate_limit;
+	int  __rate_limit;
+	u64  __last_update;
+} bpf_args_t;
 
 typedef struct {
 	union {
