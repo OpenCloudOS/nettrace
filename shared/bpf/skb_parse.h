@@ -502,9 +502,12 @@ static try_inline int __probe_parse_skb(parse_ctx_t *ctx)
 		if (!ctx->network_header)
 			goto err;
 		l3 = ctx->data + ctx->network_header;
-	} else if (ctx->mac_header == ctx->network_header) {
+	} else if (ctx->network_header && ctx->mac_header >= ctx->network_header) {
 		/* to tun device, mac header is the same to network header.
 		 * For this case, we assume that this is a IP packet.
+		 *
+		 * For vxlan device, mac header may be inner mac, and the
+		 * network header is outer, which make mac > network.
 		 */
 		l3 = ctx->data + ctx->network_header;
 		l3_proto = ETH_P_IP;
