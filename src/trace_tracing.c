@@ -77,6 +77,7 @@ static void tracing_trace_attach_manual(char *prog_name, char *func)
 
 static void tracing_adjust_target()
 {
+	struct bpf_program *prog;
 	char kret_name[128];
 	trace_t *trace;
 	int err;
@@ -85,12 +86,21 @@ static void tracing_adjust_target()
 		if (!(trace->status & TRACE_ATTACH_MANUAL))
 			continue;
 
+		prog = bpf_pbn(trace_ctx.obj, trace->prog);
+		/* function name contain "." is not supported by BTF */
+		if (prog && strchr(trace->name, '.')) {
+			trace_set_invalid_reason(trace, "BTF invalid");
+			bpf_program__set_autoload(prog, false);
+		}
+
+#if 0
 		tracing_trace_attach_manual(trace->prog, trace->name);
 		if (!trace_is_ret(trace))
 			continue;
 
 		sprintf(kret_name, "ret%s", trace->prog);
 		tracing_trace_attach_manual(kret_name, trace->name);
+#endif
 	}
 }
 
