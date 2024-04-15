@@ -621,7 +621,7 @@ int trace_prepare()
 	int err, i = 0;
 
 #ifndef COMPAT_MODE
-	if (!file_exist("/sys/kernel/btf/vmlinux")) {
+	if (!file_exist("/sys/kernel/btf/vmlinux") && !trace_ctx.args.btf_path) {
 		pr_err("BTF is not support by your kernel, please compile"
 		       "this tool with \"COMPAT=1\"\n");
 		err = -ENOTSUP;

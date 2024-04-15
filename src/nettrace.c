@@ -215,6 +215,11 @@ static void do_parse_args(int argc, char *argv[])
 			.type = OPTION_U32,
 			.desc = "limit the output to N/s, not valid in diag/default mode",
 		},
+		{
+			.lname = "btf-path", .dest = &trace_args->btf_path,
+			.type = OPTION_STRING,
+			.desc = "custom the path of BTF info of vmlinux",
+		},
 		{ .type = OPTION_BLANK },
 		{
 			.sname = 'v', .dest = &show_log,

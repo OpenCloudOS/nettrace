@@ -97,9 +97,12 @@ static void probe_check_monitor()
 
 static int probe_trace_load()
 {
+	DECLARE_LIBBPF_OPTS(bpf_object_open_opts, opts,
+		.btf_custom_path = trace_ctx.args.btf_path,
+	);
 	int i = 0;
 
-	skel = kprobe__open();
+	skel = kprobe__open_opts(&opts);
 	if (!skel) {
 		pr_err("failed to open kprobe-based eBPF\n");
 		goto err;
