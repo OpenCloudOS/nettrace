@@ -153,6 +153,11 @@ static void do_parse_args(int argc, char *argv[])
 			.desc = "enable 'monitor' mode",
 		},
 		{
+			.lname = "rtt", .dest = &trace_args->rtt,
+			.type = OPTION_BOOL,
+			.desc = "enable 'rtt' mode",
+		},
+		{
 			.lname = "rtt-min", .dest = &bpf_args->rtt_min,
 			.type = OPTION_U32,
 			.desc = "filter by the minial rtt in ms",

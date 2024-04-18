@@ -37,6 +37,13 @@ struct {
 	__uint(value_size, sizeof(u8));
 } m_matched SEC(".maps");
 
+struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY);
+	__uint(key_size, sizeof(int));
+	__uint(value_size, sizeof(__u64));
+	__uint(max_entries, 32);
+} m_rtt_stats SEC(".maps");
+
 #ifdef BPF_FEAT_STACK_TRACE
 static try_inline void try_trace_stack(context_info_t *info)
 {
@@ -513,7 +520,9 @@ DEFINE_KPROBE_INIT(tcp_ack_update_rtt, tcp_ack_update_rtt, 6,
 {
 	struct tcp_sock *tp = (void *)info->sk;
 	u64 rtt = (u64)info_get_arg(info, 2);
-	u32 srtt;
+	u32 srtt, tmp;
+	int key, i;
+	u64 *stats;
 
 	if ((long)rtt < 0)
 		return 0;
@@ -524,11 +533,31 @@ DEFINE_KPROBE_INIT(tcp_ack_update_rtt, tcp_ack_update_rtt, 6,
 	if (rtt < info->args->rtt_min || srtt < info->args->srtt_min)
 		return 0;
 
+	if (info->args->trace_mode & TRACE_MODE_RTT_MASK)
+		goto do_stats;
+
 	DECLARE_EVENT(rtt_event_t, e)
 	e->rtt = rtt;
 	e->srtt = srtt;
 
 	return handle_entry(info, e_size);
+
+do_stats:
+	i = key = 0;
+	tmp = 2;
+
+#pragma clang loop unroll_count(16)
+	for (; i < 16; i++) {
+		if (rtt < tmp)
+			break;
+		tmp <<= 1;
+		key++;
+	}
+	stats = bpf_map_lookup_elem(&m_rtt_stats, &key);
+	if (stats)
+		(*stats)++;
+
+	return 0;
 }
 
 char _license[] SEC("license") = "GPL";

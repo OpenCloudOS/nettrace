@@ -529,6 +529,47 @@ void basic_poll_handler(void *ctx, int cpu, void *data, u32 size)
 	do_basic_poll(&entry);
 }
 
+int rtt_poll_handler()
+{
+	int map_fd = bpf_object__find_map_fd_by_name(trace_ctx.obj, "m_rtt_stats");
+	__u64 count[16];
+	char buf[128];
+	int i;
+
+	if (!map_fd) {
+		pr_err("failed to find BPF map m_rtt_stats\n");
+		return -ENOTSUP;
+	}
+
+	while (!trace_stopped()) {
+		int start = 0, j;
+
+		pr_info("rtt distribution:\n");
+		for (i = 0; i < 16; i++)
+			bpf_map_lookup_elem(map_fd, &i, count + i);
+
+		for (i = 0; i < 16; i++) {
+			bool has_count = false;
+
+			for (j = i; j < 16; j++) {
+				if (count[j])
+					has_count = true;
+			}
+
+			if (!has_count && i > 8)
+				break;
+
+			start = 1 << i;
+			sprintf(buf, "%d - %5dms", start == 1 ? 0 : start,
+				(start << 1) - 1);
+			pr_info("%32s: %llu\n", buf, count[i]);
+		}
+		sleep(1);
+	}
+
+	return 0;
+}
+
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 static bool async_thread_created;

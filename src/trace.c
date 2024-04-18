@@ -241,7 +241,8 @@ static int trace_check_force()
 	pkt_args_t *pkt_args = &bpf_args->pkt;
 	trace_args_t *args = &trace_ctx.args;
 
-	if (args->drop || args->force || args->monitor || args->show_traces)
+	if (args->drop || args->force || args->monitor || args->show_traces ||
+	    args->rtt)
 		return 0;
 
 	if (bpf_args->pid || pkt_args->saddr ||
@@ -306,6 +307,9 @@ static int trace_prepare_mode(trace_args_t *args)
 				break;
 			}
 		}
+		break;
+	case TRACE_MODE_RTT:
+		trace_set_enable(&trace_tcp_ack_update_rtt);
 		break;
 	default:
 		pr_err("mode not supported!\n");
@@ -412,7 +416,8 @@ static int trace_prepare_args()
 	bool fix_trace;
 	int err;
 
-	if (args->basic + args->intel + args->drop + args->sock > 1) {
+	if (args->basic + args->intel + args->drop + args->sock +
+	    args->rtt > 1) {
 		pr_err("multi-mode specified!\n");
 		goto err;
 	}
@@ -426,6 +431,7 @@ static int trace_prepare_args()
 	ASSIGN_MODE(intel, DIAG);
 	ASSIGN_MODE(sock, SOCK);
 	ASSIGN_MODE(monitor, MONITOR);
+	ASSIGN_MODE(rtt, RTT);
 
 	fix_trace = args->drop || args->rtt;
 	if (!traces) {
@@ -784,7 +790,6 @@ int trace_bpf_load_and_attach()
 		break;
 	case TRACE_MODE_RTT:
 		trace_ctx.ops->raw_poll = rtt_poll_handler;
-		break;
 	default:
 		break;
 	}
