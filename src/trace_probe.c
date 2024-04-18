@@ -125,23 +125,6 @@ static int probe_trace_load()
 	for (; i < ARRAY_SIZE(cpus); i++)
 		INIT_LIST_HEAD(&cpus[i]);
 
-	switch (trace_ctx.mode) {
-	case TRACE_MODE_BASIC:
-	case TRACE_MODE_DROP:
-	case TRACE_MODE_MONITOR:
-		probe_ops.trace_poll = basic_poll_handler;
-		break;
-	case TRACE_MODE_SOCK:
-		probe_ops.trace_poll = async_poll_handler;
-		break;
-	case TRACE_MODE_DIAG:
-	case TRACE_MODE_TIMELINE:
-		probe_ops.trace_poll = tl_poll_handler;
-		break;
-	default:
-		break;
-	}
-
 	return 0;
 err:
 	return -1;

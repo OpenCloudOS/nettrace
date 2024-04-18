@@ -109,13 +109,56 @@ static void do_parse_args(int argc, char *argv[])
 			.type = OPTION_STRING,
 			.desc = "filter by TCP flags, such as: SAPR",
 		},
+		{ .type = OPTION_BLANK },
 		{
-			.lname = "tcp-rtt", .dest = &bpf_args->rtt_min,
+			.lname = "basic", .dest = &trace_args->basic,
+			.type = OPTION_BOOL,
+			.desc = "use 'basic' trace mode, don't trace skb's life",
+		},
+		{
+			.lname = "diag", .dest = &trace_args->intel,
+			.type = OPTION_BOOL,
+			.desc = "enable 'diagnose' mode",
+		},
+		{
+			.lname = "diag-quiet", .dest = &trace_args->intel_quiet,
+			.type = OPTION_BOOL,
+			.desc = "only print abnormal packet",
+		},
+		{
+			.lname = "diag-keep", .dest = &trace_args->intel_keep,
+			.type = OPTION_BOOL,
+			.desc = "don't quit when abnormal packet found",
+		},
+		{
+			.lname = "drop", .dest = &trace_args->drop,
+			.type = OPTION_BOOL,
+			.desc = "skb drop monitor mode, for replace of 'droptrace'",
+		},
+#ifdef BPF_FEAT_STACK_TRACE
+		{
+			.lname = "drop-stack", .dest = &trace_args->drop_stack,
+			.type = OPTION_BOOL,
+			.desc = "print the kernel function call stack of kfree_skb",
+		},
+#endif
+		{
+			.lname = "sock", .dest = &trace_args->sock,
+			.type = OPTION_BOOL,
+			.desc = "enable 'sock' mode",
+		},
+		{
+			.lname = "monitor", .dest = &trace_args->monitor,
+			.type = OPTION_BOOL,
+			.desc = "enable 'monitor' mode",
+		},
+		{
+			.lname = "rtt-min", .dest = &bpf_args->rtt_min,
 			.type = OPTION_U32,
 			.desc = "filter by the minial rtt in ms",
 		},
 		{
-			.lname = "tcp-srtt", .dest = &bpf_args->srtt_min,
+			.lname = "srtt-min", .dest = &bpf_args->srtt_min,
 			.type = OPTION_U32,
 			.desc = "filter by the minial srtt in ms",
 		},
@@ -152,51 +195,9 @@ static void do_parse_args(int argc, char *argv[])
 			.desc = "exit after receiving count packets",
 		},
 		{
-			.lname = "basic", .dest = &trace_args->basic,
-			.type = OPTION_BOOL,
-			.desc = "use 'basic' trace mode, don't trace skb's life",
-		},
-		{
-			.lname = "diag", .dest = &trace_args->intel,
-			.type = OPTION_BOOL,
-			.desc = "enable 'diagnose' mode",
-		},
-		{
-			.lname = "diag-quiet", .dest = &trace_args->intel_quiet,
-			.type = OPTION_BOOL,
-			.desc = "only print abnormal packet",
-		},
-		{
-			.lname = "diag-keep", .dest = &trace_args->intel_keep,
-			.type = OPTION_BOOL,
-			.desc = "don't quit when abnormal packet found",
-		},
-		{
 			.lname = "hooks", .dest = &bpf_args->hooks,
 			.type = OPTION_BOOL,
 			.desc = "print netfilter hooks if dropping by netfilter",
-		},
-		{
-			.lname = "drop", .dest = &trace_args->drop,
-			.type = OPTION_BOOL,
-			.desc = "skb drop monitor mode, for replace of 'droptrace'",
-		},
-#ifdef BPF_FEAT_STACK_TRACE
-		{
-			.lname = "drop-stack", .dest = &trace_args->drop_stack,
-			.type = OPTION_BOOL,
-			.desc = "print the kernel function call stack of kfree_skb",
-		},
-#endif
-		{
-			.lname = "sock", .dest = &trace_args->sock,
-			.type = OPTION_BOOL,
-			.desc = "enable 'sock' mode",
-		},
-		{
-			.lname = "monitor", .dest = &trace_args->monitor,
-			.type = OPTION_BOOL,
-			.desc = "enable 'monitor' mode",
 		},
 		{
 			.lname = "pkt-fixed", .dest = &bpf_args->pkt_fixed,
@@ -315,6 +316,7 @@ static void do_exit(int code)
 	pr_debug("begin destory BPF skel...\n");
 	trace_ctx.ops->trace_close();
 	pr_debug("BPF skel is destroied\n");
+	trace_ctx.stop = true;
 }
 
 int main(int argc, char *argv[])

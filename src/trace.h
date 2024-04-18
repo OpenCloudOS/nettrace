@@ -140,6 +140,7 @@ typedef struct {
 	trace_args_t	args;
 	bpf_args_t	bpf_args;
 	trace_mode_t	mode;
+	__u64		mode_mask;
 	bool		stop;
 	/* if drop reason feature is supported */
 	bool		drop_reason;

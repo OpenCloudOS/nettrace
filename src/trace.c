@@ -257,106 +257,8 @@ static int trace_check_force()
 	return -1;
 }
 
-static int trace_prepare_args()
-{
-	trace_t *drop_trace = search_trace_enabled("kfree_skb");
-	bpf_args_t *bpf_args = &trace_ctx.bpf_args;
-	trace_args_t *args = &trace_ctx.args;
-	char *traces_stack = args->traces_stack;
-	char *traces = args->traces;
-	trace_t *trace;
-	char *tmp, *cur;
-
-	if (args->basic + args->intel + args->drop + args->sock > 1) {
-		pr_err("multi-mode specified!\n");
-		goto err;
-	}
-
-	if (args->basic)
-		trace_ctx.mode = TRACE_MODE_BASIC;
-
-	if (args->intel)
-		trace_ctx.mode = TRACE_MODE_DIAG;
-
-	if (args->sock)
-		trace_ctx.mode = TRACE_MODE_SOCK;
-
-	if (args->monitor)
-		trace_ctx.mode = TRACE_MODE_MONITOR;
-
-	if (args->drop_stack) {
-		if (trace_set_stack(drop_trace))
-			goto err;
-	}
-
-	if (args->drop) {
-		trace_ctx.mode = TRACE_MODE_DROP;
-		trace_set_enable(drop_trace);
-		goto skip_trace;
-	}
-
-	if (bpf_args->rate_limit && (trace_ctx.mode == TRACE_MODE_TIMELINE ||
-				     trace_ctx.mode == TRACE_MODE_DIAG)) {
-		pr_err("--rate-limit can't be used in timeline(default)/diag mode\n");
-		goto err;
-	}
-	bpf_args->__rate_limit = bpf_args->rate_limit;
-
-	if (traces_stack) {
-		tmp = calloc(strlen(traces_stack) + 1, 1);
-		strcpy(tmp, traces_stack);
-		cur = strtok(tmp, ",");
-		while (cur) {
-			if (trace_group_enable(cur, 2)) {
-				free(tmp);
-				goto err;
-			}
-			cur = strtok(NULL, ",");
-		}
-		free(tmp);
-	}
-
-	if (!traces) {
-		trace_for_each(trace)
-			if (trace->def)
-				trace_set_enable(trace);
-		goto skip_trace;
-	}
-
-	if (strcmp(traces, "?") == 0) {
-		args->show_traces = true;
-		traces = "all";
-	}
-
-	tmp = calloc(strlen(traces) + 1, 1);
-	strcpy(tmp, traces);
-	cur = strtok(tmp, ",");
-	while (cur) {
-		if (trace_group_enable(cur, 1)) {
-			free(tmp);
-			goto err;
-		}
-		cur = strtok(NULL, ",");
-	}
-	free(tmp);
-
-skip_trace:
-	if (!debugfs_mounted()) {
-		pr_err("debugfs is not mounted! Please mount it with the "
-		       "command: mount -t debugfs debugfs "
-		       "/sys/kernel/debug\n");
-		goto err;
-	}
-
-	if (drop_reason_support()) {
-		bpf_args->drop_reason = true;
-		trace_ctx.drop_reason = true;
-		get_drop_reason(1);
-	}
-
-	/* enable tcp_ack_update_rtt as monitor if rtt set */
-	if (bpf_args->rtt_min || bpf_args->srtt_min)
-		trace_tcp_ack_update_rtt.monitor = 2;
+static int trace_prepare_mode(trace_args_t *args)
+{	trace_t *trace;
 
 	switch (trace_ctx.mode) {
 	case TRACE_MODE_DIAG:
@@ -366,21 +268,18 @@ skip_trace:
 		trace_for_each(trace)
 			if (TRACE_HAS_ANALYZER(trace, clone))
 				trace_set_ret(trace);
-		/* enable skb free/drop trace */
-		if (!trace_has_end())
-			trace_group_enable("life", 1);
 		break;
 	case TRACE_MODE_DROP:
 		if (!trace_ctx.drop_reason)
 			pr_warn("skb drop reason is not support by your kernel"
 				", drop reason will not be printed\n");
+		if (args->drop_stack) {
+			if (trace_set_stack(&trace_kfree_skb))
+				goto err;
+		}
+		trace_set_enable(&trace_kfree_skb);
 	case TRACE_MODE_BASIC:
 	case TRACE_MODE_SOCK:
-		if (args->min_latency) {
-			pr_err("--min-latency is only supported in default "
-			       "and 'diag' mode\n");
-			goto err;
-		}
 		break;
 	case TRACE_MODE_MONITOR:
 		trace_for_each(trace) {
@@ -405,28 +304,185 @@ skip_trace:
 		goto err;
 	}
 
+	if (!args->ret)
+		return 0;
+
+	switch (trace_ctx.mode) {
+	case TRACE_MODE_BASIC:
+		pr_err("return value trace is only supported on "
+		       "default and 'diag' mode\n");
+		goto err;
+	case TRACE_MODE_TIMELINE:
+		trace_all_set_ret();
+		break;
+	case TRACE_MODE_DIAG:
+	default:
+		break;
+	}
+	return 0;
+
+err:
+	return -EINVAL;
+}
+
+static int trace_parse_traces(char *traces, int target)
+{
+	char *tmp, *cur;
+
+	if (!traces)
+		return 0;
+
+	tmp = calloc(strlen(traces) + 1, 1);
+	strcpy(tmp, traces);
+	cur = strtok(tmp, ",");
+	while (cur) {
+		if (trace_group_enable(cur, target)) {
+			free(tmp);
+			return -EINVAL;
+		}
+		cur = strtok(NULL, ",");
+	}
+	free(tmp);
+
+	return 0;
+}
+
+static int parse_tcp_flasg(char *flags_str)
+{
+	u8 flags = 0;
+
+	while (*flags_str != '\0') {
+		switch (*flags_str) {
+		case 'S':
+			flags |= TCP_FLAGS_SYN;
+			break;
+		case 'A':
+			flags |= TCP_FLAGS_ACK;
+			break;
+		case 'P':
+			flags |= TCP_FLAGS_PSH;
+			break;
+		case 'R':
+			flags |= TCP_FLAGS_RST;
+			break;
+		case 'F':
+			flags |= TCP_FLAGS_FIN;
+			break;
+		default:
+			return -EINVAL;
+		}
+		flags_str++;
+	}
+	return flags;
+}
+
+static void trace_check_sock_skb()
+{
+	int mode_mask = 1 << trace_ctx.mode;
+	bool require_skb, require_sk;
+	trace_t *trace;
+
+	require_skb = mode_mask & TRACE_MODE_SKB_REQUIRE_MASK;
+	require_sk = mode_mask & TRACE_MODE_SOCK_REQUIRE_MASK;
+
 	/* disable traces that don't support sk in SOCK_MODE, and disable
 	 * traces that don't support skb in !(SOCK_MODE || MONITOR_MODE).
 	 */
-	trace_for_each_cond(trace, (!args->sock && !args->monitor &&
-				    trace->sk && !trace->skb) ||
-				   (args->sock && !trace->sk))
+	trace_for_each_cond(trace, (require_skb && !trace->skb) ||
+				   (require_sk && !trace->sk))
 			trace_set_invalid_reason(trace, "sock or sk mode");
+}
 
-	if (args->ret) {
-		switch (trace_ctx.mode) {
-		case TRACE_MODE_BASIC:
-			pr_err("return value trace is only supported on "
-			       "default and 'diag' mode\n");
+static void trace_enable_default()
+{
+	trace_t *trace;
+
+	trace_for_each(trace) {
+		if (trace->def)
+			trace_set_enable(trace);
+	}
+}
+
+static int trace_prepare_args()
+{
+	bpf_args_t *bpf_args = &trace_ctx.bpf_args;
+	trace_args_t *args = &trace_ctx.args;
+	char *traces_stack = args->traces_stack;
+	char *tmp, *cur, *traces;
+	bool fix_trace;
+	int err;
+
+	traces = args->traces;
+
+	if (args->basic + args->intel + args->drop + args->sock > 1) {
+		pr_err("multi-mode specified!\n");
+		goto err;
+	}
+
+#define ASSIGN_MODE(name, __mode) do {			\
+	if (args->name)					\
+		trace_ctx.mode = TRACE_MODE_##__mode;	\
+} while (0)
+
+	ASSIGN_MODE(basic, BASIC);
+	ASSIGN_MODE(intel, DIAG);
+	ASSIGN_MODE(sock, SOCK);
+	ASSIGN_MODE(monitor, MONITOR);
+	ASSIGN_MODE(drop, DROP);
+
+	trace_ctx.mode_mask = 1 << trace_ctx.mode;
+	fix_trace = args->drop || args->rtt;
+	if (!traces) {
+		if (!fix_trace)
+			trace_enable_default();
+	} else if (strcmp(traces, "?") == 0) {
+		args->show_traces = true;
+		traces = "all";
+	} else {
+		if (fix_trace) {
+			pr_err("can't specify traces in this mode!\n");
 			goto err;
-		case TRACE_MODE_TIMELINE:
-			trace_all_set_ret();
-			break;
-		case TRACE_MODE_DIAG:
-		default:
-			break;
+		}
+		trace_parse_traces(traces, 1);
+	}
+
+	trace_parse_traces(traces_stack, 2);
+	if (!debugfs_mounted()) {
+		pr_err("debugfs is not mounted! Please mount it with the "
+		       "command: mount -t debugfs debugfs "
+		       "/sys/kernel/debug\n");
+		goto err;
+	}
+
+	if (drop_reason_support()) {
+		bpf_args->drop_reason = true;
+		trace_ctx.drop_reason = true;
+		get_drop_reason(1);
+	}
+
+	if (bpf_args->rate_limit && (trace_ctx.mode_mask & TRACE_MODE_CTX_MASK)) {
+		pr_err("--rate-limit can't be used in timeline(default)/diag mode\n");
+		goto err;
+	}
+	bpf_args->__rate_limit = bpf_args->rate_limit;
+
+	if (!(trace_ctx.mode_mask & TRACE_MODE_CTX_MASK)) {
+		if (args->min_latency) {
+			pr_err("--min-latency is only supported in default "
+			       "and 'diag' mode\n");
+			goto err;
 		}
 	}
+
+	/* enable tcp_ack_update_rtt as monitor if rtt set */
+	if (bpf_args->rtt_min || bpf_args->srtt_min)
+		trace_tcp_ack_update_rtt.monitor = 2;
+
+	if (trace_prepare_mode(args))
+		goto err;
+
+	if (!fix_trace)
+		trace_check_sock_skb();
 
 	if (args->netns_current) {
 		bpf_args->netns = file_inode("/proc/self/ns/net");
@@ -456,34 +512,13 @@ skip_trace:
 	}
 
 	if (args->tcp_flags) {
-		char *cur = args->tcp_flags;
-		u8 flags = 0;
-
-		while (*cur != '\0') {
-			switch (*cur) {
-			case 'S':
-				flags |= TCP_FLAGS_SYN;
-				break;
-			case 'A':
-				flags |= TCP_FLAGS_ACK;
-				break;
-			case 'P':
-				flags |= TCP_FLAGS_PSH;
-				break;
-			case 'R':
-				flags |= TCP_FLAGS_RST;
-				break;
-			case 'F':
-				flags |= TCP_FLAGS_FIN;
-				break;
-			default:
-				pr_err("--tcp-flags: invalid char, valid chars "
-				       "are: SAPR\n");
-				goto err;
-			}
-			cur++;
+		err = parse_tcp_flasg(args->tcp_flags);
+		if (err < 0) {
+			pr_err("--tcp-flags: invalid char, valid chars "
+			       "are: SAPR\n");
+			goto err;
 		}
-		bpf_args->pkt.tcp_flags = flags;
+		bpf_args->pkt.tcp_flags = err;
 	}
 
 	if (trace_check_force()) {
@@ -513,6 +548,9 @@ static int trace_prepare_traces()
 {
 	char func[128], name[136];
 	trace_t *trace;
+
+	if ((1 << trace_ctx.mode) & TRACE_MODE_CTX_MASK)
+		trace_group_enable("life", 1);
 
 	trace_exec_cond();
 	pr_debug("begin to resolve kernel symbol...\n");
@@ -709,7 +747,7 @@ check_ret:
 			continue;
 		}
 		bpf_program__set_autoload(prog, false);
-		pr_debug("prog: %s is made no-autoload\n", trace->prog);
+		pr_debug("ret prog: %s is made no-autoload\n", trace->prog);
 	}
 
 	return 0;
@@ -741,6 +779,26 @@ int trace_bpf_load_and_attach()
 	}
 	pr_debug("eBPF program attached successfully\n");
 
+	switch (trace_ctx.mode) {
+	case TRACE_MODE_BASIC:
+	case TRACE_MODE_DROP:
+	case TRACE_MODE_MONITOR:
+		trace_ctx.ops->trace_poll = basic_poll_handler;
+		break;
+	case TRACE_MODE_SOCK:
+		trace_ctx.ops->trace_poll = async_poll_handler;
+		break;
+	case TRACE_MODE_DIAG:
+	case TRACE_MODE_TIMELINE:
+		trace_ctx.ops->trace_poll = tl_poll_handler;
+		break;
+	case TRACE_MODE_RTT:
+		trace_ctx.ops->raw_poll = rtt_poll_handler;
+		break;
+	default:
+		break;
+	}
+
 	if (trace_ctx.ops->trace_ready)
 		trace_ctx.ops->trace_ready();
 
@@ -765,16 +823,19 @@ static inline void poll_handler_wrap(void *ctx, int cpu, void *data,
 		return;
 
 	trace_ctx.ops->trace_poll(ctx, cpu, data, size);
-	if (trace_ctx.args.count && trace_ctx.args.count <= skb_count)
-		trace_stop();
+	try_inc_skb_count();
 }
 
 int trace_poll()
 {
-	int map_fd = bpf_object__find_map_fd_by_name(trace_ctx.obj, "m_event");
+	int map_fd;
 
+	if (trace_ctx.ops->raw_poll)
+		return trace_ctx.ops->raw_poll();
+
+	map_fd = bpf_object__find_map_fd_by_name(trace_ctx.obj, "m_event");
 	if (!map_fd)
 		return -1;
-	perf_output_cond(map_fd, poll_handler_wrap, trace_on_lost,
-			 &trace_ctx.stop);
+	return perf_output_cond(map_fd, poll_handler_wrap, trace_on_lost,
+			 	&trace_ctx.stop);
 }
