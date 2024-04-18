@@ -208,13 +208,6 @@ static int tracing_trace_load()
 	pr_debug("eBPF is loaded successfully\n");
 
 	bpf_set_config(skel, bss, trace_ctx.bpf_args);
-	switch (trace_ctx.mode) {
-	case TRACE_MODE_MONITOR:
-		tracing_ops.trace_poll = basic_poll_handler;
-		break;
-	default:
-		goto err;
-	}
 
 	return 0;
 err:

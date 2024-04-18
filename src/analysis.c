@@ -23,7 +23,6 @@ const char *level_mark[] = {
 	[RULE_ERROR] = PFMT_ERROR"ERROR"PFMT_END,
 };
 static u32 ctx_count = 0;
-extern u32 skb_count;
 
 static inline struct hlist_head *get_ctx_hash_head(u64 key)
 {
