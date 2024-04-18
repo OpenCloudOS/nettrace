@@ -17,7 +17,8 @@ typedef struct {
 #define MODE_SKIP_LIFE_MASK (TRACE_MODE_BASIC_MASK |	\
 			     TRACE_MODE_DROP_MASK |	\
 			     TRACE_MODE_SOCK_MASK |	\
-			     TRACE_MODE_MONITOR_MASK)
+			     TRACE_MODE_MONITOR_MASK |	\
+			     TRACE_MODE_RTT_MASK)
 
 /* init the skb by the index of func args */
 #define DEFINE_KPROBE_SKB(name, skb_index, arg_count)		\

@@ -241,7 +241,8 @@ static int trace_check_force()
 	pkt_args_t *pkt_args = &bpf_args->pkt;
 	trace_args_t *args = &trace_ctx.args;
 
-	if (args->drop || args->force || args->monitor || args->show_traces)
+	if (args->drop || args->force || args->monitor || args->show_traces ||
+	    args->rtt)
 		return 0;
 
 	if (bpf_args->pid || pkt_args->saddr ||
@@ -250,7 +251,7 @@ static int trace_check_force()
 	    pkt_args->addr_v6[0]|| pkt_args->sport ||
 	    pkt_args->dport|| pkt_args->port||
 	    pkt_args->l3_proto || pkt_args->l4_proto ||
-	    bpf_args->rtt_min || bpf_args->srtt_min ||
+	    bpf_args->first_rtt || bpf_args->last_rtt ||
 	    (args->traces && strcmp(args->traces, "all") != 0))
 		return 0;
 
@@ -298,6 +299,9 @@ static int trace_prepare_mode(trace_args_t *args)
 				break;
 			}
 		}
+		break;
+	case TRACE_MODE_RTT:
+		trace_set_enable(&trace_tcp_ack_update_rtt);
 		break;
 	default:
 		pr_err("mode not supported!\n");
@@ -393,6 +397,15 @@ static void trace_check_sock_skb()
 			trace_set_invalid_reason(trace, "sock or sk mode");
 }
 
+static void trace_prepare_pesudo(trace_args_t *args)
+{
+	if (args->rtt_detail) {
+		args->traces = "tcp_ack_update_rtt";
+		args->sock = true;
+		args->rtt = false;
+	}
+}
+
 static void trace_enable_default()
 {
 	trace_t *trace;
@@ -412,9 +425,11 @@ static int trace_prepare_args()
 	bool fix_trace;
 	int err;
 
+	trace_prepare_pesudo(args);
 	traces = args->traces;
 
-	if (args->basic + args->intel + args->drop + args->sock > 1) {
+	if (args->basic + args->intel + args->drop + args->sock +
+	    args->rtt > 1) {
 		pr_err("multi-mode specified!\n");
 		goto err;
 	}
@@ -429,6 +444,7 @@ static int trace_prepare_args()
 	ASSIGN_MODE(sock, SOCK);
 	ASSIGN_MODE(monitor, MONITOR);
 	ASSIGN_MODE(drop, DROP);
+	ASSIGN_MODE(rtt, RTT);
 
 	trace_ctx.mode_mask = 1 << trace_ctx.mode;
 	fix_trace = args->drop || args->rtt;
@@ -475,7 +491,7 @@ static int trace_prepare_args()
 	}
 
 	/* enable tcp_ack_update_rtt as monitor if rtt set */
-	if (bpf_args->rtt_min || bpf_args->srtt_min)
+	if (bpf_args->first_rtt || bpf_args->last_rtt)
 		trace_tcp_ack_update_rtt.monitor = 2;
 
 	if (trace_prepare_mode(args))
@@ -794,7 +810,6 @@ int trace_bpf_load_and_attach()
 		break;
 	case TRACE_MODE_RTT:
 		trace_ctx.ops->raw_poll = rtt_poll_handler;
-		break;
 	default:
 		break;
 	}

@@ -17,8 +17,8 @@ typedef struct {
 	bool stack;
 	bool pkt_fixed;
 	u16  stack_funs[MAX_FUNC_STACK];
-	u32  rtt_min;
-	u32  srtt_min;
+	u32  first_rtt;
+	u32  last_rtt;
 	u32  rate_limit;
 	int  __rate_limit;
 	u64  __last_update;
@@ -105,8 +105,8 @@ DEFINE_EVENT(qdisc_event_t,
 )
 
 DEFINE_EVENT(rtt_event_t,
-	event_field(u32, srtt)
-	event_field(u32, rtt)
+	event_field(u32, first_rtt)
+	event_field(u32, last_rtt)
 )
 
 #define MAX_EVENT_SIZE sizeof(detail_nf_hooks_event_t)
@@ -124,6 +124,7 @@ typedef enum trace_mode {
 	TRACE_MODE_DIAG,
 	TRACE_MODE_SOCK,
 	TRACE_MODE_MONITOR,
+	TRACE_MODE_RTT,
 } trace_mode_t;
 
 enum rule_type {
@@ -153,12 +154,15 @@ typedef struct {
 #define TRACE_MODE_DROP_MASK		(1 << TRACE_MODE_DROP)
 #define TRACE_MODE_SOCK_MASK		(1 << TRACE_MODE_SOCK)
 #define TRACE_MODE_MONITOR_MASK		(1 << TRACE_MODE_MONITOR)
-#define TRACE_MODE_SKB_MASK		\
+#define TRACE_MODE_RTT_MASK		(1 << TRACE_MODE_RTT)
+#define TRACE_MODE_SKB_REQUIRE_MASK				\
 	(TRACE_MODE_BASIC_MASK | TRACE_MODE_TIMELINE_MASK |	\
 	 TRACE_MODE_DIAG_MASK | TRACE_MODE_DROP_MASK |		\
-	 TRACE_MODE_MONITOR_MASK)
-#define TRACE_MODE_ALL_MASK		\
-	(TRACE_MODE_SKB_MASK | TRACE_MODE_SOCK_MASK)
+	 TRACE_MODE_RTT_MASK)
+#define TRACE_MODE_SOCK_REQUIRE_MASK	TRACE_MODE_SOCK_MASK
+#define TRACE_MODE_ALL_MASK					\
+	(TRACE_MODE_SKB_REQUIRE_MASK | TRACE_MODE_MONITOR_MASK |\
+	 TRACE_MODE_SOCK_REQUIRE_MASK)
 #define TRACE_MODE_CTX_MASK		\
 	(TRACE_MODE_DIAG_MASK | TRACE_MODE_TIMELINE_MASK)
 

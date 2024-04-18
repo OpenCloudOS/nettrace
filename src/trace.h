@@ -110,6 +110,8 @@ typedef struct trace_args {
 	bool sock;
 	bool netns_current;
 	bool force;
+	bool rtt;
+	bool rtt_detail;
 	u32  min_latency;
 	char *traces;
 	char *traces_stack;
@@ -132,6 +134,7 @@ typedef struct {
 	void (*trace_feat_probe)();
 	bool (*trace_supported)();
 	void (*prepare_traces)();
+	int  (*raw_poll)();
 	struct analyzer *analyzer;
 } trace_ops_t;
 

@@ -153,14 +153,24 @@ static void do_parse_args(int argc, char *argv[])
 			.desc = "enable 'monitor' mode",
 		},
 		{
-			.lname = "rtt-min", .dest = &bpf_args->rtt_min,
-			.type = OPTION_U32,
-			.desc = "filter by the minial rtt in ms",
+			.lname = "rtt", .dest = &trace_args->rtt,
+			.type = OPTION_BOOL,
+			.desc = "enable 'rtt' in statistics mode",
 		},
 		{
-			.lname = "srtt-min", .dest = &bpf_args->srtt_min,
+			.lname = "rtt-detail", .dest = &trace_args->rtt_detail,
+			.type = OPTION_BOOL,
+			.desc = "enable 'rtt' in detail mode",
+		},
+		{
+			.lname = "filter-srtt", .dest = &bpf_args->first_rtt,
 			.type = OPTION_U32,
-			.desc = "filter by the minial srtt in ms",
+			.desc = "filter by the minial first-acked rtt in ms",
+		},
+		{
+			.lname = "filter-minrtt", .dest = &bpf_args->last_rtt,
+			.type = OPTION_U32,
+			.desc = "filter by the minial last-acked rtt in ms",
 		},
 		{ .type = OPTION_BLANK },
 		{
