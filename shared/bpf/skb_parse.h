@@ -75,12 +75,6 @@ const volatile bool bpf_func_exist[BPF_LOCAL_FUNC_MAX] = {0};
 #define _C(src, a, ...)		BPF_CORE_READ(src, a, ##__VA_ARGS__)
 #endif
 
-#ifdef COMPAT_MODE
-#define try_inline __always_inline
-#else
-#define try_inline inline
-#endif
-
 #ifdef BPF_DEBUG
 #define pr_bpf_debug(fmt, args...) {				\
 	if (CONFIG()->bpf_debug)				\
@@ -145,13 +139,13 @@ typedef struct {
 #define IS_PSEUDO 0x10
 
 
-static try_inline u8 get_ip_header_len(u8 h)
+static inline u8 get_ip_header_len(u8 h)
 {
 	u8 len = (h & 0x0F) * 4;
 	return len > IP_H_LEN ? len: IP_H_LEN;
 }
 
-static try_inline
+static inline
 void *load_l4_hdr(struct __sk_buff *skb, struct iphdr *ip, void *dst,
 		  __u32 len)
 {
@@ -171,12 +165,12 @@ void *load_l4_hdr(struct __sk_buff *skb, struct iphdr *ip, void *dst,
 }
 
 /* check if the skb contains L2 head (mac head) */
-static try_inline bool skb_l2_check(u16 header)
+static inline bool skb_l2_check(u16 header)
 {
 	return !header || header == (u16)~0U;
 }
 
-static try_inline bool skb_l4_check(u16 l4, u16 l3)
+static inline bool skb_l4_check(u16 l4, u16 l3)
 {
 	return l4 == 0xFFFF || l4 <= l3;
 }
@@ -190,13 +184,13 @@ static try_inline bool skb_l4_check(u16 l4, u16 l3)
 	(ctx->args && (ctx->args->attr || ctx->args->s##attr ||	\
 		       ctx->args->d##attr))
 
-static try_inline bool is_ipv6_equal(void *addr1, void *addr2)
+static inline bool is_ipv6_equal(void *addr1, void *addr2)
 {
 	return *(u64 *)addr1 == *(u64 *)addr2 &&
 	       *(u64 *)(addr1 + 8) == *(u64 *)(addr2 + 8);
 }
 
-static try_inline int filter_ipv6_check(parse_ctx_t *ctx, void *saddr,
+static inline int filter_ipv6_check(parse_ctx_t *ctx, void *saddr,
 					void *daddr)
 {
 	pkt_args_t *args = ctx->args;
@@ -210,7 +204,7 @@ static try_inline int filter_ipv6_check(parse_ctx_t *ctx, void *saddr,
 				 !is_ipv6_equal(args->addr_v6, daddr));
 }
 
-static try_inline int filter_ipv4_check(parse_ctx_t *ctx, u32 saddr,
+static inline int filter_ipv4_check(parse_ctx_t *ctx, u32 saddr,
 					u32 daddr)
 {
 	pkt_args_t *args = ctx->args;
@@ -223,7 +217,7 @@ static try_inline int filter_ipv4_check(parse_ctx_t *ctx, u32 saddr,
 	       (args->addr && args->addr != daddr && args->addr != daddr);
 }
 
-static try_inline int filter_port(parse_ctx_t *ctx, u32 sport, u32 dport)
+static inline int filter_port(parse_ctx_t *ctx, u32 sport, u32 dport)
 {
 	pkt_args_t *args = ctx->args;
 
@@ -235,7 +229,7 @@ static try_inline int filter_port(parse_ctx_t *ctx, u32 sport, u32 dport)
 	       (args->port && args->port != dport && args->port != dport);
 }
 
-static try_inline int probe_parse_ip(void *ip, parse_ctx_t *ctx)
+static inline int probe_parse_ip(void *ip, parse_ctx_t *ctx)
 {
 	pkt_args_t *args = ctx->args;
 	packet_t *pkt = ctx->pkt;
@@ -366,7 +360,7 @@ static __always_inline u8 sk_get_protocol(struct sock *sk)
 }
 #endif
 
-static try_inline int __probe_parse_sk(parse_ctx_t *ctx)
+static inline int __probe_parse_sk(parse_ctx_t *ctx)
 {
 	struct inet_connection_sock *icsk;
 	struct sock *sk = ctx->sk;
@@ -463,7 +457,7 @@ err:
 	return -1;
 }
 
-static try_inline int __probe_parse_skb(parse_ctx_t *ctx)
+static inline int __probe_parse_skb(parse_ctx_t *ctx)
 {
 	struct sk_buff *skb = ctx->skb;
 	packet_t *pkt = ctx->pkt;
@@ -548,7 +542,7 @@ static __always_inline int probe_parse_sk(struct sock *sk, sock_t *ske,
 	return __probe_parse_sk(&ctx);
 }
 
-static try_inline int direct_parse_skb(struct __sk_buff *skb, packet_t *pkt,
+static inline int direct_parse_skb(struct __sk_buff *skb, packet_t *pkt,
 				       pkt_args_t *bpf_args)
 {
 	struct ethhdr *eth = SKB_DATA(skb);
