@@ -45,7 +45,7 @@ struct {
 } m_rtt_stats SEC(".maps");
 
 #ifdef BPF_FEAT_STACK_TRACE
-static try_inline void try_trace_stack(context_info_t *info)
+static inline void try_trace_stack(context_info_t *info)
 {
 	int i = 0, key;
 	u16 *funcs;
@@ -69,10 +69,10 @@ do_stack:
 	info->e->stack_id = key;
 }
 #else
-static try_inline void try_trace_stack(context_info_t *info) { }
+static inline void try_trace_stack(context_info_t *info) { }
 #endif
 
-static try_inline int filter_by_netns(context_info_t *info)
+static inline int filter_by_netns(context_info_t *info)
 {	
 	struct sk_buff *skb = info->skb;
 	struct net_device *dev;
@@ -108,12 +108,9 @@ no_ns:
 	return !!netns;
 }
 
-static __always_inline void handle_event_output(context_info_t *info,
-						const int size)
+static __always_inline void do_event_output(context_info_t *info,
+					    const int size)
 {
-	if (!size)
-		return;
-
 	EVENT_OUTPUT_PTR(info->ctx, info->e, size);
 }
 
@@ -146,10 +143,7 @@ static __always_inline int check_rate_limit(bpf_args_t *args)
 	return 0;
 }
 
-/* The event_size here is to be compatible with 4.X kernel, the compiler
- * will optimize it to imm.
- */
-static try_inline int handle_entry(context_info_t *info, const int event_size)
+static inline int handle_entry(context_info_t *info)
 {
 	bpf_args_t *args = (void *)info->args;
 	struct sk_buff *skb = info->skb;
@@ -231,8 +225,6 @@ out:
 	e->key = (u64)(void *)skb;
 	e->func = info->func;
 
-	handle_event_output(info, event_size);
-
 #ifdef __PROG_TYPE_TRACING
 	e->retval = info->retval;
 #endif
@@ -244,10 +236,43 @@ err:
 	return -1;
 }
 
-static try_inline int handle_destroy(context_info_t *info)
+static inline int handle_destroy(context_info_t *info)
 {
 	if (!(info->args->trace_mode & MODE_SKIP_LIFE_MASK))
 		bpf_map_delete_elem(&m_matched, &info->skb);
+	return 0;
+}
+
+static inline int default_handle_entry(context_info_t *info)
+{
+	bool detail = info->args->detail;
+	detail_event_t __e;
+	int size;
+
+	info->e = (void *)&__e;
+	size = sizeof(__e);
+
+	/* the kernel of version 4.X can't spill const variable to stack,
+	 * so we need to initialize the whole event.
+	 */
+#ifdef INLINE_MODE
+	__builtin_memset(&__e, 0, size);
+#else
+	if (!detail) {
+		size = sizeof(event_t);
+		__builtin_memset(&__e, 0, size);
+	} else {
+		__builtin_memset(&__e, 0, size);
+	}
+#endif
+
+	if (!handle_entry(info)) {
+#ifdef INLINE_MODE
+		size = detail ? sizeof(__e) : sizeof(event_t);
+#endif
+		do_event_output(info, size);
+	}
+
 	return 0;
 }
 
@@ -264,6 +289,7 @@ static try_inline int handle_destroy(context_info_t *info)
 
 DEFINE_ALL_PROBES(KPROBE_DEFAULT, TP_DEFAULT, FNC)
 
+
 #ifndef __PROG_TYPE_TRACING
 struct kfree_skb_args {
 	u64 pad;
@@ -272,15 +298,17 @@ struct kfree_skb_args {
 	unsigned short protocol;
 	int reason;
 };
+#define info_tp_args(info, offset, index) (void *)((u64 *)(info->ctx) + index)
 #else
 struct kfree_skb_args {
 	void *skb;
 	void *location;
 	u64 reason;
 };
+#define info_tp_args(info, offset, index) ((void *)(info->ctx) + offset)
 #endif
 
-DEFINE_TP_INIT(kfree_skb, skb, kfree_skb)
+DEFINE_TP(kfree_skb, skb, kfree_skb, 0, 8)
 {
 	struct kfree_skb_args *args = info->ctx;
 	int reason = 0;
@@ -294,9 +322,22 @@ DEFINE_TP_INIT(kfree_skb, skb, kfree_skb)
 
 	e->location = (unsigned long)args->location;
 	e->reason = reason;
-	info->skb = args->skb;
 
-	handle_entry(info, e_size);
+	handle_entry_output(info, e);
+	handle_destroy(info);
+	return 0;
+}
+
+DEFINE_TP(consume_skb, skb, consume_skb, 0, 8)
+{
+	default_handle_entry(info);
+	handle_destroy(info);
+	return 0;
+}
+
+DEFINE_KPROBE_SKB(__kfree_skb, 0, 1)
+{
+	default_handle_entry(info);
 	handle_destroy(info);
 	return 0;
 }
@@ -308,7 +349,7 @@ DEFINE_KPROBE_INIT(__netif_receive_skb_core_pskb,
 	return default_handle_entry(info);
 }
 
-static try_inline int bpf_ipt_do_table(context_info_t *info, struct xt_table *table,
+static inline int bpf_ipt_do_table(context_info_t *info, struct xt_table *table,
 				       struct nf_hook_state *state)
 {
 	char *table_name;
@@ -321,7 +362,7 @@ static try_inline int bpf_ipt_do_table(context_info_t *info, struct xt_table *ta
 		table_name = _(table->name);
 
 	bpf_probe_read(e->table, sizeof(e->table) - 1, table_name);
-	return handle_entry(info, e_size);
+	return handle_entry_output(info, e);
 }
 
 DEFINE_KPROBE_INIT(ipt_do_table_legacy, ipt_do_table, 0,
@@ -354,19 +395,19 @@ DEFINE_KPROBE_SKB(nf_hook_slow, 0, 4)
 
 	DECLARE_EVENT(nf_event_t, e)
 
-	if (handle_entry(info, 0))
+	if (handle_entry(info))
 		return 0;
 
 	e->hook = _C(state, hook);
 	e->pf = _C(state, pf);
-	handle_event_output(info, e_size);
+	handle_event_output(info, e);
 	return 0;
 
 on_hooks:;
 	struct nf_hook_entries *entries = info_get_arg(info, 2);
 	DECLARE_EVENT(nf_hooks_event_t, hooks_event)
 
-	if (handle_entry(info, 0))
+	if (handle_entry(info))
 		return 0;
 
 	hooks_event->hook = _C(state, hook);
@@ -392,7 +433,7 @@ on_hooks:;
 	 * 		COPY_HOOK(i);
 	 */
 out:
-	handle_event_output(info, hooks_event_size);
+	handle_event_output(info, hooks_event);
 	return 0;
 }
 
@@ -415,25 +456,20 @@ bpf_qdisc_handle(context_info_t *info, struct Qdisc *q)
 	e->state = _C(txq, state);
 	e->flags = _C(q, flags);
 
-	return handle_entry(info, e_size);
+	return handle_entry_output(info, e);
 }
 
-DEFINE_KPROBE_SKB(sch_direct_xmit, 0, 6) {
-	struct Qdisc *q = info_get_arg(info, 1);
+DEFINE_TP(qdisc_dequeue, qdisc, qdisc_dequeue, 3, 32)
+{
+	struct Qdisc *q = info_tp_args(info, 8, 0);
 	bpf_qdisc_handle(info, q);
 
 	return 0;
 }
 
-DEFINE_KPROBE_SKB(pfifo_enqueue, 0, 3) {
-	struct Qdisc *q = info_get_arg(info, 1);
-	bpf_qdisc_handle(info, q);
-
-	return 0;
-}
-
-DEFINE_KPROBE_SKB(pfifo_fast_enqueue, 0, 3) {
-	struct Qdisc *q = info_get_arg(info, 1);
+DEFINE_TP(qdisc_enqueue, qdisc, qdisc_enqueue, 2, 24)
+{
+	struct Qdisc *q = info_tp_args(info, 8, 0);
 	bpf_qdisc_handle(info, q);
 
 	return 0;
@@ -467,8 +503,11 @@ DEFINE_KPROBE_INIT(nft_do_chain, nft_do_chain, 2)
 	struct nft_table *table;
 	DECLARE_EVENT(nf_event_t, e)
 
+	/* skb is always the 1st memory in struct nft_pktinfo in every
+	 * kernel version, so we can skip CO-RE here.
+	 */
 	info->skb = (struct sk_buff *)_(pkt->skb);
-	if (handle_entry(info, 0))
+	if (handle_entry(info))
 		return 0;
 
 	if (bpf_core_type_exists(struct nft_pktinfo)) {
@@ -497,7 +536,7 @@ DEFINE_KPROBE_INIT(nft_do_chain, nft_do_chain, 2)
 	bpf_probe_read_kernel_str(e->chain, sizeof(e->chain), chain_name);
 	bpf_probe_read_kernel_str(e->table, sizeof(e->table), table_name);
 
-	handle_event_output(info, e_size);
+	handle_event_output(info, e);
 	return 0;
 }
 #endif

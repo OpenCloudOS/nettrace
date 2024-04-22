@@ -813,8 +813,8 @@ DEFINE_ANALYZER_ENTRY(qdisc, TRACE_MODE_ALL_MASK)
 	msg[0] = '\0';
 	hz = kernel_hz();
 	hz = hz > 0 ? hz : 1;
-	sprintf(msg, PFMT_EMPH_STR(" *queue state: %x, flags: %x, "
-		"last update: %lums, len: %lu*"), event->state,
+	sprintf(msg, PFMT_EMPH_STR(" *qdisc state: %x, flags: %x, "
+		"last-update: %lums, len: %lu*"), event->state,
 		event->flags, (1000 * event->last_update) / hz,
 		event->qlen);
 	entry_set_msg(e, msg);

@@ -7,14 +7,20 @@ prog-nettrace-origin = \
 		dropreason.c
 prog-nettrace	= $(prog-nettrace-origin) nettrace.c
 
-ifndef COMPAT
+ifdef COMPAT
+	NO_GLOBAL_DATA	:= 1
+	NO_BTF		:= 1
+	INLINE		:= 1
+endif
+
+ifndef NO_BTF
 	bpf_progs += progs/tracing progs/feat_args_ext
 endif
 
 BPF_EXTRA_DEP := kheaders.h progs/core.c progs/core.h
 include ../common.mk
 
-ifdef COMPAT
+ifdef NO_BTF
 ifneq ($(shell grep -c get_stackid $(HEADERS)/include/uapi/linux/bpf.h),0)
 	CFLAGS += -DBPF_FEAT_STACK_TRACE
 endif

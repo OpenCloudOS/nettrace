@@ -53,16 +53,20 @@ ifdef NO_GLOBAL_DATA
 	CFLAGS		+= -DBPF_NO_GLOBAL_DATA
 endif
 
-ifdef COMPAT
+ifdef NO_BTF
 ifeq ($(wildcard $(HEADERS)),)
 $(error kernel headers not exist in COMPAT mode, please install it)
 endif
 	kheaders_cmd	:= ln -s vmlinux_header.h kheaders.h
-	CFLAGS		+= -DCOMPAT_MODE -DBPF_NO_GLOBAL_DATA
+	CFLAGS		+= -DNO_BTF
 	BPF_CFLAGS	+= $(KERNEL_CFLAGS)
 else
 	kheaders_cmd	:= ln -s ../shared/bpf/vmlinux.h kheaders.h
 	BPF_CFLAGS	+= -target bpf
+endif
+
+ifdef INLINE
+	BPF_CFLAGS	+= -DINLINE_MODE
 endif
 
 ifndef BPFTOOL

@@ -16,7 +16,7 @@ static bool tracing_arch_supported()
 
 static bool tracing_trace_supported()
 {
-#ifdef COMPAT_MODE
+#ifdef NO_BTF
 	goto failed;
 #endif
 
@@ -39,7 +39,7 @@ failed:
 	return false;
 }
 
-#ifndef COMPAT_MODE
+#ifndef NO_BTF
 
 #include "progs/tracing.skel.h"
 #include "progs/feat_args_ext.skel.h"

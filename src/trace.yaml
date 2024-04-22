@@ -91,26 +91,19 @@ children:
     - tcf_classify:0
     - cls_bpf_classify:0
     - tcf_bpf_act:0
-    - name: pfifo_enqueue:0
-      custom: 1
-      analyzer: qdisc
-      monitor: 1
-      target: pfifo_enqueue
-      rules:
-      - exp: ne 0
-        level: error
-        msg: failed to queue packet to qdisc
-    - name: pfifo_fast_enqueue:0
-      analyzer: qdisc
-      custom: 1
-      target: pfifo_fast_enqueue
-      monitor: 1
-      rules:
-      - exp: ne 0
-        level: error
-        msg: failed to queue packet to qdisc
     - name: sch_direct_xmit:0
       custom: 1
+      analyzer: qdisc
+    - name: qdisc_dequeue:3
+      tp: qdisc/qdisc_dequeue
+      custom: true
+      skboffset: 32
+      analyzer: qdisc
+    - &qdisc_enqueue
+      name: qdisc_enqueue:2
+      tp: qdisc/qdisc_enqueue
+      custom: true
+      skboffset: 24
       analyzer: qdisc
   - name: ipvlan
     desc: ipvlan network interface
@@ -519,6 +512,7 @@ children:
   - name: __kfree_skb
     skb: 0
     analyzer: free
+    custom: 1
   - name: skb_clone
     skb: 0
     analyzer: clone
@@ -529,6 +523,7 @@ children:
   - name: consume_skb:0
     tp: skb/consume_skb
     skboffset: 8
+    custom: 1
     analyzer: free
     rules:
     - exp: any

@@ -86,11 +86,11 @@
 		return fake__##name(&info);			\
 	}							\
 	DECLARE_FAKE_FUNC(fake__##name)
-#define DEFINE_TP(name, cata, tp, skb_index)			\
+#define DEFINE_TP(name, cata, tp, skb_index, offset)		\
 	DEFINE_TP_INIT(name, cata, tp,				\
 		       .skb = ctx_get_arg(ctx, skb_index))
 #define TP_DEFAULT(name, cata, tp, skb_index, offset)		\
-	DEFINE_TP(name, cata, tp, skb_index)			\
+	DEFINE_TP(name, cata, tp, skb_index, offset)		\
 	{							\
 		return default_handle_entry(info);		\
 	}
@@ -99,30 +99,13 @@
 static __always_inline int pre_handle_exit(void *ctx, int func_index,
 					   u64 *retval,
 					   int arg_count);
-static try_inline int default_handle_entry(context_info_t *info);
+static inline int default_handle_entry(context_info_t *info);
 /* we don't need to get/put kernel function to pair the entry and exit in
  * TRACING program.
  */
 #define get_ret(func)
 
 #include "core.c"
-
-static try_inline int default_handle_entry(context_info_t *info)
-{
-	DECLARE_EVENT(event_t, e)
-	handle_entry(info, e_size);
-
-	switch (info->func) {
-	case INDEX_consume_skb:
-	case INDEX___kfree_skb:
-		handle_destroy(info);
-		break;
-	default:
-		break;
-	}
-
-	return 0;
-}
 
 rules_ret_t rules_all[TRACE_MAX];
 
