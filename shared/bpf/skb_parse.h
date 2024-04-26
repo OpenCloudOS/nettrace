@@ -422,6 +422,11 @@ static inline int __probe_parse_sk(parse_ctx_t *ctx)
 		if (bpf_core_type_exists(struct tcp_sock)) {
 			ske->l4.tcp.packets_out = _C(tp, packets_out);
 			ske->l4.tcp.retrans_out = _C(tp, retrans_out);
+			ske->l4.tcp.snd_una = _C(tp, snd_una);
+		} else {
+			ske->l4.tcp.packets_out = _(tp->packets_out);
+			ske->l4.tcp.retrans_out = _(tp->retrans_out);
+			ske->l4.tcp.snd_una = _(tp->snd_una);
 		}
 	}
 	case IPPROTO_UDP:

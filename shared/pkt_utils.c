@@ -254,10 +254,11 @@ print_ip:
 	switch (l4) {
 	case IPPROTO_TCP: {
 		tcp_ca_data_t *ca_state = (void *)&ske->ca_state;
-		BUF_FMT(" %s %s info:(%u %u)", state_name[ske->state],
+		BUF_FMT(" %s %s out:(p%u r%u) unack:%u", state_name[ske->state],
 			ca_name[ca_state->icsk_ca_state],
 			ske->l4.tcp.packets_out,
-			ske->l4.tcp.retrans_out);
+			ske->l4.tcp.retrans_out,
+			ske->l4.tcp.snd_una);
 	}
 	case IPPROTO_UDP:
 		hz = kernel_hz();

@@ -113,6 +113,7 @@ typedef struct {
 			u16	dport;
 			u32	packets_out;
 			u32	retrans_out;
+			u32	snd_una;
 		} tcp;
 		struct {
 			u16	sport;
