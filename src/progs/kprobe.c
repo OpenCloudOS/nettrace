@@ -39,6 +39,7 @@
 			.args = (void *)CONFIG(),		\
 			info_init				\
 		};						\
+		if (pre_handle_entry(&info)) return 0;		\
 		return fake__##name(&info);			\
 	}							\
 	DECLARE_FAKE_FUNC(fake__##name)
@@ -68,6 +69,7 @@
 			.args = (void *)CONFIG(),		\
 			info_init				\
 		};						\
+		if (pre_handle_entry(&info)) return 0;		\
 		return fake__##name(&info);			\
 	}							\
 	DECLARE_FAKE_FUNC(fake__##name)

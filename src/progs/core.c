@@ -143,6 +143,16 @@ static __always_inline int check_rate_limit(bpf_args_t *args)
 	return 0;
 }
 
+static inline int pre_handle_entry(context_info_t *info)
+{
+	bpf_args_t *args = (void *)info->args;
+
+	if (!args->ready || check_rate_limit(args))
+		return -1;
+
+	return 0;
+}
+
 static inline int handle_entry(context_info_t *info)
 {
 	bpf_args_t *args = (void *)info->args;
@@ -150,13 +160,11 @@ static inline int handle_entry(context_info_t *info)
 	struct net_device *dev;
 	detail_event_t *detail;
 	event_t *e = info->e;
+	bool *matched = NULL;
 	bool skip_life;
 	packet_t *pkt;
 	u32 pid;
 	int err;
-
-	if (!args->ready || check_rate_limit(args))
-		goto err;
 
 	pr_debug_skb("begin to handle, func=%d", info->func);
 	skip_life = (args->trace_mode & MODE_SKIP_LIFE_MASK) ||
@@ -164,15 +172,14 @@ static inline int handle_entry(context_info_t *info)
 	pid = (u32)bpf_get_current_pid_tgid();
 	pkt = &e->pkt;
 	if (!skip_life) {
-		bool *matched = bpf_map_lookup_elem(&m_matched, &skb);
+		matched = bpf_map_lookup_elem(&m_matched, &skb);
 		if (matched && *matched) {
 			probe_parse_skb(skb, pkt, NULL);
-			filter_by_netns(info);
 			goto skip_filter;
 		}
 	}
 
-	if (args_check(args, pid, pid) || filter_by_netns(info))
+	if (args_check(args, pid, pid))
 		goto err;
 
 	/* in the monitor mode, perfer to trace skb, then sk */
@@ -200,6 +207,9 @@ static inline int handle_entry(context_info_t *info)
 	}
 
 skip_filter:
+	if (filter_by_netns(info) && !matched)
+		goto err;
+
 	if (!args->detail)
 		goto out;
 
