@@ -82,6 +82,8 @@ typedef struct trace {
 	bool	def;
 	/* if the BPF program is custom of this trace */
 	bool	custom;
+	/* latency point */
+	bool	point;
 	int	monitor;
 	int	index;
 	int	arg_count;
@@ -112,6 +114,7 @@ typedef struct trace_args {
 	bool force;
 	bool rtt;
 	bool rtt_detail;
+	bool latency;
 	u32  min_latency;
 	char *traces;
 	char *traces_stack;

@@ -76,11 +76,13 @@ children:
     - name: __dev_queue_xmit:0
       analyzer: ret
       monitor: 1
+      point: true
       rules:
       - <<: *rule_ret_err
         msg: failed to queue packet to qdisc
         adv: too complex to say
     - name: dev_hard_start_xmit:0
+      point: true
       rules:
       - <<: *rule_msg
         msg: skb is successfully sent to the NIC driver

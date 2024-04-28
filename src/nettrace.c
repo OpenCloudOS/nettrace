@@ -172,6 +172,11 @@ static void do_parse_args(int argc, char *argv[])
 			.type = OPTION_U32,
 			.desc = "filter by the minial last-acked rtt in ms",
 		},
+		{
+			.lname = "latency", .dest = &trace_args->latency,
+			.type = OPTION_BOOL,
+			.desc = "enable 'latency' mode",
+		},
 		{ .type = OPTION_BLANK },
 		{
 			.lname = "trace", .sname = 't',

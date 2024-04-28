@@ -308,6 +308,15 @@ static int trace_prepare_mode(trace_args_t *args)
 		goto err;
 	}
 
+	if (args->latency) {
+		trace_for_each(trace) {
+			if (!trace->point && strcmp(trace->parent->name, "life")) {
+				trace_set_invalid_reason(trace, "latency");
+				continue;
+			}
+		}
+	}
+
 	if (!args->ret)
 		return 0;
 
@@ -483,6 +492,10 @@ static int trace_prepare_args()
 	bpf_args->__rate_limit = bpf_args->rate_limit;
 
 	if (!(trace_ctx.mode_mask & TRACE_MODE_CTX_MASK)) {
+		if (args->latency) {
+			pr_err("--latency can only be used in default/diag mode\n");
+			goto err;
+		}
 		if (args->min_latency) {
 			pr_err("--min-latency is only supported in default "
 			       "and 'diag' mode\n");

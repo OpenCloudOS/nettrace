@@ -270,6 +270,7 @@ def gen_trace(trace, group, p_name):
     fields_str += append_trace_field('skboffset', trace, 'raw')
     fields_str += append_trace_field('skoffset', trace, 'raw')
     fields_str += append_trace_field('custom', trace, 'bool')
+    fields_str += append_trace_field('point', trace, 'bool')
     fields_str += append_trace_field('tp', trace)
 
     default = True
