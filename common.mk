@@ -66,7 +66,7 @@ else
 endif
 
 ifdef INLINE
-	BPF_CFLAGS	+= -DINLINE_MODE
+	CFLAGS		+= -DINLINE_MODE
 endif
 
 ifndef BPFTOOL
