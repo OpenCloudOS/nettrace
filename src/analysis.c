@@ -222,6 +222,45 @@ static void analy_ctx_free(analy_ctx_t *ctx)
 	free(ctx);
 }
 
+static void analy_diag_handle(analy_ctx_t *ctx)
+{
+	analy_entry_t *entry;
+	rule_t *rule = NULL;
+	trace_t *trace;
+	int i = 0;
+
+		pr_info("---------------- "PFMT_EMPH_STR("ANALYSIS RESULT")
+			" ---------------------\n");
+
+	list_for_each_entry(entry, &ctx->entries, list) {
+		if (!entry->rule || entry->rule->level == RULE_INFO)
+			continue;
+
+		trace = get_trace_from_analy_entry(entry);
+		rule = entry->rule;
+		i++;
+
+		pr_info("[%d] %s happens in %s(%s):\n\t%s\n", i,
+			level_mark[rule->level], trace->name,
+			trace->parent->name, rule->msg);
+
+		if (entry->extinfo)
+			pr_info("%s\n", entry->extinfo);
+
+		if (rule->adv)
+			pr_info("    "PFMT_EMPH"fix advice"PFMT_END":\n\t%s\n",
+				rule->adv);
+		pr_info("\n");
+	}
+
+	if ((ctx->status & ANALY_CTX_ERROR) && !trace_ctx.args.intel_keep) {
+		pr_info(PFMT_EMPH"analysis finished!"PFMT_END"\n");
+		trace_stop();
+	} else if (!rule) {
+		pr_info("this is a good packet!\n");
+	}
+}
+
 void analy_ctx_handle(analy_ctx_t *ctx)
 {
 	analy_entry_t *entry, *n;
@@ -251,38 +290,7 @@ void analy_ctx_handle(analy_ctx_t *ctx)
 		analy_entry_handle(entry);
 
 	if (trace_mode_diag())
-		pr_info("---------------- "PFMT_EMPH_STR("ANALYSIS RESULT")
-			" ---------------------\n");
-	else
-		goto out;
-
-	list_for_each_entry(entry, &ctx->entries, list) {
-		if (!entry->rule || entry->rule->level == RULE_INFO)
-			continue;
-
-		trace = get_trace_from_analy_entry(entry);
-		rule = entry->rule;
-		i++;
-
-		pr_info("[%d] %s happens in %s(%s):\n\t%s\n", i,
-			level_mark[rule->level], trace->name,
-			trace->parent->name, rule->msg);
-
-		if (entry->extinfo)
-			pr_info("%s\n", entry->extinfo);
-
-		if (rule->adv)
-			pr_info("    "PFMT_EMPH"fix advice"PFMT_END":\n\t%s\n",
-				rule->adv);
-		pr_info("\n");
-	}
-
-	if ((ctx->status & ANALY_CTX_ERROR) && !trace_ctx.args.intel_keep) {
-		pr_info(PFMT_EMPH"analysis finished!"PFMT_END"\n");
-		trace_stop();
-	} else if (!rule) {
-		pr_info("this is a good packet!\n");
-	}
+		analy_diag_handle(ctx);
 out:
 	pr_info("\n");
 free_ctx:
