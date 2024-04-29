@@ -232,7 +232,7 @@ void analy_ctx_handle(analy_ctx_t *ctx)
 	trace_t *trace;
 	int i = 0;
 
-	if (trace_mode_intel() && trace_ctx.args.intel_quiet &&
+	if (trace_mode_diag() && trace_ctx.args.intel_quiet &&
 	    !ctx->status)
 		goto free_ctx;
 
@@ -250,7 +250,7 @@ void analy_ctx_handle(analy_ctx_t *ctx)
 	list_for_each_entry(entry, &ctx->entries, list)
 		analy_entry_handle(entry);
 
-	if (trace_mode_intel())
+	if (trace_mode_diag())
 		pr_info("---------------- "PFMT_EMPH_STR("ANALYSIS RESULT")
 			" ---------------------\n");
 	else
@@ -663,7 +663,7 @@ DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_ALL_MASK)
 		hlist_del(&e->fake_ctx->hash);
 	}
 
-	if (!trace_mode_intel())
+	if (!trace_mode_diag())
 		goto out;
 
 	/* generate the information in the analysis result part */
@@ -689,7 +689,7 @@ DEFINE_ANALYZER_EXIT(clone, TRACE_MODE_CTX_MASK)
 
 	pr_debug("clone analyzer triggered on: %llx\n", e->event.val);
 	analy_fake_ctx_alloc(e->event.val, entry->ctx);
-	if (trace_mode_intel())
+	if (trace_mode_diag())
 		rule_run_ret(entry, trace, 0);
 out:
 	return RESULT_CONSUME;

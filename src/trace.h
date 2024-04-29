@@ -289,7 +289,7 @@ static inline bool trace_mode_timeline()
 	return trace_ctx.mode == TRACE_MODE_TIMELINE;
 }
 
-static inline bool trace_mode_intel()
+static inline bool trace_mode_diag()
 {
 	return trace_ctx.mode == TRACE_MODE_DIAG;
 }
