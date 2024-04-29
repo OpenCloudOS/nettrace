@@ -203,8 +203,8 @@ found:
 	put_fake_analy_ctx(pos->fake_ctx);
 	e->entry = pos;
 	pos->status &= ~ANALY_ENTRY_ONCPU;
-	pr_debug("found exit for entry: %s(%llx) on cpu %d with return "
-		 "value %llx, ctx:%llx:%d\n", trace->name, pos->event->key, cpu,
+	pr_debug("found exit for entry: %s(%x) on cpu %d with return "
+		 "value %llx, ctx:%llx:%u\n", trace->name, pos->event->key, cpu,
 		 e->event.val, PTR2X(pos->ctx), pos->ctx->refs);
 out:
 	return RESULT_CONT;
@@ -215,7 +215,7 @@ static analyzer_result_t probe_analy_entry(trace_t *trace, analy_entry_t *e)
 	struct list_head *list;
 
 	if (!trace_is_ret(trace)) {
-		pr_debug("tp found for %s(%llx), ctx:%llx:%d\n", trace->name,
+		pr_debug("entry found for %s(%llx), ctx:%llx:%d\n", trace->name,
 			 (u64)e->event->key, PTR2X(e->ctx),
 			 e->ctx->refs);
 		goto out;
@@ -269,7 +269,7 @@ static bool probe_trace_supported()
 }
 
 analyzer_t probe_analyzer = {
-	.mode = TRACE_MODE_DIAG_MASK | TRACE_MODE_TIMELINE_MASK,
+	.mode = TRACE_MODE_CTX_MASK,
 	.analy_entry = probe_analy_entry,
 	.analy_exit = probe_analy_exit,
 };

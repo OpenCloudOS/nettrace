@@ -116,6 +116,7 @@ static inline int handle_exit(struct pt_regs *ctx, int func)
 	event = (retevent_t) {
 		.ts = bpf_ktime_get_ns(),
 		.func = func,
+		.meta = FUNC_TYPE_RET,
 		.val = PT_REGS_RC(ctx),
 	};
 

@@ -25,14 +25,15 @@ typedef struct {
 } bpf_args_t;
 
 typedef struct {
+	u16		meta;
+	u16		func;
+	u32		key;
 	union {
 		packet_t	pkt;
 		sock_t		ske;
 	};
-	u64		key;
 	/* For FEXIT program only for now */
 	u64		retval;
-	u32		func;
 #ifdef BPF_FEAT_STACK_TRACE
 	u32		stack_id;
 #endif
@@ -40,13 +41,21 @@ typedef struct {
 } event_t;
 
 typedef struct {
+	u16 meta;
+	u16 func;
+	u32 key;
+	u64 ts;
+} tiny_event_t;
+
+typedef struct {
+	u16		meta;
+	u16		func;
+	u32		key;
 	union {
 		packet_t	pkt;
 		sock_t		ske;
 	};
-	u64		key;
 	u64		retval;
-	u32		func;
 #ifdef BPF_FEAT_STACK_TRACE
 	u32		stack_id;
 #endif
@@ -60,6 +69,14 @@ typedef struct {
 
 typedef struct {
 } pure_event_t;
+
+enum {
+	FUNC_TYPE_FUNC,
+	FUNC_TYPE_RET,
+	FUNC_TYPE_TINY,
+	FUNC_TYPE_TRACING_RET,
+	FUNC_TYPE_MAX,
+};
 
 #define DEFINE_EVENT(name, fields...)		\
 typedef struct {				\
@@ -112,9 +129,11 @@ DEFINE_EVENT(rtt_event_t,
 #define MAX_EVENT_SIZE sizeof(detail_nf_hooks_event_t)
 
 typedef struct __attribute__((__packed__)) {
+	u16 meta;
+	u16 func;
+	u32 pad;
 	u64 ts;
 	u64 val;
-	u16 func;
 } retevent_t;
 
 typedef enum trace_mode {

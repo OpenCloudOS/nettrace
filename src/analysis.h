@@ -40,9 +40,9 @@ typedef struct {
 
 typedef struct fake_analy_ctx {
 	analy_ctx_t *ctx;
-	u64 key;
 	struct hlist_node hash;
 	struct list_head list;
+	u32 key;
 	u16 refs;
 } fake_analy_ctx_t;
 
@@ -191,11 +191,6 @@ static inline void put_fake_analy_ctx(fake_analy_ctx_t *ctx)
 		put_analy_ctx(ctx->ctx);
 }
 
-static inline bool event_is_ret(int size)
-{
-	return size - 8 <= sizeof(retevent_t);
-}
-
 static inline void entry_set_extinfo(analy_entry_t *e, char *info)
 {
 	e->extinfo = info;
@@ -210,8 +205,7 @@ static inline void entry_set_msg(analy_entry_t *e, char *info)
 
 static inline bool mode_has_context()
 {
-	return (1 << trace_ctx.mode) & (TRACE_MODE_TIMELINE_MASK |
-		TRACE_MODE_DIAG_MASK);
+	return trace_ctx.mode_mask & TRACE_MODE_CTX_MASK;
 }
 
 static inline int try_inc_skb_count()
@@ -225,6 +219,11 @@ static inline int try_inc_skb_count()
 	}
 
 	return 0;
+}
+
+static inline int func_get_type(void *data)
+{
+	return ((event_t *)data)->meta;
 }
 
 #endif

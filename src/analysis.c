@@ -158,7 +158,7 @@ static void analy_entry_handle(analy_entry_t *entry)
 			ifname = ifname ?: "";
 		}
 
-		sprintf(tinfo, "[%llx][%-20s][cpu:%-3u][%-5s][pid:%-7u][%-12s][ns:%u] ",
+		sprintf(tinfo, "[%x][%-20s][cpu:%-3u][%-5s][pid:%-7u][%-12s][ns:%u] ",
 			detail->key, t->name, entry->cpu, ifname,
 			detail->pid, detail->task, detail->netns);
 	} else if (trace_ctx.mode != TRACE_MODE_DROP) {
@@ -281,7 +281,7 @@ void analy_ctx_handle(analy_ctx_t *ctx)
 
 	keys[0] = '\0';
 	list_for_each_entry(fake, &ctx->fakes, list)
-		sprintf_end(keys, ",%llx", fake->key);
+		sprintf_end(keys, ",%08x", fake->key);
 
 	keys[0] = ' ';
 	pr_info("*****************"PFMT_EMPH"%s "PFMT_END"***************\n",
@@ -404,7 +404,7 @@ void tl_poll_handler(void *raw_ctx, int cpu, void *data, u32 size)
 	event_t *e;
 
 	analyzer = trace_ctx.ops->analyzer;
-	if (event_is_ret(size))
+	if (func_get_type(data) == FUNC_TYPE_RET)
 		goto do_ret;
 
 	entry = analy_entry_alloc(data, size);
@@ -413,9 +413,8 @@ void tl_poll_handler(void *raw_ctx, int cpu, void *data, u32 size)
 		return;
 	}
 	e = entry->event;
-	entry->cpu = cpu;
-	pr_debug("create entry: %llx, %llx, size: %u\n", PTR2X(entry),
-		 e->key, size);
+	pr_debug("create entry: %llx, %x, size: %u\n", PTR2X(entry),
+		 e->key, dlist->size);
 
 	fake = analy_fake_ctx_fetch(e->key);
 	if (!fake) {
@@ -822,7 +821,7 @@ DEFINE_ANALYZER_ENTRY(qdisc, TRACE_MODE_ALL_MASK)
 	hz = kernel_hz();
 	hz = hz > 0 ? hz : 1;
 	sprintf(msg, PFMT_EMPH_STR(" *qdisc state: %x, flags: %x, "
-		"last-update: %lums, len: %lu*"), event->state,
+		"last-update: %llums, len: %u*"), event->state,
 		event->flags, (1000 * event->last_update) / hz,
 		event->qlen);
 	entry_set_msg(e, msg);

@@ -261,7 +261,7 @@ static void tracing_print_stack(int key)
 }
 
 analyzer_t tracing_analyzer = {
-	.mode = TRACE_MODE_DIAG_MASK | TRACE_MODE_TIMELINE_MASK,
+	.mode = TRACE_MODE_CTX_MASK,
 	.analy_entry = tracing_analy_entry,
 	.analy_exit = tracing_analy_exit,
 };
