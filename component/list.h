@@ -141,6 +141,16 @@ static inline int list_is_singular(const struct list_head *head)
 	return !list_empty(head) && (head->next == head->prev);
 }
 
+static inline int list_is_first(const struct list_head *list, const struct list_head *head)
+{
+	return list->prev == head;
+}
+
+static inline int list_is_last(const struct list_head *list, const struct list_head *head)
+{
+	return list->next == head;
+}
+
 #define list_entry(ptr, type, member) \
 	container_of(ptr, type, member)
 
@@ -149,6 +159,9 @@ static inline int list_is_singular(const struct list_head *head)
 
 #define list_last_entry(ptr, type, member) \
 	list_entry((ptr)->prev, type, member)
+
+#define list_prev_entry(pos, member) \
+	list_entry((pos)->member.prev, typeof(*(pos)), member)
 
 #define list_for_each_entry(pos, head, member)				\
 	for (pos = list_entry((head)->next, typeof(*pos), member);	\
@@ -163,6 +176,14 @@ static inline int list_is_singular(const struct list_head *head)
 
 #define list_safe_reset_next(pos, n, member)				\
 	n = list_entry(pos->member.next, typeof(*pos), member)
+
+#define list_entry_is_head(pos, head, member)				\
+	(&pos->member == (head))
+
+#define list_for_each_entry_reverse(pos, head, member)			\
+	for (pos = list_last_entry(head, typeof(*pos), member);		\
+	     !list_entry_is_head(pos, head, member); 			\
+	     pos = list_prev_entry(pos, member))
 
 #define HLIST_HEAD_INIT { .first = NULL }
 #define HLIST_HEAD(name) struct hlist_head name = {  .first = NULL }
