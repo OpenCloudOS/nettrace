@@ -97,7 +97,7 @@ static void do_parse_args(int argc, char *argv[])
 		{
 			.lname = "min-latency", .dest = &trace_args->min_latency,
 			.type = OPTION_U32,
-			.desc = "filter by the minial time to live of the skb in ms",
+			.desc = "filter by the minial time to live of the skb in us",
 		},
 		{
 			.lname = "pkt-len", .dest = &trace_args->pkt_len,

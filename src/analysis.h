@@ -174,14 +174,33 @@ static inline void put_analy_ctx(analy_ctx_t *ctx)
 	ctx->refs--;
 }
 
-static inline u32 get_lifetime_ms(analy_ctx_t *ctx)
+static inline u32 get_entry_dela_us(analy_entry_t *n, analy_entry_t *o)
+{
+	if (n == o)
+		return 0;
+
+	return (n->event->pkt.ts - o->event->pkt.ts) / 1000;
+}
+
+static inline u32 get_lifetime_us(analy_ctx_t *ctx, bool skip_last)
 {
 	analy_entry_t *first, *last;
 
 	first = list_first_entry(&ctx->entries, analy_entry_t, list);
 	last = list_last_entry(&ctx->entries, analy_entry_t, list);
 
-	return (last->event->pkt.ts - first->event->pkt.ts) / 1000000;
+	if (skip_last) {
+		if (first == last)
+			return 0;
+		last = list_prev_entry(last, list);
+	}
+
+	return get_entry_dela_us(last, first);
+}
+
+static inline u32 get_lifetime_ms(analy_ctx_t *ctx, bool skip_last)
+{
+	return get_lifetime_us(ctx, skip_last) / 1000;
 }
 
 static inline void get_fake_analy_ctx(fake_analy_ctx_t *ctx)

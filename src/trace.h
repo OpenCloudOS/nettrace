@@ -152,6 +152,9 @@ typedef struct {
 	bool		drop_reason;
 	/* enable detail output */
 	bool		detail;
+	bool		skip_last;
+	bool		latency;
+	bool		trace_clone;
 	struct bpf_object *obj;
 } trace_context_t;
 
@@ -166,6 +169,7 @@ extern trace_t *all_traces[];
 extern trace_group_t root_group;
 extern int trace_count;
 extern struct list_head trace_list;
+extern u32 ctx_count;
 
 #define DECLARE_TRACES(name, ...) extern trace_t trace_##name;
 DEFINE_ALL_PROBES(DECLARE_TRACES, DECLARE_TRACES, DECLARE_TRACES)

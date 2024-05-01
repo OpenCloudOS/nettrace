@@ -134,6 +134,7 @@ static analy_entry_t *analy_entry_from_dlist(data_list_t *dlist)
 	return entry;
 }
 
+static void analy_entry_handle(analy_entry_t *entry, analy_entry_t *prev)
 {
 	static char buf[1024], tinfo[256];
 	event_t *e = entry->event;
@@ -167,6 +168,14 @@ static analy_entry_t *analy_entry_from_dlist(data_list_t *dlist)
 	if ((entry->status & ANALY_ENTRY_RETURNED) && trace_ctx.args.ret)
 		sprintf_end(buf, PFMT_EMPH_STR(" *return: %d*"),
 			    (int)entry->priv);
+
+	if (prev && trace_ctx.latency) {
+		u32 delta;
+
+		delta = get_entry_dela_us(entry, prev);
+		sprintf_end(buf, " latency: %d.%03dms", delta / 1000,
+			    delta % 1000);
+	}
 
 	if (entry->msg)
 		sprintf_end(buf, "%s", entry->msg);
@@ -257,21 +266,21 @@ static void analy_diag_handle(analy_ctx_t *ctx)
 
 void analy_ctx_handle(analy_ctx_t *ctx)
 {
-	analy_entry_t *entry, *n;
+	analy_entry_t *entry, *prev = NULL;
+	struct list_head *head;
 	static char keys[1024];
 	fake_analy_ctx_t *fake;
-	rule_t *rule = NULL;
-	u32 min_latency;
-	trace_t *trace;
-	int i = 0;
+	u32 latency = 0;
 
 	if (trace_mode_diag() && trace_ctx.args.intel_quiet &&
 	    !ctx->status)
 		goto free_ctx;
 
-	min_latency = trace_ctx.args.min_latency;
-	if (min_latency && get_lifetime_ms(ctx) < min_latency)
-		goto free_ctx;
+	if (trace_ctx.latency) {
+		latency = get_lifetime_us(ctx, true);
+		if (latency < trace_ctx.args.min_latency)
+			goto free_ctx;
+	}
 
 	keys[0] = '\0';
 	list_for_each_entry(fake, &ctx->fakes, list)
@@ -280,12 +289,20 @@ void analy_ctx_handle(analy_ctx_t *ctx)
 	keys[0] = ' ';
 	pr_info("*****************"PFMT_EMPH"%s "PFMT_END"***************\n",
 		keys);
-	list_for_each_entry(entry, &ctx->entries, list)
-		analy_entry_handle(entry);
+	head = &ctx->entries;
+	list_for_each_entry(entry, head, list) {
+		analy_entry_handle(entry, prev);
+		prev = entry;
+	}
+
+	if (trace_ctx.latency) {
+		pr_info("  total latency: %d.%03dms\n", latency / 1000,
+			latency % 1000);
+	}
 
 	if (trace_mode_diag())
 		analy_diag_handle(ctx);
-out:
+
 	pr_info("\n");
 free_ctx:
 	analy_ctx_free(ctx);

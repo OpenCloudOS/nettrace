@@ -582,13 +582,19 @@ DEFINE_KPROBE_INIT(tcp_ack_update_rtt, tcp_ack_update_rtt, 6,
 	if (first_rtt < info->args->first_rtt || last_rtt < info->args->last_rtt)
 		return 0;
 
-	if (info->args->trace_mode & TRACE_MODE_RTT_MASK)
+	if (info->args->trace_mode & TRACE_MODE_RTT_MASK &&
+	    !info->args->has_filter)
 		goto do_stats;
 
 	DECLARE_EVENT(rtt_event_t, e)
 
 	if (handle_entry(info))
 		return 0;
+
+	if (info->args->trace_mode & TRACE_MODE_RTT_MASK) {
+		update_stats(first_rtt);
+		return 0;
+	}
 
 	e->first_rtt = first_rtt;
 	e->last_rtt = last_rtt;

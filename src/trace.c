@@ -261,9 +261,18 @@ static int trace_prepare_mode(trace_args_t *args)
 		trace_all_set_ret();
 	case TRACE_MODE_TIMELINE:
 		/* enable skb clone trace */
-		trace_for_each(trace)
-			if (TRACE_HAS_ANALYZER(trace, clone))
-				trace_set_ret(trace);
+		trace_set_ret(&trace_skb_clone);
+		break;
+	case TRACE_MODE_LATENCY:
+		trace_for_each(trace) {
+			if (!trace->point && strcmp(trace->parent->name, "life")) {
+				trace_set_invalid_reason(trace, "latency");
+				continue;
+			}
+		}
+		trace_set_invalid_reason(&trace_skb_clone, "latency");
+		trace_ctx.skip_last = true;
+		trace_ctx.latency = true;
 		break;
 	case TRACE_MODE_DROP:
 		if (!trace_ctx.drop_reason)
@@ -301,15 +310,6 @@ static int trace_prepare_mode(trace_args_t *args)
 	default:
 		pr_err("mode not supported!\n");
 		goto err;
-	}
-
-	if (args->latency) {
-		trace_for_each(trace) {
-			if (!trace->point && strcmp(trace->parent->name, "life")) {
-				trace_set_invalid_reason(trace, "latency");
-				continue;
-			}
-		}
 	}
 
 	if (!args->ret)
@@ -449,6 +449,7 @@ static int trace_prepare_args()
 	ASSIGN_MODE(monitor, MONITOR);
 	ASSIGN_MODE(drop, DROP);
 	ASSIGN_MODE(rtt, RTT);
+	ASSIGN_MODE(latency, LATENCY);
 
 	trace_ctx.mode_mask = 1 << trace_ctx.mode;
 	fix_trace = args->drop || args->rtt;
@@ -486,16 +487,12 @@ static int trace_prepare_args()
 	}
 	bpf_args->__rate_limit = bpf_args->rate_limit;
 
-	if (!(trace_ctx.mode_mask & TRACE_MODE_CTX_MASK)) {
-		if (args->latency) {
-			pr_err("--latency can only be used in default/diag mode\n");
+	if (args->min_latency) {
+		if (!(trace_ctx.mode_mask & TRACE_MODE_CTX_MASK)) {
+			pr_err("--min-latency is only supported in context mode\n");
 			goto err;
 		}
-		if (args->min_latency) {
-			pr_err("--min-latency is only supported in default "
-			       "and 'diag' mode\n");
-			goto err;
-		}
+		trace_ctx.latency = true;
 	}
 
 	/* enable tcp_ack_update_rtt as monitor if rtt set */
@@ -812,7 +809,8 @@ int trace_bpf_load_and_attach()
 		break;
 	case TRACE_MODE_DIAG:
 	case TRACE_MODE_TIMELINE:
-		trace_ctx.ops->trace_poll = tl_poll_handler;
+	case TRACE_MODE_LATENCY:
+		trace_ctx.ops->trace_poll = ctx_poll_handler;
 		break;
 	case TRACE_MODE_RTT:
 		trace_ctx.ops->raw_poll = rtt_poll_handler;
