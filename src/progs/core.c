@@ -167,7 +167,7 @@ static inline int handle_entry(context_info_t *info)
 	int err;
 
 	pr_debug_skb("begin to handle, func=%d", info->func);
-	skip_life = (args->trace_mode & MODE_SKIP_LIFE_MASK) ||
+	skip_life = !(args->trace_mode & TRACE_MODE_CTX_MASK) ||
 		args->pkt_fixed;
 	pid = (u32)bpf_get_current_pid_tgid();
 	pkt = &e->pkt;
@@ -248,7 +248,7 @@ err:
 
 static inline int handle_destroy(context_info_t *info)
 {
-	if (!(info->args->trace_mode & MODE_SKIP_LIFE_MASK))
+	if (info->args->trace_mode & TRACE_MODE_CTX_MASK)
 		bpf_map_delete_elem(&m_matched, &info->skb);
 	return 0;
 }

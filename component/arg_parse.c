@@ -22,12 +22,12 @@ int parse_args(int argc, char *argv[], arg_config_t *config,
 	       option_item_t *options,
 	       int option_size)
 {
-	int i, cur_opt, size, err = 0;
 	struct option *long_opts;
 	int cur_key = KEY_START;
 	char sopts[128] = {};
 	option_item_t *item;
 	struct option *opt;
+	int i, cur_opt;
 
 	opt = long_opts = calloc(option_size + 1, sizeof(struct option));
 	if (!long_opts)

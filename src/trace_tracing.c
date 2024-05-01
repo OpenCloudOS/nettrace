@@ -63,24 +63,10 @@ static bool tracing_support_feat_args_ext()
 	return err == 0;
 }
 
-static void tracing_trace_attach_manual(char *prog_name, char *func)
-{
-	struct bpf_program *prog;
-
-	prog = bpf_pbn(skel->obj, prog_name);
-	if (!prog) {
-		pr_verb("failed to find prog %s\n", prog_name);
-		return;
-	}
-	bpf_program__set_attach_target(prog, 0, func);
-}
-
 static void tracing_adjust_target()
 {
 	struct bpf_program *prog;
-	char kret_name[128];
 	trace_t *trace;
-	int err;
 
 	trace_for_each(trace) {
 		if (!(trace->status & TRACE_ATTACH_MANUAL))
@@ -178,7 +164,6 @@ static int tracing_trace_load()
 	DECLARE_LIBBPF_OPTS(bpf_object_open_opts, opts,
 		.btf_custom_path = trace_ctx.args.btf_path,
 	);
-	int i = 0;
 
 	skel = tracing__open_opts(&opts);
 	if (!skel) {
@@ -255,7 +240,7 @@ static void tracing_print_stack(int key)
 		sym = sym_parse(ip[i]);
 		if (!sym)
 			break;
-		pr_info("    -> [%lx]%s\n", ip[i], sym->desc);
+		pr_info("    -> [%llx]%s\n", ip[i], sym->desc);
 	}
 	pr_info("\n");
 }

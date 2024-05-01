@@ -16,7 +16,6 @@
 static time_t time_offset;
 static struct tm *convert_ts_to_date(u64 ts)
 {
-	struct tm *p;
 	time_t tmp;
 
 	if (!time_offset) {

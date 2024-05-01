@@ -834,7 +834,6 @@ DEFINE_ANALYZER_ENTRY(rtt, TRACE_MODE_ALL_MASK)
 {
 	define_pure_event(rtt_event_t, event, e->event);
 	char *msg = malloc(1024);
-	int hz;
 
 	msg[0] = '\0';
 	sprintf(msg, PFMT_EMPH_STR(" *rtt:%ums, rtt_min:%ums*"),

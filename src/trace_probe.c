@@ -59,7 +59,6 @@ static int probe_trace_attach()
 {
 	char kret_name[128];
 	trace_t *trace;
-	int err;
 
 	trace_for_each(trace) {
 		if (!(trace->status & TRACE_ATTACH_MANUAL))

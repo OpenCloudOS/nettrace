@@ -217,11 +217,6 @@ bool trace_analyzer_enabled(analyzer_t *analyzer)
 	return false;
 }
 
-static bool trace_has_end()
-{
-	return TRACE_ANALYZER_ENABLED(drop) || TRACE_ANALYZER_ENABLED(free);
-}
-
 /* enable 'return value trace' for all function traces */
 static void trace_all_set_ret()
 {
@@ -430,8 +425,8 @@ static int trace_prepare_args()
 	bpf_args_t *bpf_args = &trace_ctx.bpf_args;
 	trace_args_t *args = &trace_ctx.args;
 	char *traces_stack = args->traces_stack;
-	char *tmp, *cur, *traces;
 	bool fix_trace;
+	char *traces;
 	int err;
 
 	trace_prepare_pesudo(args);
@@ -743,10 +738,10 @@ err:
 
 int trace_pre_load()
 {
-	char kret_name[128], regex[128], *func;
 	struct bpf_program *prog;
-	bool manual, autoload;
+	char kret_name[128];
 	trace_t *trace;
+	bool autoload;
 
 	/* disable all programs that is not enabled or invalid */
 	trace_for_each(trace) {
@@ -796,8 +791,6 @@ static int trace_bpf_load()
 
 int trace_bpf_load_and_attach()
 {
-	trace_t *trace;
-
 	if (trace_bpf_load())
 		goto err;
 

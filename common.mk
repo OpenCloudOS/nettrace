@@ -8,7 +8,7 @@ BPF_CFLAGS	= $(CFLAGS) -Wno-unused-function			\
 		  -Wno-compare-distinct-pointer-types -Wuninitialized	\
 		  -D__TARGET_ARCH_$(SRCARCH) -DBPF_NO_PRESERVE_ACCESS_INDEX
 HOST_CFLAGS	= \
-		-lbpf -lelf -lz -O2 -static $(CFLAGS)			\
+		-lbpf -lelf -lz -O2 -static $(CFLAGS) -Wall		\
 		-Wno-deprecated-declarations -DVERSION=$(VERSION)	\
 		-DRELEASE=$(RELEASE)					\
 		-I$(ROOT)/shared/ -I$(ROOT)/component
