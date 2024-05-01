@@ -72,6 +72,13 @@ typedef struct {
 	u16	cpu;
 } analy_exit_t;
 
+typedef struct {
+	struct list_head list;
+	u16 size;
+	u16 cpu;
+	u8 data[0];
+} data_list_t;
+
 typedef enum analyzer_result {
 	RESULT_CONT,
 	RESULT_CONSUME,
@@ -91,6 +98,7 @@ extern u32 skb_count;
 #define ANALY_ENTRY_EXTINFO	(1 << 1)
 #define ANALY_ENTRY_MSG		(1 << 2)
 #define ANALY_ENTRY_ONCPU	(1 << 3)
+#define ANALY_ENTRY_DLIST	(1 << 4)
 
 #define ANALYZER(name) analyzer_##name
 #define DEFINE_ANALYZER_PART(name, type, mode_mask)			\
@@ -140,7 +148,7 @@ DECLARE_ANALYZER(default);
 			(void *)(data) +			\
 			offsetof(detail_##type, __event_filed))
 
-void tl_poll_handler(void *raw_ctx, int cpu, void *data, u32 size);
+void ctx_poll_handler(void *raw_ctx, int cpu, void *data, u32 size);
 void basic_poll_handler(void *ctx, int cpu, void *data, u32 size);
 void async_poll_handler(void *ctx, int cpu, void *data, u32 size);
 
@@ -201,6 +209,28 @@ static inline void entry_set_msg(analy_entry_t *e, char *info)
 {
 	e->msg = info;
 	e->status |= ANALY_ENTRY_MSG;
+}
+
+static inline analy_entry_t *analy_entry_alloc(void *data, u32 size)
+{
+	analy_entry_t *entry = calloc(1, sizeof(*entry));
+	int copy_size = size;
+	void *event;
+
+	if (!entry)
+		return NULL;
+
+	if (size > MAX_EVENT_SIZE + 8) {
+		pr_err("trace data is too big! size: %u, max: %lu\n",
+		       size, MAX_EVENT_SIZE);
+		return NULL;
+	}
+	copy_size = MIN(size, MAX_EVENT_SIZE);
+	event = malloc(copy_size);
+
+	memcpy(event, data, copy_size);
+	entry->event = event;
+	return entry;
 }
 
 static inline bool mode_has_context()

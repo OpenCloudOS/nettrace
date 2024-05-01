@@ -332,6 +332,9 @@ static void do_exit(int code)
 	trace_ctx.ops->trace_close();
 	pr_debug("BPF skel is destroied\n");
 	trace_ctx.stop = true;
+
+	if (ctx_count)
+		pr_info("%d context not showed\n", ctx_count);
 }
 
 int main(int argc, char *argv[])
