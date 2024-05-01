@@ -352,6 +352,13 @@ DEFINE_KPROBE_SKB(__kfree_skb, 0, 1)
 	return 0;
 }
 
+DEFINE_KPROBE_SKB(kfree_skb_partial, 0, 2)
+{
+	default_handle_entry(info);
+	handle_destroy(info);
+	return 0;
+}
+
 DEFINE_KPROBE_INIT(__netif_receive_skb_core_pskb,
 		   __netif_receive_skb_core, 3,
 		   .skb = _(*(void **)(ctx_get_arg(ctx, 0))))

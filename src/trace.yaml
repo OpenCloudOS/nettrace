@@ -515,6 +515,9 @@ children:
     skb: 0
     analyzer: free
     custom: 1
+  - name: kfree_skb_partial:0
+    analyzer: free
+    custom: 1
   - name: skb_clone
     skb: 0
     analyzer: clone
