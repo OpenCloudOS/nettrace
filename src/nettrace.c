@@ -215,11 +215,9 @@ static void do_parse_args(int argc, char *argv[])
 			.desc = "print netfilter hooks if dropping by netfilter",
 		},
 		{
-			.lname = "pkt-fixed", .dest = &bpf_args->pkt_fixed,
+			.lname = "tiny-show", .dest = &bpf_args->tiny_output,
 			.type = OPTION_BOOL,
-			.desc = "set this option if you are sure the target "
-				"packet is not NATed to get better "
-				"performance",
+			.desc = "set this option to show less infomation",
 		},
 		{
 			.lname = "trace-stack", .dest = &trace_args->traces_stack,

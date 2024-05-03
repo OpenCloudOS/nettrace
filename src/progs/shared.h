@@ -15,7 +15,7 @@ typedef struct {
 	bool hooks;
 	bool ready;
 	bool stack;
-	bool pkt_fixed;
+	bool tiny_output;
 	u16  stack_funs[MAX_FUNC_STACK];
 	u32  first_rtt;
 	u32  last_rtt;
@@ -32,8 +32,11 @@ typedef struct {
 		packet_t	pkt;
 		sock_t		ske;
 	};
-	/* For FEXIT program only for now */
-	u64		retval;
+	union {
+		/* For FEXIT program only for now */
+		u64	retval;
+		u64	match_val;
+	};
 #ifdef BPF_FEAT_STACK_TRACE
 	u32		stack_id;
 #endif
@@ -145,6 +148,8 @@ typedef enum trace_mode {
 	TRACE_MODE_MONITOR,
 	TRACE_MODE_RTT,
 	TRACE_MODE_LATENCY,
+	/* following is some fake mode */
+	TRACE_MODE_TINY = 16,
 } trace_mode_t;
 
 enum rule_type {
@@ -176,6 +181,7 @@ typedef struct {
 #define TRACE_MODE_MONITOR_MASK		(1 << TRACE_MODE_MONITOR)
 #define TRACE_MODE_RTT_MASK		(1 << TRACE_MODE_RTT)
 #define TRACE_MODE_LATENCY_MASK		(1 << TRACE_MODE_LATENCY)
+#define TRACE_MODE_TINY_MASK		(1 << TRACE_MODE_TINY)
 
 #define TRACE_MODE_SKB_REQUIRE_MASK				\
 	(TRACE_MODE_BASIC_MASK | TRACE_MODE_TIMELINE_MASK |	\

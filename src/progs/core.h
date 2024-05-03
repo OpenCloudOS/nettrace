@@ -9,8 +9,11 @@ typedef struct {
 	event_t *e;
 	/* the filter condition stored in map */
 	bpf_args_t *args;
-	/* used by fexit to pass the retval to event */
-	u64 retval;
+	union {
+		/* used by fexit to pass the retval to event */
+		u64 retval;
+		u64 *match_val;
+	};
 	u16 func;
 } context_info_t;
 

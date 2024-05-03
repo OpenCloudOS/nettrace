@@ -137,12 +137,19 @@ static analy_entry_t *analy_entry_from_dlist(data_list_t *dlist)
 static void analy_entry_handle(analy_entry_t *entry, analy_entry_t *prev)
 {
 	static char buf[1024], tinfo[256];
+	bool date = trace_ctx.args.date;
 	event_t *e = entry->event;
 	rule_t *rule;
 	trace_t *t;
 
 	t = get_trace_from_analy_entry(entry);
 	pr_debug("output entry(%llx)\n", PTR2X(entry));
+	if (e->meta == FUNC_TYPE_TINY) {
+		ts_print_ts(buf, ((tiny_event_t *)(void *)e)->ts, date);
+		sprintf_end(buf, "[%-20s]", t->name);
+		goto do_latency;
+	}
+
 	if (trace_ctx.detail) {
 		detail_event_t *detail = (void *)e;
 		static char ifbuf[IF_NAMESIZE];
@@ -169,6 +176,7 @@ static void analy_entry_handle(analy_entry_t *entry, analy_entry_t *prev)
 		sprintf_end(buf, PFMT_EMPH_STR(" *return: %d*"),
 			    (int)entry->priv);
 
+do_latency:
 	if (prev && trace_ctx.latency) {
 		u32 delta;
 
@@ -201,7 +209,7 @@ out:
 	pr_info("%s\n", buf);
 
 #ifdef BPF_FEAT_STACK_TRACE
-	if (trace_is_stack(t))
+	if (trace_is_stack(t) && e->meta != FUNC_TYPE_TINY)
 		trace_ctx.ops->print_stack(e->stack_id);
 #endif
 }
@@ -312,7 +320,12 @@ free_ctx:
 static int try_run_entry(trace_t *trace, analyzer_t *analyzer,
 			 analy_entry_t *entry)
 {
-	if (analyzer && (analyzer->mode & (1 << trace_ctx.mode)) &&
+	u32 mode = 1 << trace_ctx.mode;
+
+	if (entry->event->meta == FUNC_TYPE_TINY)
+		mode |= TRACE_MODE_TINY_MASK;
+
+	if (analyzer && (analyzer->mode & mode) == mode &&
 	    analyzer->analy_entry)
 		return analyzer->analy_entry(trace, entry);
 
@@ -692,7 +705,7 @@ int rtt_poll_handler()
 	return 0;
 }
 
-DEFINE_ANALYZER_ENTRY(free, TRACE_MODE_CTX_MASK)
+DEFINE_ANALYZER_ENTRY(free, TRACE_MODE_CTX_MASK | TRACE_MODE_TINY_MASK)
 {
 	put_fake_analy_ctx(e->fake_ctx);
 	hlist_del(&e->fake_ctx->hash);
@@ -701,11 +714,19 @@ DEFINE_ANALYZER_ENTRY(free, TRACE_MODE_CTX_MASK)
 	return RESULT_CONT;
 }
 
-DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_ALL_MASK)
+DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_ALL_MASK | TRACE_MODE_TINY_MASK)
 {
 	define_pure_event(drop_event_t, event, e->event);
 	char *reason = NULL, *sym_str, *info;
 	struct sym_result *sym;
+
+	if (mode_has_context()) {
+		put_fake_analy_ctx(e->fake_ctx);
+		hlist_del(&e->fake_ctx->hash);
+	}
+
+	if (e->event->meta == FUNC_TYPE_TINY)
+		goto out;
 
 	reason = get_drop_reason(event->reason);
 	sym = sym_parse(event->location);
@@ -720,11 +741,6 @@ DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_ALL_MASK)
 	entry_set_msg(e, info);
 
 	rule_run_any(e, trace);
-	if (mode_has_context()) {
-		put_fake_analy_ctx(e->fake_ctx);
-		hlist_del(&e->fake_ctx->hash);
-	}
-
 	if (!trace_mode_diag())
 		goto out;
 
@@ -740,7 +756,7 @@ out:
 	return RESULT_CONT;
 }
 
-DEFINE_ANALYZER_EXIT(clone, TRACE_MODE_CTX_MASK)
+DEFINE_ANALYZER_EXIT(clone, TRACE_MODE_CTX_MASK | TRACE_MODE_TINY_MASK)
 {
 	analy_entry_t *entry = e->entry;
 
@@ -757,7 +773,7 @@ out:
 	return RESULT_CONSUME;
 }
 
-DEFINE_ANALYZER_EXIT(ret, TRACE_MODE_CTX_MASK)
+DEFINE_ANALYZER_EXIT(ret, TRACE_MODE_CTX_MASK | TRACE_MODE_TINY_MASK)
 {
 	int ret = (int) e->event.val;
 

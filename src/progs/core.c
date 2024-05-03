@@ -34,7 +34,7 @@ struct {
 	__uint(type, BPF_MAP_TYPE_LRU_HASH);
 	__uint(max_entries, 102400);
 	__uint(key_size, sizeof(u64));
-	__uint(value_size, sizeof(u8));
+	__uint(value_size, sizeof(u64));
 } m_matched SEC(".maps");
 
 struct {
@@ -143,12 +143,68 @@ static __always_inline int check_rate_limit(bpf_args_t *args)
 	return 0;
 }
 
+static inline void handle_tiny_output(context_info_t *info)
+{
+	tiny_event_t e = {
+		.func = info->func,
+		.meta = FUNC_TYPE_TINY,
+		.key = (u64)(void *)info->skb,
+		.ts = bpf_ktime_get_ns(),
+	};
+
+	EVENT_OUTPUT(info->ctx, e);
+}
+
+static inline bool mode_has_context(bpf_args_t *args)
+{
+	return args->trace_mode & TRACE_MODE_CTX_MASK;
+}
+
+static inline bool func_is_free(u16 func)
+{
+	return func == INDEX___kfree_skb ||
+	       func == INDEX_kfree_skb_partial ||
+	       func == INDEX_consume_skb ||
+	       func == INDEX_kfree_skb;
+}
+
+static inline int handle_destroy(context_info_t *info)
+{
+	if (mode_has_context(info->args) && info->match_val)
+		bpf_map_delete_elem(&m_matched, &info->skb);
+	return 0;
+}
+
+static inline void try_handle_destroy(context_info_t *info)
+{
+	if (func_is_free(info->func))
+		handle_destroy(info);
+}
+
+static inline int pre_tiny_output(context_info_t *info)
+{
+	handle_tiny_output(info);
+	if (func_is_free(info->func))
+		bpf_map_delete_elem(&m_matched, &info->skb);
+	else
+		get_ret(info->func);
+	return 1;
+}
+
 static inline int pre_handle_entry(context_info_t *info)
 {
 	bpf_args_t *args = (void *)info->args;
 
 	if (!args->ready || check_rate_limit(args))
 		return -1;
+
+	if (mode_has_context(args)) {
+		u64 *match_val = bpf_map_lookup_elem(&m_matched, &info->skb);
+
+		/* skip handle_entry() for tiny case */
+		if (match_val && args->tiny_output)
+			return pre_tiny_output(info);
+	}
 
 	return 0;
 }
@@ -246,13 +302,6 @@ err:
 	return -1;
 }
 
-static inline int handle_destroy(context_info_t *info)
-{
-	if (info->args->trace_mode & TRACE_MODE_CTX_MASK)
-		bpf_map_delete_elem(&m_matched, &info->skb);
-	return 0;
-}
-
 static inline int default_handle_entry(context_info_t *info)
 {
 	bool detail = info->args->detail;
@@ -283,6 +332,7 @@ static inline int default_handle_entry(context_info_t *info)
 		do_event_output(info, size);
 	}
 
+	try_handle_destroy(info);
 	return 0;
 }
 
@@ -334,27 +384,6 @@ DEFINE_TP(kfree_skb, skb, kfree_skb, 0, 8)
 	e->reason = reason;
 
 	handle_entry_output(info, e);
-	handle_destroy(info);
-	return 0;
-}
-
-DEFINE_TP(consume_skb, skb, consume_skb, 0, 8)
-{
-	default_handle_entry(info);
-	handle_destroy(info);
-	return 0;
-}
-
-DEFINE_KPROBE_SKB(__kfree_skb, 0, 1)
-{
-	default_handle_entry(info);
-	handle_destroy(info);
-	return 0;
-}
-
-DEFINE_KPROBE_SKB(kfree_skb_partial, 0, 2)
-{
-	default_handle_entry(info);
 	handle_destroy(info);
 	return 0;
 }
@@ -511,7 +540,8 @@ struct nft_pktinfo___new {
  * This function is used to the kernel version that don't support
  * kernel module BTF.
  */
-DEFINE_KPROBE_INIT(nft_do_chain, nft_do_chain, 2)
+DEFINE_KPROBE_INIT(nft_do_chain, nft_do_chain, 2,
+		   .skb = _(((struct nft_pktinfo *)ctx_get_arg(ctx, 0))->skb))
 {
 	struct nft_pktinfo *pkt = info_get_arg(info, 0);
 	void *chain_name, *table_name;
@@ -520,10 +550,6 @@ DEFINE_KPROBE_INIT(nft_do_chain, nft_do_chain, 2)
 	struct nft_table *table;
 	DECLARE_EVENT(nf_event_t, e)
 
-	/* skb is always the 1st memory in struct nft_pktinfo in every
-	 * kernel version, so we can skip CO-RE here.
-	 */
-	info->skb = (struct sk_buff *)_(pkt->skb);
 	if (handle_entry(info))
 		return 0;
 

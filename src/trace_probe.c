@@ -268,7 +268,7 @@ static bool probe_trace_supported()
 }
 
 analyzer_t probe_analyzer = {
-	.mode = TRACE_MODE_CTX_MASK,
+	.mode = TRACE_MODE_CTX_MASK | TRACE_MODE_TINY_MASK,
 	.analy_entry = probe_analy_entry,
 	.analy_exit = probe_analy_exit,
 };
