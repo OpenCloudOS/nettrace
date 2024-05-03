@@ -20,5 +20,6 @@ int ts_print_packet(char *buf, packet_t *pkt, char *minfo,
 		    bool date_format);
 int ts_print_sock(char *buf, sock_t *ske, char *minfo, bool date_format);
 int base_print_packet(char *buf, packet_t *pkt);
+int ts_print_ts(char *buf, u64 ts, bool date_format);
 
 #endif

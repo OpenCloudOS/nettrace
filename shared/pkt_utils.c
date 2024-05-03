@@ -30,25 +30,29 @@ static struct tm *convert_ts_to_date(u64 ts)
 	return localtime(&tmp);
 }
 
+int ts_print_ts(char *buf, u64 ts, bool date_format)
+{
+	struct tm *p;
+
+	if (date_format) {
+		p = convert_ts_to_date(ts);
+		return sprintf(buf, "[%d-%d-%d %02d:%02d:%02d.%06lld] ", 1900 + p->tm_year,
+			       1 + p->tm_mon, p->tm_mday, p->tm_hour, p->tm_min,
+			       p->tm_sec, ts % 1000000000 / 1000);
+	} else {
+		return sprintf(buf, "[%llu.%06llu] ", ts / 1000000000,
+			       ts % 1000000000 / 1000);
+	}
+}
+
 int ts_print_packet(char *buf, packet_t *pkt, char *minfo,
 		    bool date_format)
 {
 	static char saddr[MAX_ADDR_LENGTH], daddr[MAX_ADDR_LENGTH];
-	u64 ts = pkt->ts;
-	struct tm *p;
 	u8 flags, l4;
-	int pos = 0;
+	int pos;
 
-	if (date_format) {
-		p = convert_ts_to_date(ts);
-		BUF_FMT("[%d-%d-%d %02d:%02d:%02d.%06lld] ", 1900 + p->tm_year,
-			1 + p->tm_mon, p->tm_mday, p->tm_hour, p->tm_min,
-			p->tm_sec, ts % 1000000000 / 1000);
-	} else {
-		BUF_FMT("[%llu.%06llu] ", ts / 1000000000,
-			ts % 1000000000 / 1000);
-	}
-
+	pos = ts_print_ts(buf, pkt->ts, date_format);
 	if (minfo)
 		BUF_FMT("%s", minfo);
 
