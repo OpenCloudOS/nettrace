@@ -23,6 +23,7 @@ typedef struct {
 		u32 matched;
 	};
 	u16 func;
+	u8  func_status;
 } context_info_t;
 
 /* init the skb by the index of func args */

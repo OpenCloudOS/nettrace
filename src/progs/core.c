@@ -160,12 +160,19 @@ static inline bool mode_has_context(bpf_args_t *args)
 	return args->trace_mode & TRACE_MODE_BPF_CTX_MASK;
 }
 
-static inline bool func_is_free(u16 func)
+static __always_inline u8 get_func_status(context_info_t *info)
 {
-	return func == INDEX___kfree_skb ||
-	       func == INDEX_kfree_skb_partial ||
-	       func == INDEX_consume_skb ||
-	       func == INDEX_kfree_skb;
+	u16 func = info->func;
+
+	if (func >= TRACE_MAX)
+		return 0;
+
+	return info->args->trace_status[func];
+}
+
+static inline bool func_is_free(u8 status)
+{
+	return status & (1 << FUNC_STSTUS_FREE);
 }
 
 static inline int handle_destroy(context_info_t *info)
@@ -177,7 +184,7 @@ static inline int handle_destroy(context_info_t *info)
 
 static inline void try_handle_destroy(context_info_t *info)
 {
-	if (func_is_free(info->func))
+	if (func_is_free(info->func_status))
 		handle_destroy(info);
 }
 
@@ -194,7 +201,7 @@ static inline void init_ctx_match(void *skb, u16 func)
 static inline int pre_tiny_output(context_info_t *info)
 {
 	handle_tiny_output(info);
-	if (func_is_free(info->func))
+	if (func_is_free(info->func_status))
 		bpf_map_delete_elem(&m_matched, &info->skb);
 	else
 		get_ret(info->func);
@@ -208,7 +215,7 @@ static inline int pre_handle_latency(context_info_t *info,
 	u32 delta;
 
 	if (match_val) {
-		if (func_is_free(info->func)) {
+		if (func_is_free(info->func_status)) {
 			delta = match_val->ts2 - match_val->ts1;
 			/* skip a single match function */
 			if (!match_val->func2 || delta < args->latency_min) {
@@ -224,7 +231,7 @@ static inline int pre_handle_latency(context_info_t *info,
 		return 1;
 	} else {
 		/* skip single free function for latency total mode */
-		if (func_is_free(info->func))
+		if (func_is_free(info->func_status))
 			return 1;
 		/* if there isn't any filter, skip handle_entry() */
 		if (!args->has_filter) {
@@ -247,6 +254,7 @@ static inline int pre_handle_entry(context_info_t *info)
 	if (!args->ready || check_rate_limit(args))
 		return -1;
 
+	info->func_status = get_func_status(info);
 	if (mode_has_context(args)) {
 		match_val_t *match_val = bpf_map_lookup_elem(&m_matched,
 							     &info->skb);

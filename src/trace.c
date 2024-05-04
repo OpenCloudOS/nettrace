@@ -572,6 +572,11 @@ static void trace_exec_cond()
 	}
 }
 
+static void trace_set_status(int func, int status)
+{
+	trace_ctx.bpf_args.trace_status[func] |= (1 << status);
+}
+
 static int trace_prepare_traces()
 {
 	char func[128], name[136];
@@ -587,6 +592,9 @@ static int trace_prepare_traces()
 	 * load manually.
 	 */
 	trace_for_each(trace) {
+		if (TRACE_HAS_ANALYZER(trace, free) || TRACE_HAS_ANALYZER(trace, drop))
+			trace_set_status(trace->index, FUNC_STSTUS_FREE);
+
 		if (trace_is_invalid(trace) || !trace_is_enable(trace))
 			continue;
 

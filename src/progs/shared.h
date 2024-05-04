@@ -5,6 +5,8 @@
 
 #include <skb_shared.h>
 
+#include "kprobe_trace.h"
+
 typedef struct {
 	pkt_args_t pkt;
 	u32  trace_mode;
@@ -24,6 +26,7 @@ typedef struct {
 	u32  latency_min;
 	int  __rate_limit;
 	u64  __last_update;
+	u8   trace_status[TRACE_MAX];
 } bpf_args_t;
 
 typedef struct {
@@ -85,6 +88,11 @@ enum {
 	FUNC_TYPE_TINY,
 	FUNC_TYPE_TRACING_RET,
 	FUNC_TYPE_MAX,
+};
+
+enum {
+	FUNC_STSTUS_FREE = 1,
+	FUNC_STSTUS_SKB_INVAL,
 };
 
 #define DEFINE_EVENT(name, fields...)		\
