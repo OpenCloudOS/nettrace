@@ -34,7 +34,7 @@ struct {
 	__uint(type, BPF_MAP_TYPE_LRU_HASH);
 	__uint(max_entries, 102400);
 	__uint(key_size, sizeof(u64));
-	__uint(value_size, sizeof(u64));
+	__uint(value_size, sizeof(match_val_t));
 } m_matched SEC(".maps");
 
 struct {
@@ -157,7 +157,7 @@ static inline void handle_tiny_output(context_info_t *info)
 
 static inline bool mode_has_context(bpf_args_t *args)
 {
-	return args->trace_mode & TRACE_MODE_CTX_MASK;
+	return args->trace_mode & TRACE_MODE_BPF_CTX_MASK;
 }
 
 static inline bool func_is_free(u16 func)
@@ -170,7 +170,7 @@ static inline bool func_is_free(u16 func)
 
 static inline int handle_destroy(context_info_t *info)
 {
-	if (mode_has_context(info->args) && info->match_val)
+	if (mode_has_context(info->args) && info->matched)
 		bpf_map_delete_elem(&m_matched, &info->skb);
 	return 0;
 }
@@ -179,6 +179,16 @@ static inline void try_handle_destroy(context_info_t *info)
 {
 	if (func_is_free(info->func))
 		handle_destroy(info);
+}
+
+static inline void init_ctx_match(void *skb, u16 func)
+{
+	match_val_t _matched = {
+		.ts1 = bpf_ktime_get_ns() / 1000,
+		.func1 = func,
+	};
+
+	bpf_map_update_elem(&m_matched, &skb, &_matched, 0);
 }
 
 static inline int pre_tiny_output(context_info_t *info)
@@ -191,6 +201,45 @@ static inline int pre_tiny_output(context_info_t *info)
 	return 1;
 }
 
+static inline int pre_handle_latency(context_info_t *info,
+				    match_val_t *match_val)
+{
+	bpf_args_t *args = (void *)info->args;
+	u32 delta;
+
+	if (match_val) {
+		if (func_is_free(info->func)) {
+			delta = match_val->ts2 - match_val->ts1;
+			/* skip a single match function */
+			if (!match_val->func2 || delta < args->latency_min) {
+				bpf_map_delete_elem(&m_matched, &info->skb);
+				return 1;
+			}
+			info->match_val = *match_val;
+			return 0;
+		}
+
+		match_val->ts2 = bpf_ktime_get_ns() / 1000;
+		match_val->func2 = info->func;
+		return 1;
+	} else {
+		/* skip single free function for latency total mode */
+		if (func_is_free(info->func))
+			return 1;
+		/* if there isn't any filter, skip handle_entry() */
+		if (!args->has_filter) {
+			init_ctx_match(info->skb, info->func);
+			return 1;
+		}
+	}
+	return 0;
+}
+
+static inline bool trace_mode_latency(bpf_args_t *args)
+{
+	return args->trace_mode & TRACE_MODE_LATENCY_MASK;
+}
+
 static inline int pre_handle_entry(context_info_t *info)
 {
 	bpf_args_t *args = (void *)info->args;
@@ -199,14 +248,32 @@ static inline int pre_handle_entry(context_info_t *info)
 		return -1;
 
 	if (mode_has_context(args)) {
-		u64 *match_val = bpf_map_lookup_elem(&m_matched, &info->skb);
+		match_val_t *match_val = bpf_map_lookup_elem(&m_matched,
+							     &info->skb);
 
 		/* skip handle_entry() for tiny case */
 		if (match_val && args->tiny_output)
 			return pre_tiny_output(info);
+
+		if (trace_mode_latency(args))
+			return pre_handle_latency(info, match_val);
+
+		if (match_val)
+			info->match_val = *match_val;
 	}
 
 	return 0;
+}
+
+static inline void try_set_latency(bpf_args_t *args, event_t *e,
+				   match_val_t *val)
+{
+	if (!val->func1 || !trace_mode_latency(args))
+		return;
+
+	e->latency = val->ts2 - val->ts1;
+	e->latency_func1 = val->func1;
+	e->latency_func2 = val->func2;
 }
 
 static inline int handle_entry(context_info_t *info)
@@ -217,22 +284,19 @@ static inline int handle_entry(context_info_t *info)
 	detail_event_t *detail;
 	event_t *e = info->e;
 	bool *matched = NULL;
-	bool skip_life;
+	bool mode_ctx;
 	packet_t *pkt;
 	u32 pid;
 	int err;
 
 	pr_debug_skb("begin to handle, func=%d", info->func);
-	skip_life = !(args->trace_mode & TRACE_MODE_CTX_MASK) ||
-		args->pkt_fixed;
 	pid = (u32)bpf_get_current_pid_tgid();
+	mode_ctx = mode_has_context(args);
 	pkt = &e->pkt;
-	if (!skip_life) {
-		matched = bpf_map_lookup_elem(&m_matched, &skb);
-		if (matched && *matched) {
-			probe_parse_skb(skb, pkt, NULL);
-			goto skip_filter;
-		}
+
+	if (info->match_val) {
+		probe_parse_skb(skb, pkt, NULL);
+		goto skip_filter;
 	}
 
 	if (args_check(args, pid, pid))
@@ -257,9 +321,11 @@ static inline int handle_entry(context_info_t *info)
 	if (err)
 		goto err;
 
-	if (!skip_life) {
-		bool _matched = true;
-		bpf_map_update_elem(&m_matched, &skb, &_matched, 0);
+	if (mode_ctx) {
+		init_ctx_match(skb, info->func);
+		/* latency total mode with filter condition case */
+		if (trace_mode_latency(args))
+			return 1;
 	}
 
 skip_filter:
@@ -291,11 +357,13 @@ out:
 	e->key = (u64)(void *)skb;
 	e->func = info->func;
 
+	try_set_latency(args, e, &info->match_val);
+
 #ifdef __PROG_TYPE_TRACING
 	e->retval = info->retval;
 #endif
 
-	if (!skip_life)
+	if (mode_ctx)
 		get_ret(info->func);
 	return 0;
 err:

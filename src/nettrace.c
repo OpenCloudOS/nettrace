@@ -173,6 +173,11 @@ static void do_parse_args(int argc, char *argv[])
 			.desc = "filter by the minial last-acked rtt in ms",
 		},
 		{
+			.lname = "latency-show", .dest = &trace_args->latency_show,
+			.type = OPTION_BOOL,
+			.desc = "show latency between kernel functions",
+		},
+		{
 			.lname = "latency", .dest = &trace_args->latency,
 			.type = OPTION_BOOL,
 			.desc = "enable 'latency' mode",
@@ -247,7 +252,7 @@ static void do_parse_args(int argc, char *argv[])
 		},
 #ifdef BPF_DEBUG
 		{
-			.lname = "bpf-debug", .dest = &bpf_args->bpf_debug,
+			.lname = "bpf-debug", .dest = &bpf_args->pkt.bpf_debug,
 			.type = OPTION_BOOL,
 			.desc = "show bpf debug information",
 		},

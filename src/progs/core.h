@@ -2,6 +2,13 @@
 #define _H_PROG_CORE
 
 typedef struct {
+	u16 func1;
+	u16 func2;
+	u32 ts1;
+	u32 ts2;
+} match_val_t;
+
+typedef struct {
 	/* the bpf context args */
 	void *ctx;
 	struct sk_buff *skb;
@@ -12,7 +19,8 @@ typedef struct {
 	union {
 		/* used by fexit to pass the retval to event */
 		u64 retval;
-		u64 *match_val;
+		match_val_t match_val;
+		u32 matched;
 	};
 	u16 func;
 } context_info_t;

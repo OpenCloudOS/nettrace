@@ -51,7 +51,7 @@ enum {
 
 typedef struct trace {
 	/* name of the kernel function this trace targeted */
-	char	name[128];
+	char	name[64];
 	char	*desc;
 	char	*msg;
 	/* name of the eBPF program */
@@ -82,8 +82,6 @@ typedef struct trace {
 	bool	def;
 	/* if the BPF program is custom of this trace */
 	bool	custom;
-	/* latency point */
-	bool	point;
 	int	monitor;
 	int	index;
 	int	arg_count;
@@ -112,6 +110,7 @@ typedef struct trace_args {
 	bool sock;
 	bool netns_current;
 	bool force;
+	bool latency_show;
 	bool rtt;
 	bool rtt_detail;
 	bool latency;
@@ -153,7 +152,6 @@ typedef struct {
 	/* enable detail output */
 	bool		detail;
 	bool		skip_last;
-	bool		latency;
 	bool		trace_clone;
 	struct bpf_object *obj;
 } trace_context_t;

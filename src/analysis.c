@@ -134,9 +134,9 @@ static analy_entry_t *analy_entry_from_dlist(data_list_t *dlist)
 	return entry;
 }
 
-static void analy_entry_handle(analy_entry_t *entry, analy_entry_t *prev)
+static void analy_entry_output(analy_entry_t *entry, analy_entry_t *prev)
 {
-	static char buf[1024], tinfo[256];
+	static char buf[1024], tinfo[512], func_range[512], __func_range[500];
 	bool date = trace_ctx.args.date;
 	event_t *e = entry->event;
 	rule_t *rule;
@@ -150,6 +150,17 @@ static void analy_entry_handle(analy_entry_t *entry, analy_entry_t *prev)
 		goto do_latency;
 	}
 
+	if (trace_ctx.mode == TRACE_MODE_LATENCY) {
+		trace_t *t1, *t2;
+
+		t1 = get_trace(e->latency_func1);
+		t2 = get_trace(e->latency_func2);
+		sprintf(__func_range, "%s -> %s", t1->name, t2->name);
+		sprintf(func_range, "[%-36s]", __func_range);
+	} else {
+		func_range[0] = '\0';
+	}
+
 	if (trace_ctx.detail) {
 		detail_event_t *detail = (void *)e;
 		static char ifbuf[IF_NAMESIZE];
@@ -160,11 +171,11 @@ static void analy_entry_handle(analy_entry_t *entry, analy_entry_t *prev)
 			ifname = ifname ?: "";
 		}
 
-		sprintf(tinfo, "[%x][%-20s][cpu:%-3u][%-5s][pid:%-7u][%-12s][ns:%u] ",
-			detail->key, t->name, entry->cpu, ifname,
+		sprintf(tinfo, "[%x][%-20s]%s[cpu:%-3u][%-5s][pid:%-7u][%-12s][ns:%u] ",
+			detail->key, t->name, func_range, entry->cpu, ifname,
 			detail->pid, detail->task, detail->netns);
 	} else if (trace_ctx.mode != TRACE_MODE_DROP) {
-		sprintf(tinfo, "[%-20s] ", t->name);
+		sprintf(tinfo, "[%-20s]%s ", t->name, func_range);
 	}
 
 	if (trace_using_sk(t))
@@ -177,7 +188,7 @@ static void analy_entry_handle(analy_entry_t *entry, analy_entry_t *prev)
 			    (int)entry->priv);
 
 do_latency:
-	if (prev && trace_ctx.latency) {
+	if (prev && trace_ctx.args.latency_show) {
 		u32 delta;
 
 		delta = get_entry_dela_us(entry, prev);
@@ -240,8 +251,8 @@ static void analy_diag_handle(analy_ctx_t *ctx)
 	trace_t *trace;
 	int i = 0;
 
-		pr_info("---------------- "PFMT_EMPH_STR("ANALYSIS RESULT")
-			" ---------------------\n");
+	pr_info("---------------- "PFMT_EMPH_STR("ANALYSIS RESULT")
+		" ---------------------\n");
 
 	list_for_each_entry(entry, &ctx->entries, list) {
 		if (!entry->rule || entry->rule->level == RULE_INFO)
@@ -272,7 +283,7 @@ static void analy_diag_handle(analy_ctx_t *ctx)
 	}
 }
 
-void analy_ctx_handle(analy_ctx_t *ctx)
+void analy_ctx_output(analy_ctx_t *ctx)
 {
 	analy_entry_t *entry, *prev = NULL;
 	struct list_head *head;
@@ -284,7 +295,7 @@ void analy_ctx_handle(analy_ctx_t *ctx)
 	    !ctx->status)
 		goto free_ctx;
 
-	if (trace_ctx.latency) {
+	if (trace_ctx.args.latency_show) {
 		latency = get_lifetime_us(ctx, true);
 		if (latency < trace_ctx.args.min_latency)
 			goto free_ctx;
@@ -299,12 +310,12 @@ void analy_ctx_handle(analy_ctx_t *ctx)
 		keys);
 	head = &ctx->entries;
 	list_for_each_entry(entry, head, list) {
-		analy_entry_handle(entry, prev);
+		analy_entry_output(entry, prev);
 		prev = entry;
 	}
 
-	if (trace_ctx.latency) {
-		pr_info("  total latency: %d.%03dms\n", latency / 1000,
+	if (trace_ctx.args.latency_show) {
+		pr_info("total latency: %d.%03dms\n", latency / 1000,
 			latency % 1000);
 	}
 
@@ -587,7 +598,7 @@ check_pending:
 	if (analy_ctx->refs <= 0) {
 		pr_debug("ctx(%llx) finished with %s\n", PTR2X(analy_ctx),
 			 trace ? trace->name : "");
-		analy_ctx_handle(analy_ctx);
+		analy_ctx_output(analy_ctx);
 	}
 }
 
@@ -637,7 +648,7 @@ static inline void entry_basic_poll(analy_entry_t *entry)
 		try_run_exit(trace, trace->analyzer, &analy_exit);
 	}
 
-	analy_entry_handle(entry, NULL);
+	analy_entry_output(entry, NULL);
 	skb_count++;
 }
 
@@ -703,6 +714,23 @@ int rtt_poll_handler()
 	}
 
 	return 0;
+}
+
+void latency_poll_handler(void *ctx, int cpu, void *data, u32 size)
+{
+	analy_entry_t entry = {
+		.event = data,
+		.cpu = cpu,
+	};
+	static char info[1024];
+	u32 delta;
+
+	delta = entry.event->latency;
+	sprintf(info, " latency: %d.%03dms", delta / 1000,
+		delta % 1000);
+	entry_set_msg(&entry, info);
+	analy_entry_output(&entry, NULL);
+	skb_count++;
 }
 
 DEFINE_ANALYZER_ENTRY(free, TRACE_MODE_CTX_MASK | TRACE_MODE_TINY_MASK)

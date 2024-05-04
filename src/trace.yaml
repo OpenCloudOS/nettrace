@@ -76,13 +76,11 @@ children:
     - name: __dev_queue_xmit:0
       analyzer: ret
       monitor: 1
-      point: true
       rules:
       - <<: *rule_ret_err
         msg: failed to queue packet to qdisc
         adv: too complex to say
     - name: dev_hard_start_xmit:0
-      point: true
       rules:
       - <<: *rule_msg
         msg: skb is successfully sent to the NIC driver
@@ -514,10 +512,8 @@ children:
   - name: __kfree_skb
     skb: 0
     analyzer: free
-    custom: 1
   - name: kfree_skb_partial:0
     analyzer: free
-    custom: 1
   - name: skb_clone
     skb: 0
     analyzer: clone
@@ -528,7 +524,6 @@ children:
   - name: consume_skb:0
     tp: skb/consume_skb
     skboffset: 8
-    custom: 1
     analyzer: free
     rules:
     - exp: any

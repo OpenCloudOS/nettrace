@@ -21,6 +21,7 @@ typedef struct {
 	u32  first_rtt;
 	u32  last_rtt;
 	u32  rate_limit;
+	u32  latency_min;
 	int  __rate_limit;
 	u64  __last_update;
 } bpf_args_t;
@@ -36,7 +37,11 @@ typedef struct {
 	union {
 		/* For FEXIT program only for now */
 		u64	retval;
-		u64	match_val;
+		struct {
+			u16 latency_func1;
+			u16 latency_func2;
+			u32 latency;
+		};
 	};
 #ifdef BPF_FEAT_STACK_TRACE
 	u32		stack_id;
@@ -192,9 +197,11 @@ typedef struct {
 #define TRACE_MODE_ALL_MASK					\
 	(TRACE_MODE_SKB_REQUIRE_MASK | TRACE_MODE_MONITOR_MASK |\
 	 TRACE_MODE_SOCK_REQUIRE_MASK)
-#define TRACE_MODE_CTX_MASK		\
+#define TRACE_MODE_BPF_CTX_MASK		\
 	(TRACE_MODE_DIAG_MASK | TRACE_MODE_TIMELINE_MASK |	\
 	 TRACE_MODE_LATENCY_MASK)
+#define TRACE_MODE_CTX_MASK		\
+	(TRACE_MODE_DIAG_MASK | TRACE_MODE_TIMELINE_MASK)
 
 #define __MACRO_SIZE(macro)	sizeof(#macro)
 #define MACRO_SIZE(macro)	__MACRO_SIZE(macro)

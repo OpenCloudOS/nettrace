@@ -267,17 +267,10 @@ static int trace_prepare_mode(trace_args_t *args)
 	case TRACE_MODE_TIMELINE:
 		/* enable skb clone trace */
 		trace_set_ret(&trace_skb_clone);
+		trace_ctx.skip_last = true;
 		break;
 	case TRACE_MODE_LATENCY:
-		trace_for_each(trace) {
-			if (!trace->point && strcmp(trace->parent->name, "life")) {
-				trace_set_invalid_reason(trace, "latency");
-				continue;
-			}
-		}
 		trace_set_invalid_reason(&trace_skb_clone, "latency");
-		trace_ctx.skip_last = true;
-		trace_ctx.latency = true;
 		break;
 	case TRACE_MODE_DROP:
 		if (!trace_ctx.drop_reason)
@@ -438,7 +431,7 @@ static int trace_prepare_args()
 	traces = args->traces;
 
 	if (args->basic + args->intel + args->drop + args->sock +
-	    args->rtt > 1) {
+	    args->rtt + args->latency > 1) {
 		pr_err("multi-mode specified!\n");
 		goto err;
 	}
@@ -486,19 +479,25 @@ static int trace_prepare_args()
 		get_drop_reason(1);
 	}
 
-	if (bpf_args->rate_limit && (trace_ctx.mode_mask & TRACE_MODE_CTX_MASK)) {
+	if (bpf_args->rate_limit && (trace_ctx.mode_mask & TRACE_MODE_BPF_CTX_MASK)) {
 		pr_err("--rate-limit can't be used in timeline(default)/diag mode\n");
 		goto err;
 	}
 	bpf_args->__rate_limit = bpf_args->rate_limit;
 	bpf_args->has_filter = trace_has_pkt_filter();
 
+	if (args->latency_show && !mode_has_context()) {
+		pr_err("--latency-show not supported in this mode\n");
+		goto err;
+	}
+
 	if (args->min_latency) {
-		if (!(trace_ctx.mode_mask & TRACE_MODE_CTX_MASK)) {
-			pr_err("--min-latency is only supported in context mode\n");
+		if (!(trace_ctx.mode_mask & TRACE_MODE_BPF_CTX_MASK)) {
+			pr_err("--min-latency is not supported in this mode\n");
 			goto err;
 		}
-		trace_ctx.latency = true;
+		args->latency_show = true;
+		bpf_args->latency_min = args->min_latency;
 	}
 
 	/* enable tcp_ack_update_rtt as monitor if rtt set */
@@ -576,7 +575,7 @@ static int trace_prepare_traces()
 	char func[128], name[136];
 	trace_t *trace;
 
-	if ((1 << trace_ctx.mode) & TRACE_MODE_CTX_MASK)
+	if ((1 << trace_ctx.mode) & TRACE_MODE_BPF_CTX_MASK)
 		trace_group_enable("life", 1);
 
 	trace_exec_cond();
@@ -815,8 +814,10 @@ int trace_bpf_load_and_attach()
 		break;
 	case TRACE_MODE_DIAG:
 	case TRACE_MODE_TIMELINE:
-	case TRACE_MODE_LATENCY:
 		trace_ctx.ops->trace_poll = ctx_poll_handler;
+		break;
+	case TRACE_MODE_LATENCY:
+		trace_ctx.ops->trace_poll = latency_poll_handler;
 		break;
 	case TRACE_MODE_RTT:
 		trace_ctx.ops->raw_poll = rtt_poll_handler;
