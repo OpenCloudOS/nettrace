@@ -401,13 +401,16 @@ static void trace_check_sock_skb()
 			trace_set_invalid_reason(trace, "sock or sk mode");
 }
 
-static void trace_prepare_pesudo(trace_args_t *args)
+static void trace_prepare_pesudo(trace_args_t *args, bpf_args_t *bpf_args)
 {
 	if (args->rtt_detail) {
 		args->traces = "tcp_ack_update_rtt";
 		args->sock = true;
 		args->rtt = false;
 	}
+
+	if (bpf_args->latency_summary)
+		args->latency = true;
 }
 
 static void trace_enable_default()
@@ -429,7 +432,7 @@ static int trace_prepare_args()
 	char *traces;
 	int err;
 
-	trace_prepare_pesudo(args);
+	trace_prepare_pesudo(args, bpf_args);
 	traces = args->traces;
 
 	if (args->basic + args->intel + args->drop + args->sock +
@@ -827,10 +830,13 @@ int trace_bpf_load_and_attach()
 		trace_ctx.ops->trace_poll = ctx_poll_handler;
 		break;
 	case TRACE_MODE_LATENCY:
-		trace_ctx.ops->trace_poll = latency_poll_handler;
+		if (trace_ctx.bpf_args.latency_summary)
+			trace_ctx.ops->raw_poll = stats_poll_handler;
+		else
+			trace_ctx.ops->trace_poll = latency_poll_handler;
 		break;
 	case TRACE_MODE_RTT:
-		trace_ctx.ops->raw_poll = rtt_poll_handler;
+		trace_ctx.ops->raw_poll = stats_poll_handler;
 	default:
 		break;
 	}

@@ -42,7 +42,7 @@ struct {
 	__uint(key_size, sizeof(int));
 	__uint(value_size, sizeof(__u64));
 	__uint(max_entries, 32);
-} m_rtt_stats SEC(".maps");
+} m_stats SEC(".maps");
 
 #ifdef BPF_FEAT_STACK_TRACE
 static inline void try_trace_stack(context_info_t *info)
@@ -208,8 +208,25 @@ static inline int pre_tiny_output(context_info_t *info)
 	return 1;
 }
 
+static __always_inline void update_stats(u32 val)
+{
+	u32 key = 0, i = 0, tmp = 2;
+	u64 *stats;
+
+	#pragma clang loop unroll_count(16)
+	for (; i < 16; i++) {
+		if (val < tmp)
+			break;
+		tmp <<= 1;
+		key++;
+	}
+	stats = bpf_map_lookup_elem(&m_stats, &key);
+	if (stats)
+		(*stats)++;
+}
+
 static inline int pre_handle_latency(context_info_t *info,
-				    match_val_t *match_val)
+				     match_val_t *match_val)
 {
 	bpf_args_t *args = (void *)info->args;
 	u32 delta;
@@ -219,6 +236,11 @@ static inline int pre_handle_latency(context_info_t *info,
 			delta = match_val->ts2 - match_val->ts1;
 			/* skip a single match function */
 			if (!match_val->func2 || delta < args->latency_min) {
+				bpf_map_delete_elem(&m_matched, &info->skb);
+				return 1;
+			}
+			if (args->latency_summary) {
+				update_stats(delta);
 				bpf_map_delete_elem(&m_matched, &info->skb);
 				return 1;
 			}
@@ -676,8 +698,7 @@ DEFINE_KPROBE_INIT(inet_listen, inet_listen, 2,
 DEFINE_KPROBE_INIT(tcp_ack_update_rtt, tcp_ack_update_rtt, 6,
 		   .sk = ctx_get_arg(ctx, 0))
 {
-	u32 key = 0, i = 0, tmp = 2, last_rtt;
-	u64 first_rtt, *stats;
+	u64 first_rtt, last_rtt;
 
 	first_rtt = (u64)info_get_arg(info, 2);
 	last_rtt = (u64)info_get_arg(info, 4);
@@ -692,8 +713,10 @@ DEFINE_KPROBE_INIT(tcp_ack_update_rtt, tcp_ack_update_rtt, 6,
 		return 0;
 
 	if (info->args->trace_mode & TRACE_MODE_RTT_MASK &&
-	    !info->args->has_filter)
-		goto do_stats;
+	    !info->args->has_filter) {
+		update_stats(first_rtt);
+		return 0;
+	}
 
 	DECLARE_EVENT(rtt_event_t, e)
 
@@ -709,20 +732,6 @@ DEFINE_KPROBE_INIT(tcp_ack_update_rtt, tcp_ack_update_rtt, 6,
 	e->last_rtt = last_rtt;
 
 	handle_event_output(info, e);
-	return 0;
-
-do_stats:
-#pragma clang loop unroll_count(16)
-	for (; i < 16; i++) {
-		if (first_rtt < tmp)
-			break;
-		tmp <<= 1;
-		key++;
-	}
-	stats = bpf_map_lookup_elem(&m_rtt_stats, &key);
-	if (stats)
-		(*stats)++;
-
 	return 0;
 }
 

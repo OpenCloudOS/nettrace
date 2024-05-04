@@ -675,22 +675,31 @@ void async_poll_handler(void *ctx, int cpu, void *data, u32 size)
 	do_async_poll(cpu, data, size, dlist_poll_cb);
 }
 
-int rtt_poll_handler()
+int stats_poll_handler()
 {
-	int map_fd = bpf_object__find_map_fd_by_name(trace_ctx.obj, "m_rtt_stats");
+	int map_fd = bpf_object__find_map_fd_by_name(trace_ctx.obj, "m_stats");
+	char buf[128], *header, *unit;
 	__u64 count[16];
-	char buf[128];
+	
 	int i;
 
 	if (!map_fd) {
-		pr_err("failed to find BPF map m_rtt_stats\n");
+		pr_err("failed to find BPF map m_stats\n");
 		return -ENOTSUP;
+	}
+
+	if (trace_ctx.mode_mask & TRACE_MODE_RTT_MASK) {
+		header = "rtt distribution:\n";
+		unit = "ms";
+	} else {
+		header = "latency distribution:\n";
+		unit = "us";
 	}
 
 	while (!trace_stopped()) {
 		int start = 0, j;
 
-		pr_info("rtt distribution:\n");
+		pr_info(header);
 		for (i = 0; i < 16; i++)
 			bpf_map_lookup_elem(map_fd, &i, count + i);
 
@@ -706,8 +715,8 @@ int rtt_poll_handler()
 				break;
 
 			start = 1 << i;
-			sprintf(buf, "%d - %5dms", start == 1 ? 0 : start,
-				(start << 1) - 1);
+			sprintf(buf, "%d - %5d%s", start == 1 ? 0 : start,
+				(start << 1) - 1, unit);
 			pr_info("%32s: %llu\n", buf, count[i]);
 		}
 		sleep(1);

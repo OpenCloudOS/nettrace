@@ -187,6 +187,11 @@ static void do_parse_args(int argc, char *argv[])
 			.type = OPTION_BOOL,
 			.desc = "enable 'latency' mode",
 		},
+		{
+			.lname = "latency-summary", .dest = &bpf_args->latency_summary,
+			.type = OPTION_BOOL,
+			.desc = "show latency by statistics",
+		},
 		{ .type = OPTION_BLANK },
 		{
 			.lname = "trace", .sname = 't',
