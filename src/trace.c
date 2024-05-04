@@ -265,8 +265,10 @@ static int trace_prepare_mode(trace_args_t *args)
 	case TRACE_MODE_DIAG:
 		trace_all_set_ret();
 	case TRACE_MODE_TIMELINE:
-		/* enable skb clone trace */
-		trace_set_ret(&trace_skb_clone);
+		if (!trace_ctx.args.traces_noclone) {
+			/* enable skb clone trace */
+			trace_set_ret(&trace_skb_clone);
+		}
 		trace_ctx.skip_last = true;
 		break;
 	case TRACE_MODE_LATENCY:

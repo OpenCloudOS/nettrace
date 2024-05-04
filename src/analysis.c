@@ -788,6 +788,9 @@ DEFINE_ANALYZER_EXIT(clone, TRACE_MODE_CTX_MASK | TRACE_MODE_TINY_MASK)
 {
 	analy_entry_t *entry = e->entry;
 
+	if (trace_ctx.args.traces_noclone)
+		return RESULT_CONT;
+
 	if (!entry || !e->event.val) {
 		pr_err("skb clone failed\n");
 		goto out;

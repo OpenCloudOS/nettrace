@@ -114,6 +114,7 @@ typedef struct trace_args {
 	bool rtt;
 	bool rtt_detail;
 	bool latency;
+	bool traces_noclone;
 	u32  min_latency;
 	char *traces;
 	char *traces_stack;

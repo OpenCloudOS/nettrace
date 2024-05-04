@@ -230,6 +230,11 @@ static void do_parse_args(int argc, char *argv[])
 			.desc = "print call stack for traces or group",
 		},
 		{
+			.lname = "trace-noclone", .dest = &trace_args->traces_noclone,
+			.type = OPTION_BOOL,
+			.desc = "don't trace skb clone",
+		},
+		{
 			.lname = "rate-limit", .dest = &bpf_args->rate_limit,
 			.type = OPTION_U32,
 			.desc = "limit the output to N/s, not valid in diag/default mode",
