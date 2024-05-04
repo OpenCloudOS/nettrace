@@ -269,7 +269,7 @@ static int trace_prepare_mode(trace_args_t *args)
 			/* enable skb clone trace */
 			trace_set_ret(&trace_skb_clone);
 		}
-		trace_ctx.skip_last = true;
+		trace_ctx.skip_last = !args->latency_free;
 		break;
 	case TRACE_MODE_LATENCY:
 		trace_set_invalid_reason(&trace_skb_clone, "latency");

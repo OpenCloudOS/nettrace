@@ -111,6 +111,7 @@ typedef struct trace_args {
 	bool netns_current;
 	bool force;
 	bool latency_show;
+	bool latency_free;
 	bool rtt;
 	bool rtt_detail;
 	bool latency;

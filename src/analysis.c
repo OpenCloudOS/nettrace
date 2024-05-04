@@ -296,7 +296,7 @@ void analy_ctx_output(analy_ctx_t *ctx)
 		goto free_ctx;
 
 	if (trace_ctx.args.latency_show) {
-		latency = get_lifetime_us(ctx, true);
+		latency = get_lifetime_us(ctx, trace_ctx.skip_last);
 		if (latency < trace_ctx.args.min_latency)
 			goto free_ctx;
 	}
