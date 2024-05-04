@@ -227,26 +227,31 @@ static void trace_all_set_ret()
 		trace_set_ret(trace);
 }
 
+static bool trace_has_pkt_filter()
+{
+	pkt_args_t *pkt_args = &trace_ctx.bpf_args.pkt;
+
+	return pkt_args->daddr || pkt_args->addr || pkt_args->saddr ||
+	       pkt_args->saddr_v6[0] || pkt_args->daddr_v6[0] ||
+	       pkt_args->addr_v6[0]|| pkt_args->sport ||
+	       pkt_args->dport|| pkt_args->port||
+	       pkt_args->l3_proto || pkt_args->l4_proto;
+}
+
 /* By default, don't allow to trace 'all' without any filter condition,
  * as it will cause performance problem.
  */
 static int trace_check_force()
 {
 	bpf_args_t *bpf_args = &trace_ctx.bpf_args;
-	pkt_args_t *pkt_args = &bpf_args->pkt;
 	trace_args_t *args = &trace_ctx.args;
 
 	if (args->drop || args->force || args->monitor || args->show_traces ||
 	    args->rtt)
 		return 0;
 
-	if (bpf_args->pid || pkt_args->saddr ||
-	    pkt_args->daddr || pkt_args->addr ||
-	    pkt_args->saddr_v6[0] || pkt_args->daddr_v6[0] ||
-	    pkt_args->addr_v6[0]|| pkt_args->sport ||
-	    pkt_args->dport|| pkt_args->port||
-	    pkt_args->l3_proto || pkt_args->l4_proto ||
-	    bpf_args->first_rtt || bpf_args->last_rtt ||
+	if (trace_has_pkt_filter() || bpf_args->pid || bpf_args->first_rtt ||
+	    bpf_args->last_rtt ||
 	    (args->traces && strcmp(args->traces, "all") != 0))
 		return 0;
 
@@ -486,6 +491,7 @@ static int trace_prepare_args()
 		goto err;
 	}
 	bpf_args->__rate_limit = bpf_args->rate_limit;
+	bpf_args->has_filter = trace_has_pkt_filter();
 
 	if (args->min_latency) {
 		if (!(trace_ctx.mode_mask & TRACE_MODE_CTX_MASK)) {

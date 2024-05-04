@@ -16,6 +16,7 @@ typedef struct {
 	bool ready;
 	bool stack;
 	bool tiny_output;
+	bool has_filter;
 	u16  stack_funs[MAX_FUNC_STACK];
 	u32  first_rtt;
 	u32  last_rtt;
