@@ -250,12 +250,13 @@ static inline int probe_parse_ip(void *ip, parse_ctx_t *ctx)
 		if (filter_any_enabled(ctx, addr))
 			goto err;
 
+#ifndef NT_DISABLE_IPV6
 		bpf_probe_read_kernel(pkt->l3.ipv6.saddr, 16, &ipv6->saddr);
 		bpf_probe_read_kernel(pkt->l3.ipv6.daddr, 16, &ipv6->daddr);
 		if (filter_ipv6_check(ctx, pkt->l3.ipv6.saddr,
 				      pkt->l3.ipv6.daddr))
 			goto err;
-
+#endif
 		pkt->proto_l4 = _(ipv6->nexthdr);
 		l4 = l4 ?: ip + sizeof(*ipv6);
 	} else {

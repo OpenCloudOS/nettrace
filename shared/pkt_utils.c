@@ -68,12 +68,14 @@ int ts_print_packet(char *buf, packet_t *pkt, char *minfo,
 		inet_ntop(AF_INET, (void *)&pkt->l3.ipv4.daddr, daddr,
 			  sizeof(daddr));
 		goto print_ip;
+#ifndef NT_DISABLE_IPV6
 	case ETH_P_IPV6:
 		inet_ntop(AF_INET6, (void *)pkt->l3.ipv6.saddr, saddr,
 			  sizeof(saddr));
 		inet_ntop(AF_INET6, (void *)pkt->l3.ipv6.daddr, daddr,
 			  sizeof(daddr));
 		goto print_ip;
+#endif
 	case ETH_P_ARP:
 		goto print_arp;
 	default:
@@ -226,12 +228,14 @@ int ts_print_sock(char *buf, sock_t *ske, char *minfo, bool date_format)
 		inet_ntop(AF_INET, (void *)&ske->l3.ipv4.daddr, daddr,
 			  sizeof(daddr));
 		goto print_ip;
+#if 0
 	case ETH_P_IPV6:
 		inet_ntop(AF_INET6, (void *)ske->l3.ipv6.saddr, saddr,
 			  sizeof(saddr));
 		inet_ntop(AF_INET6, (void *)ske->l3.ipv6.daddr, daddr,
 			  sizeof(daddr));
 		goto print_ip;
+#endif
 	default:
 		break;
 	}

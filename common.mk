@@ -53,6 +53,10 @@ ifdef NO_GLOBAL_DATA
 	CFLAGS		+= -DBPF_NO_GLOBAL_DATA
 endif
 
+ifdef DISABLE_IPV6
+	CFLAGS		+= -DNT_DISABLE_IPV6
+endif
+
 ifdef NO_BTF
 ifeq ($(wildcard $(HEADERS)),)
 $(error kernel headers not exist in COMPAT mode, please install it)

@@ -60,10 +60,12 @@ typedef struct {
 			u32	saddr;
 			u32	daddr;
 		} ipv4;
+#ifndef NT_DISABLE_IPV6
 		struct {
 			u8	saddr[16];
 			u8	daddr[16];
 		} ipv6;
+#endif
 	} l3;
 	union {
 		struct {
@@ -106,10 +108,12 @@ typedef struct {
 			u32	saddr;
 			u32	daddr;
 		} ipv4;
+#if 0
 		struct {
 			u8	saddr[16];
 			u8	daddr[16];
 		} ipv6;
+#endif
 	} l3;
 	union {
 		struct {
