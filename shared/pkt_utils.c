@@ -272,7 +272,7 @@ print_ip:
 		hz = hz > 0 ? hz : 1;
 		BUF_FMT(" mem:(w%u r%u)", ske->wqlen, ske->rqlen);
 		if (ske->timer_pending)
-			BUF_FMT(" timer:(%s, %ld.%03lds)",
+			BUF_FMT(" timer:(%s, %u.%03us)",
 				timer_name[ske->timer_pending],
 				ske->timer_out / hz,
 				((ske->timer_out * 1000) / hz) % 1000);

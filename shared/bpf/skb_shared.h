@@ -129,7 +129,7 @@ typedef struct {
 		} udp;
 		l4_min_t min;
 	} l4;
-	long timer_out;
+	u32 timer_out;
 	u32 wqlen;
 	u32 rqlen;
 	u16 proto_l3;
