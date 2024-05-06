@@ -92,8 +92,9 @@ enum {
 };
 
 enum {
-	FUNC_STSTUS_FREE = 1,
-	FUNC_STSTUS_SKB_INVAL,
+	FUNC_STATUS_FREE,
+	FUNC_STATUS_SK,
+	FUNC_STATUS_SKB_INVAL,
 };
 
 #define DEFINE_EVENT(name, fields...)		\

@@ -172,7 +172,7 @@ static __always_inline u8 get_func_status(context_info_t *info)
 
 static inline bool func_is_free(u8 status)
 {
-	return status & (1 << FUNC_STSTUS_FREE);
+	return status & (1 << FUNC_STATUS_FREE);
 }
 
 static inline int handle_destroy(context_info_t *info)
@@ -313,8 +313,8 @@ static inline int handle_entry(context_info_t *info)
 	struct net_device *dev;
 	detail_event_t *detail;
 	event_t *e = info->e;
-	bool *matched = NULL;
-	bool mode_ctx;
+	pkt_args_t *pkt_args;
+	bool mode_ctx, filter;
 	packet_t *pkt;
 	u32 pid;
 	int err;
@@ -322,30 +322,50 @@ static inline int handle_entry(context_info_t *info)
 	pr_debug_skb("begin to handle, func=%d", info->func);
 	pid = (u32)bpf_get_current_pid_tgid();
 	mode_ctx = mode_has_context(args);
+	filter = !info->matched;
+	pkt_args = &args->pkt;
 	pkt = &e->pkt;
 
-	if (info->match_val) {
-		probe_parse_skb(skb, pkt, NULL);
-		goto skip_filter;
-	}
-
-	if (args_check(args, pid, pid))
+	if (filter && args_check(args, pid, pid))
 		goto err;
 
-	/* in the monitor mode, perfer to trace skb, then sk */
-	if ((args->trace_mode == TRACE_MODE_MONITOR_MASK && !skb) ||
-	    args->trace_mode == TRACE_MODE_SOCK_MASK) {
+	/* why we call probe_parse_skb/probe_parse_pkt_sk double times?
+	 * because in the inline mode, 4.15 kernel will be confused
+	 * with pkt_args.
+	 */
+	if (!filter) {
+		if (info->func_status & (1 << FUNC_STATUS_SKB_INVAL)) {
+			if (!skb || !info->sk)
+				goto err;
+			/* in this case, hash context by skb, but parse sock */
+			probe_parse_pkt_sk(info->sk, pkt, NULL);
+		} else {
+			if (!skb) {
+				pr_bpf_debug("no skb available, func=%d", info->func);
+				goto err;
+			}
+			probe_parse_skb(skb, pkt, NULL);
+		}
+		goto no_filter;
+	}
+
+	if (info->func_status & (1 << FUNC_STATUS_SKB_INVAL)) {
+		if (!skb || !info->sk)
+			goto err;
+		/* in this case, hash context by skb, but parse sock */
+		err = probe_parse_pkt_sk(info->sk, pkt, pkt_args);
+	} else if (info->func_status & (1 << FUNC_STATUS_SK)) {
 		if (!info->sk) {
 			pr_bpf_debug("no sock available, func=%d", info->func);
 			goto err;
 		}
-		err = probe_parse_sk(info->sk, &e->ske, args);
+		err = probe_parse_sk(info->sk, &e->ske, pkt_args);
 	} else {
 		if (!skb) {
 			pr_bpf_debug("no skb available, func=%d", info->func);
 			goto err;
 		}
-		err = probe_parse_skb(skb, pkt, args);
+		err = probe_parse_skb(skb, pkt, pkt_args);
 	}
 
 	if (err)
@@ -358,8 +378,8 @@ static inline int handle_entry(context_info_t *info)
 			return 1;
 	}
 
-skip_filter:
-	if (filter_by_netns(info) && !matched)
+no_filter:
+	if (filter_by_netns(info) && filter)
 		goto err;
 
 	if (!args->detail)

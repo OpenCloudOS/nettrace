@@ -580,6 +580,31 @@ static void trace_set_status(int func, int status)
 	trace_ctx.bpf_args.trace_status[func] |= (1 << status);
 }
 
+static u8 trace_get_status(int func)
+{
+	return trace_ctx.bpf_args.trace_status[func];
+}
+
+static void trace_prepare_status()
+{
+	u32 mode = trace_ctx.mode_mask;
+	trace_t *trace;
+
+	trace_for_each(trace) {
+		if (TRACE_HAS_ANALYZER(trace, free) || TRACE_HAS_ANALYZER(trace, drop))
+			trace_set_status(trace->index, FUNC_STATUS_FREE);
+
+		/* in the monitor mode, perfer to trace skb, then sk */
+		if (!trace->skb || (mode & (TRACE_MODE_SOCK_MASK | TRACE_MODE_RTT_MASK))) {
+			if (trace->sk)
+				trace_set_status(trace->index, FUNC_STATUS_SK);
+		}
+
+		if (trace->skbinvalid && mode & TRACE_MODE_BPF_CTX_MASK)
+			trace_set_status(trace->index, FUNC_STATUS_SKB_INVAL);
+	}
+}
+
 static int trace_prepare_traces()
 {
 	char func[128], name[136];
@@ -595,9 +620,6 @@ static int trace_prepare_traces()
 	 * load manually.
 	 */
 	trace_for_each(trace) {
-		if (TRACE_HAS_ANALYZER(trace, free) || TRACE_HAS_ANALYZER(trace, drop))
-			trace_set_status(trace->index, FUNC_STSTUS_FREE);
-
 		if (trace_is_invalid(trace) || !trace_is_enable(trace))
 			continue;
 
@@ -630,10 +652,11 @@ static int trace_prepare_traces()
 		pr_debug("%s is made manual attach\n", trace->name);
 	}
 
+	pr_debug("finished to resolve kernel symbol\n");
+	trace_prepare_status();
+
 	if (trace_ctx.ops->prepare_traces)
 		trace_ctx.ops->prepare_traces();
-
-	pr_debug("finished to resolve kernel symbol\n");
 
 	return 0;
 }
@@ -688,8 +711,8 @@ static void trace_print_enabled()
 		} else {
 			fmt = "tracepoint";
 		}
-		pr_verb("\t%s: %s, prog: %s\n", fmt, trace->name,
-			trace->prog);
+		pr_verb("\t%s: %s, prog: %s, status: %x\n", fmt, trace->name,
+			trace->prog, trace_get_status(trace->index));
 	}
 }
 
