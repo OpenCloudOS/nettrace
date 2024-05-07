@@ -46,7 +46,7 @@ extern long int syscall (long int __sysno, ...);
 
 int
 perf_output_cond(int fd, perf_buffer_sample_fn cb, perf_buffer_lost_fn lost,
-		 bool *stop);
+		 int (*timeout)(int));
 
 static inline int perf_output(int fd, perf_buffer_sample_fn fn)
 {

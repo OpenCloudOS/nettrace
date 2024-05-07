@@ -325,7 +325,6 @@ void analy_ctx_output(analy_ctx_t *ctx)
 	pr_info("\n");
 free_ctx:
 	analy_ctx_free(ctx);
-	skb_count++;
 }
 
 static int try_run_entry(trace_t *trace, analyzer_t *analyzer,
@@ -649,7 +648,6 @@ static inline void entry_basic_poll(analy_entry_t *entry)
 	}
 
 	analy_entry_output(entry, NULL);
-	skb_count++;
 }
 
 static void dlist_poll_cb(data_list_t *dlist)
@@ -739,7 +737,6 @@ void latency_poll_handler(void *ctx, int cpu, void *data, u32 size)
 		delta % 1000);
 	entry_set_msg(&entry, info);
 	analy_entry_output(&entry, NULL);
-	skb_count++;
 }
 
 DEFINE_ANALYZER_ENTRY(free, TRACE_MODE_CTX_MASK | TRACE_MODE_TINY_MASK)

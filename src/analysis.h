@@ -92,8 +92,6 @@ typedef struct analyzer {
 	u32 mode;
 } analyzer_t;
 
-extern u32 skb_count;
-
 #define ANALY_ENTRY_RETURNED	(1 << 0)
 #define ANALY_ENTRY_EXTINFO	(1 << 1)
 #define ANALY_ENTRY_MSG		(1 << 2)
@@ -256,19 +254,6 @@ static inline analy_entry_t *analy_entry_alloc(void *data, u32 size)
 static inline bool mode_has_context()
 {
 	return trace_ctx.mode_mask & TRACE_MODE_CTX_MASK;
-}
-
-static inline int try_inc_skb_count()
-{
-	if (!trace_ctx.args.count)
-		return 0;
-
-	if (trace_ctx.args.count <= skb_count++) {
-		trace_stop();
-		return -1;
-	}
-
-	return 0;
 }
 
 static inline int func_get_type(void *data)

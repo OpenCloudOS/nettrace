@@ -37,7 +37,8 @@
 			info_init				\
 		};						\
 		if (pre_handle_entry(&info)) return 0;		\
-		return fake__##name(&info);			\
+		handle_entry_finish(&info, fake__##name(&info));\
+		return 0;					\
 	}							\
 	SEC("fentry/"#target)					\
 	int TRACE_NAME(name)(void **ctx)			\
@@ -49,7 +50,8 @@
 			info_init				\
 		};						\
 		if (pre_handle_entry(&info)) return 0;		\
-		return fake__##name(&info);			\
+		handle_entry_finish(&info, fake__##name(&info));\
+		return 0;					\
 	}							\
 	DECLARE_FAKE_FUNC(fake__##name)
 
@@ -86,7 +88,8 @@
 			info_init				\
 		};						\
 		if (pre_handle_entry(&info)) return 0;		\
-		return fake__##name(&info);			\
+		handle_entry_finish(&info, fake__##name(&info));\
+		return 0;					\
 	}							\
 	DECLARE_FAKE_FUNC(fake__##name)
 #define DEFINE_TP(name, cata, tp, skb_index, offset)		\

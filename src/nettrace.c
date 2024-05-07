@@ -340,19 +340,22 @@ err:
 static void do_exit(int code)
 {
 	static bool is_exited = false;
+	u64 event_count;
 
 	if (is_exited)
 		return;
 
 	is_exited = true;
+	event_count = get_event_count();
+
 	pr_info("end trace...\n");
 	pr_debug("begin destory BPF skel...\n");
 	trace_ctx.ops->trace_close();
 	pr_debug("BPF skel is destroied\n");
 	trace_ctx.stop = true;
 
-	if (ctx_count)
-		pr_info("%d context not showed\n", ctx_count);
+	pr_info("total event: %llu, %d context skipped\n",
+		event_count, ctx_count);
 }
 
 int main(int argc, char *argv[])

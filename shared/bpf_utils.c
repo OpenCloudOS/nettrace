@@ -18,7 +18,7 @@
 int
 perf_output_cond(int fd, perf_buffer_sample_fn callback,
 		 perf_buffer_lost_fn lost_cb,
-		 bool *stop)
+		 int (*timeout)(int))
 {
 #if defined(LIBBPF_MAJOR_VERSION) && (LIBBPF_MAJOR_VERSION >= 1)
 	struct perf_buffer *pb;
@@ -43,7 +43,7 @@ perf_output_cond(int fd, perf_buffer_sample_fn callback,
 	}
 
 	while ((err = perf_buffer__poll(pb, 1000)) >= 0) {
-		if (stop && *stop)
+		if (timeout && timeout(err))
 			break;
 	}
 	return 0;

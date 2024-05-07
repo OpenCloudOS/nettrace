@@ -12,6 +12,7 @@ typedef struct {
 	u32  trace_mode;
 	u32  pid;
 	u32  netns;
+	u32  max_event;
 	bool drop_reason;
 	bool detail;
 	bool hooks;
@@ -28,6 +29,7 @@ typedef struct {
 	int  __rate_limit;
 	u64  __last_update;
 	u8   trace_status[TRACE_MAX];
+	u64  event_count;
 } bpf_args_t;
 
 typedef struct {

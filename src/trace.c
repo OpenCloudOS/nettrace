@@ -21,7 +21,6 @@ trace_context_t trace_ctx = {
 extern trace_ops_t tracing_ops;
 extern trace_ops_t probe_ops;
 trace_ops_t *trace_ops_all[] = { &tracing_ops, &probe_ops };
-u32 skb_count = 0;
 
 static bool trace_group_valid(trace_group_t *group)
 {
@@ -522,6 +521,7 @@ static int trace_prepare_args()
 
 	bpf_args->trace_mode = 1 << trace_ctx.mode;
 	trace_ctx.detail = bpf_args->detail;
+	bpf_args->max_event = args->count;
 
 	if (args->pkt_len) {
 		u32 len_1, len_2;
@@ -888,7 +888,35 @@ static inline void poll_handler_wrap(void *ctx, int cpu, void *data,
 		return;
 
 	trace_ctx.ops->trace_poll(ctx, cpu, data, size);
-	try_inc_skb_count();
+}
+
+u64 get_event_count()
+{
+	static u8 buf[CONFIG_MAP_SIZE];
+	bpf_args_t *args = (void *)buf;
+	int map_fd, key = 0;
+	struct bpf_map *map;
+
+	map = bpf_object__find_map_by_name(trace_ctx.obj, "m_config");
+	map_fd = bpf_map__fd(map);
+	bpf_map_lookup_elem(map_fd, &key, buf);
+	return args->event_count;
+}
+
+static int poll_timeout(int err)
+{
+	if (trace_ctx.stop)
+		return 1;
+
+	if (err == 0 && trace_ctx.args.count) {
+		if (trace_ctx.args.count <= get_event_count()) {
+			trace_stop();
+			return 1;
+		}
+
+		return 0;
+	}
+	return 0;
 }
 
 int trace_poll()
@@ -902,5 +930,5 @@ int trace_poll()
 	if (!map_fd)
 		return -1;
 	return perf_output_cond(map_fd, poll_handler_wrap, trace_on_lost,
-			 	&trace_ctx.stop);
+			 	poll_timeout);
 }

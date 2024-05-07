@@ -175,17 +175,15 @@ static inline bool func_is_free(u8 status)
 	return status & (1 << FUNC_STATUS_FREE);
 }
 
-static inline int handle_destroy(context_info_t *info)
+static inline void consume_map_ctx(bpf_args_t *args, void *key)
 {
-	if (mode_has_context(info->args) && info->matched)
-		bpf_map_delete_elem(&m_matched, &info->skb);
-	return 0;
+	bpf_map_delete_elem(&m_matched, key);
+	args->event_count++;
 }
 
-static inline void try_handle_destroy(context_info_t *info)
+static inline void free_map_ctx(bpf_args_t *args, void *key)
 {
-	if (func_is_free(info->func_status))
-		handle_destroy(info);
+	bpf_map_delete_elem(&m_matched, key);
 }
 
 static inline void init_ctx_match(void *skb, u16 func)
@@ -198,11 +196,30 @@ static inline void init_ctx_match(void *skb, u16 func)
 	bpf_map_update_elem(&m_matched, &skb, &_matched, 0);
 }
 
+static inline void handle_entry_finish(context_info_t *info, int err)
+{
+	if (mode_has_context(info->args)) {
+		if (func_is_free(info->func_status)) {
+			if (info->matched) {
+				if (err < 0)
+					free_map_ctx(info->args, &info->skb);
+				else
+					consume_map_ctx(info->args, &info->skb);
+			}
+		} else {
+			init_ctx_match(info->skb, info->func);
+		}
+	} else {
+		if (err >= 0)
+			info->args->event_count++;
+	}
+}
+
 static inline int pre_tiny_output(context_info_t *info)
 {
 	handle_tiny_output(info);
 	if (func_is_free(info->func_status))
-		bpf_map_delete_elem(&m_matched, &info->skb);
+		consume_map_ctx(info->args, &info->skb);
 	else
 		get_ret(info->func);
 	return 1;
@@ -236,12 +253,12 @@ static inline int pre_handle_latency(context_info_t *info,
 			delta = match_val->ts2 - match_val->ts1;
 			/* skip a single match function */
 			if (!match_val->func2 || delta < args->latency_min) {
-				bpf_map_delete_elem(&m_matched, &info->skb);
+				free_map_ctx(info->args, &info->skb);
 				return 1;
 			}
 			if (args->latency_summary) {
 				update_stats(delta);
-				bpf_map_delete_elem(&m_matched, &info->skb);
+				consume_map_ctx(info->args, &info->skb);
 				return 1;
 			}
 			info->match_val = *match_val;
@@ -274,6 +291,9 @@ static inline int pre_handle_entry(context_info_t *info)
 	bpf_args_t *args = (void *)info->args;
 
 	if (!args->ready || check_rate_limit(args))
+		return -1;
+
+	if (args->max_event && args->event_count >= args->max_event)
 		return -1;
 
 	info->func_status = get_func_status(info);
@@ -371,16 +391,13 @@ static inline int handle_entry(context_info_t *info)
 	if (err)
 		goto err;
 
-	if (mode_ctx) {
-		init_ctx_match(skb, info->func);
-		/* latency total mode with filter condition case */
-		if (trace_mode_latency(args))
-			return 1;
-	}
-
 no_filter:
 	if (filter_by_netns(info) && filter)
 		goto err;
+
+	/* latency total mode with filter condition case */
+	if (trace_mode_latency(args))
+		return 1;
 
 	if (!args->detail)
 		goto out;
@@ -424,7 +441,7 @@ static inline int default_handle_entry(context_info_t *info)
 {
 	bool detail = info->args->detail;
 	detail_event_t __e;
-	int size;
+	int size, err;
 
 	info->e = (void *)&__e;
 	size = sizeof(__e);
@@ -443,15 +460,15 @@ static inline int default_handle_entry(context_info_t *info)
 	}
 #endif
 
-	if (!handle_entry(info)) {
+	err = handle_entry(info);
+	if (!err) {
 #ifdef INLINE_MODE
 		size = detail ? sizeof(__e) : sizeof(event_t);
 #endif
 		do_event_output(info, size);
 	}
 
-	try_handle_destroy(info);
-	return 0;
+	return err;
 }
 
 
@@ -501,9 +518,7 @@ DEFINE_TP(kfree_skb, skb, kfree_skb, 0, 8)
 	e->location = (unsigned long)args->location;
 	e->reason = reason;
 
-	handle_entry_output(info, e);
-	handle_destroy(info);
-	return 0;
+	return handle_entry_output(info, e);
 }
 
 DEFINE_KPROBE_INIT(__netif_receive_skb_core_pskb,
@@ -535,8 +550,7 @@ DEFINE_KPROBE_INIT(ipt_do_table_legacy, ipt_do_table, 0,
 	struct nf_hook_state *state = info_get_arg(info, 1);
 	struct xt_table *table = info_get_arg(info, 2);
 
-	bpf_ipt_do_table(info, table, state);
-	return 0;
+	return bpf_ipt_do_table(info, table, state);
 }
 
 DEFINE_KPROBE_SKB(ipt_do_table, 1, 3)
@@ -544,14 +558,13 @@ DEFINE_KPROBE_SKB(ipt_do_table, 1, 3)
 	struct nf_hook_state *state = info_get_arg(info, 2);
 	struct xt_table *table = info_get_arg(info, 0);
 
-	bpf_ipt_do_table(info, table, state);
-	return 0;
+	return bpf_ipt_do_table(info, table, state);
 }
 
 DEFINE_KPROBE_SKB(nf_hook_slow, 0, 4)
 {
 	struct nf_hook_state *state;
-	int num;
+	int num, err;
 
 	state = info_get_arg(info, 1);
 	if (info->args->hooks)
@@ -559,8 +572,9 @@ DEFINE_KPROBE_SKB(nf_hook_slow, 0, 4)
 
 	DECLARE_EVENT(nf_event_t, e)
 
-	if (handle_entry(info))
-		return 0;
+	err = handle_entry(info);
+	if (err)
+		return err;
 
 	e->hook = _C(state, hook);
 	e->pf = _C(state, pf);
@@ -571,8 +585,9 @@ on_hooks:;
 	struct nf_hook_entries *entries = info_get_arg(info, 2);
 	DECLARE_EVENT(nf_hooks_event_t, hooks_event)
 
-	if (handle_entry(info))
-		return 0;
+	err = handle_entry(info);
+	if (err)
+		return err;
 
 	hooks_event->hook = _C(state, hook);
 	hooks_event->pf = _C(state, pf);
@@ -626,17 +641,13 @@ bpf_qdisc_handle(context_info_t *info, struct Qdisc *q)
 DEFINE_TP(qdisc_dequeue, qdisc, qdisc_dequeue, 3, 32)
 {
 	struct Qdisc *q = info_tp_args(info, 8, 0);
-	bpf_qdisc_handle(info, q);
-
-	return 0;
+	return bpf_qdisc_handle(info, q);
 }
 
 DEFINE_TP(qdisc_enqueue, qdisc, qdisc_enqueue, 2, 24)
 {
 	struct Qdisc *q = info_tp_args(info, 8, 0);
-	bpf_qdisc_handle(info, q);
-
-	return 0;
+	return bpf_qdisc_handle(info, q);
 }
 
 #ifndef NT_DISABLE_NFT
@@ -666,10 +677,12 @@ DEFINE_KPROBE_INIT(nft_do_chain, nft_do_chain, 2,
 	struct nf_hook_state *state;
 	struct nft_chain *chain;
 	struct nft_table *table;
+	int err;
 	DECLARE_EVENT(nf_event_t, e)
 
-	if (handle_entry(info))
-		return 0;
+	err = handle_entry(info);
+	if (err)
+		return err;
 
 	if (bpf_core_type_exists(struct nft_pktinfo)) {
 		if (!bpf_core_field_exists(pkt->xt))
@@ -724,13 +737,13 @@ DEFINE_KPROBE_INIT(tcp_ack_update_rtt, tcp_ack_update_rtt, 6,
 	last_rtt = (u64)info_get_arg(info, 4);
 
 	if ((long)first_rtt < 0)
-		return 0;
+		return -1;
 
 	first_rtt = first_rtt / 1000;
 	last_rtt = last_rtt / 1000;
 
 	if (first_rtt < info->args->first_rtt || last_rtt < info->args->last_rtt)
-		return 0;
+		return -1;
 
 	if (info->args->trace_mode & TRACE_MODE_RTT_MASK &&
 	    !info->args->has_filter) {
@@ -741,7 +754,7 @@ DEFINE_KPROBE_INIT(tcp_ack_update_rtt, tcp_ack_update_rtt, 6,
 	DECLARE_EVENT(rtt_event_t, e)
 
 	if (handle_entry(info))
-		return 0;
+		return -1;
 
 	if (info->args->trace_mode & TRACE_MODE_RTT_MASK) {
 		update_stats(first_rtt);
