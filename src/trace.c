@@ -864,9 +864,6 @@ int trace_bpf_load_and_attach()
 		break;
 	}
 
-	if (trace_ctx.ops->trace_ready)
-		trace_ctx.ops->trace_ready();
-
 	return 0;
 err:
 	return -1;
@@ -910,7 +907,7 @@ static int poll_timeout(int err)
 
 	if (err == 0 && trace_ctx.args.count) {
 		if (trace_ctx.args.count <= get_event_count()) {
-			trace_stop();
+			usleep(200000);
 			return 1;
 		}
 
@@ -921,14 +918,40 @@ static int poll_timeout(int err)
 
 int trace_poll()
 {
-	int map_fd;
+	struct perf_buffer *pb;
+	int err, map_fd;
 
-	if (trace_ctx.ops->raw_poll)
+	if (trace_ctx.ops->raw_poll) {
+		trace_ctx.ops->trace_ready();
 		return trace_ctx.ops->raw_poll();
+	}
 
 	map_fd = bpf_object__find_map_fd_by_name(trace_ctx.obj, "m_event");
 	if (!map_fd)
 		return -1;
-	return perf_output_cond(map_fd, poll_handler_wrap, trace_on_lost,
-			 	poll_timeout);
+
+#if defined(LIBBPF_MAJOR_VERSION) && (LIBBPF_MAJOR_VERSION >= 1)
+	pb = perf_buffer__new(map_fd, 1024, poll_handler_wrap,
+			      trace_on_lost, NULL, NULL);
+#else
+	struct perf_buffer_opts pb_opts = {
+		.sample_cb = poll_handler_wrap,
+		.lost_cb = trace_on_lost,
+	};
+
+	pb = perf_buffer__new(map_fd, 1024, &pb_opts);
+#endif
+
+	err = libbpf_get_error(pb);
+	if (err) {
+		pr_err("failed to setup perf_buffer: %d\n", err);
+		return err;
+	}
+
+	trace_ctx.ops->trace_ready();
+	while ((err = perf_buffer__poll(pb, 1000)) >= 0) {
+		if (poll_timeout(err))
+			break;
+	}
+	return 0;
 }

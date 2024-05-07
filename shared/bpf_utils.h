@@ -44,15 +44,6 @@ extern long int syscall (long int __sysno, ...);
 	bpf_map_update_elem(fd, &key, args, 0);		\
 } while (0)
 
-int
-perf_output_cond(int fd, perf_buffer_sample_fn cb, perf_buffer_lost_fn lost,
-		 int (*timeout)(int));
-
-static inline int perf_output(int fd, perf_buffer_sample_fn fn)
-{
-	return perf_output_cond(fd, fn, NULL, NULL);
-}
-
 int compat_bpf_attach_kprobe(int fd, char *name, bool ret);
 const struct btf_type *btf_get_type(char *name);
 int btf_get_arg_count(char *name);
