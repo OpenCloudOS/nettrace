@@ -687,22 +687,26 @@ int stats_poll_handler()
 	}
 
 	if (trace_ctx.mode_mask & TRACE_MODE_RTT_MASK) {
-		header = "rtt distribution:\n";
+		header = "rtt distribution:";
 		unit = "ms";
 	} else {
-		header = "latency distribution:\n";
+		header = "latency distribution:";
 		unit = "us";
 	}
 
 	while (!trace_stopped()) {
 		int start = 0, j;
-
-		pr_info(header);
-		for (i = 0; i < 16; i++)
-			bpf_map_lookup_elem(map_fd, &i, count + i);
+		__u64 total = 0;
 
 		for (i = 0; i < 16; i++) {
+			bpf_map_lookup_elem(map_fd, &i, count + i);
+			total += count[i];
+		}
+
+		pr_info("%-34s%llu\n", header, total);
+		for (i = 0; i < 16; i++) {
 			bool has_count = false;
+			int p = 0, t = 0;
 
 			for (j = i; j < 16; j++) {
 				if (count[j])
@@ -715,7 +719,13 @@ int stats_poll_handler()
 			start = 1 << i;
 			sprintf(buf, "%d - %5d%s", start == 1 ? 0 : start,
 				(start << 1) - 1, unit);
-			pr_info("%32s: %llu\n", buf, count[i]);
+			if (total) {
+				p = count[i] / total;
+				t = (count[i] % total) * 10000 / total;
+			}
+
+			pr_info("%32s: %-8llu %d.%04d\n", buf, count[i],
+				p, t);
 		}
 		sleep(1);
 	}
