@@ -21,6 +21,7 @@ typedef struct {
 	bool tiny_output;
 	bool has_filter;
 	bool latency_summary;
+	bool func_stats;
 	u16  stack_funs[MAX_FUNC_STACK];
 	u32  first_rtt;
 	u32  last_rtt;

@@ -827,17 +827,12 @@ static int trace_bpf_load()
 	return trace_ctx.ops->trace_load();
 }
 
-int trace_bpf_load_and_attach()
+static void trace_prepare_ops()
 {
-	if (trace_bpf_load())
-		goto err;
-
-	pr_debug("begin to attach eBPF program...\n");
-	if (trace_ctx.ops->trace_attach()) {
-		trace_ctx.ops->trace_close();
-		goto err;
+	if (trace_ctx.bpf_args.func_stats) {
+		trace_ctx.ops->raw_poll = func_stats_poll_handler;
+		return;
 	}
-	pr_debug("eBPF program attached successfully\n");
 
 	switch (trace_ctx.mode) {
 	case TRACE_MODE_BASIC:
@@ -863,6 +858,21 @@ int trace_bpf_load_and_attach()
 	default:
 		break;
 	}
+}
+
+int trace_bpf_load_and_attach()
+{
+	if (trace_bpf_load())
+		goto err;
+
+	pr_debug("begin to attach eBPF program...\n");
+	if (trace_ctx.ops->trace_attach()) {
+		trace_ctx.ops->trace_close();
+		goto err;
+	}
+	pr_debug("eBPF program attached successfully\n");
+
+	trace_prepare_ops();
 
 	return 0;
 err:

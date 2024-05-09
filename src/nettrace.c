@@ -245,6 +245,11 @@ static void do_parse_args(int argc, char *argv[])
 			.desc = "don't trace skb clone",
 		},
 		{
+			.lname = "func-stats", .dest = &bpf_args->func_stats,
+			.type = OPTION_BOOL,
+			.desc = "only do the statistics for function call",
+		},
+		{
 			.lname = "rate-limit", .dest = &bpf_args->rate_limit,
 			.type = OPTION_U32,
 			.desc = "limit the output to N/s, not valid in diag/default mode",

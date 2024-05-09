@@ -41,7 +41,7 @@ struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);
 	__uint(key_size, sizeof(int));
 	__uint(value_size, sizeof(__u64));
-	__uint(max_entries, 32);
+	__uint(max_entries, 512);
 } m_stats SEC(".maps");
 
 #ifdef BPF_FEAT_STACK_TRACE
@@ -196,23 +196,27 @@ static inline void init_ctx_match(void *skb, u16 func)
 	bpf_map_update_elem(&m_matched, &skb, &_matched, 0);
 }
 
-static inline void handle_entry_finish(context_info_t *info, int err)
+static __always_inline void update_stats_key(u32 key)
 {
-	if (mode_has_context(info->args)) {
-		if (func_is_free(info->func_status)) {
-			if (info->matched) {
-				if (err < 0)
-					free_map_ctx(info->args, &info->skb);
-				else
-					consume_map_ctx(info->args, &info->skb);
-			}
-		} else {
-			init_ctx_match(info->skb, info->func);
-		}
-	} else {
-		if (err >= 0)
-			info->args->event_count++;
+	u64 *stats = bpf_map_lookup_elem(&m_stats, &key);
+
+	if (stats)
+		(*stats)++;
+}
+
+static __always_inline void update_stats_log(u32 val)
+{
+	u32 key = 0, i = 0, tmp = 2;
+
+	#pragma clang loop unroll_count(16)
+	for (; i < 16; i++) {
+		if (val < tmp)
+			break;
+		tmp <<= 1;
+		key++;
 	}
+
+	update_stats_key(key);
 }
 
 static inline int pre_tiny_output(context_info_t *info)
@@ -223,23 +227,6 @@ static inline int pre_tiny_output(context_info_t *info)
 	else
 		get_ret(info->func);
 	return 1;
-}
-
-static __always_inline void update_stats(u32 val)
-{
-	u32 key = 0, i = 0, tmp = 2;
-	u64 *stats;
-
-	#pragma clang loop unroll_count(16)
-	for (; i < 16; i++) {
-		if (val < tmp)
-			break;
-		tmp <<= 1;
-		key++;
-	}
-	stats = bpf_map_lookup_elem(&m_stats, &key);
-	if (stats)
-		(*stats)++;
 }
 
 static inline int pre_handle_latency(context_info_t *info,
@@ -257,7 +244,7 @@ static inline int pre_handle_latency(context_info_t *info,
 				return 1;
 			}
 			if (args->latency_summary) {
-				update_stats(delta);
+				update_stats_log(delta);
 				consume_map_ctx(info->args, &info->skb);
 				return 1;
 			}
@@ -278,6 +265,7 @@ static inline int pre_handle_latency(context_info_t *info,
 			return 1;
 		}
 	}
+	info->no_event = true;
 	return 0;
 }
 
@@ -286,9 +274,15 @@ static inline bool trace_mode_latency(bpf_args_t *args)
 	return args->trace_mode & TRACE_MODE_LATENCY_MASK;
 }
 
+/* return value:
+ *   -1: invalid and return
+ *    0: valid and continue
+ *    1: valid and return
+ */
 static inline int pre_handle_entry(context_info_t *info)
 {
 	bpf_args_t *args = (void *)info->args;
+	int ret = 0;
 
 	if (!args->ready || check_rate_limit(args))
 		return -1;
@@ -303,16 +297,49 @@ static inline int pre_handle_entry(context_info_t *info)
 
 		/* skip handle_entry() for tiny case */
 		if (match_val && args->tiny_output)
-			return pre_tiny_output(info);
-
-		if (trace_mode_latency(args))
-			return pre_handle_latency(info, match_val);
-
-		if (match_val)
+			ret = pre_tiny_output(info);
+		else if (trace_mode_latency(args))
+			ret = pre_handle_latency(info, match_val);
+		else if (match_val)
 			info->match_val = *match_val;
 	}
 
-	return 0;
+	if (args->func_stats) {
+		if (ret > 0) {
+			update_stats_key(info->func);
+		} else if (!ret && !args->has_filter) {
+			update_stats_key(info->func);
+			args->event_count++;
+			ret = 1;
+		} else {
+			info->no_event = true;
+		}
+	}
+
+	return ret;
+}
+
+/* err:
+ *   -1: not match
+ *    0: match
+ *    1: match and no output
+ */
+static inline void handle_entry_finish(context_info_t *info, int err)
+{
+	if (mode_has_context(info->args)) {
+		if (func_is_free(info->func_status)) {
+			if (info->matched)
+				consume_map_ctx(info->args, &info->skb);
+		} else if (err >= 0) {
+			init_ctx_match(info->skb, info->func);
+		}
+	} else {
+		if (err >= 0)
+			info->args->event_count++;
+	}
+
+	if (err >= 0 && info->args->func_stats)
+		update_stats_key(info->func);
 }
 
 static inline void try_set_latency(bpf_args_t *args, event_t *e,
@@ -396,7 +423,7 @@ no_filter:
 		goto err;
 
 	/* latency total mode with filter condition case */
-	if (trace_mode_latency(args))
+	if (info->no_event)
 		return 1;
 
 	if (!args->detail)
@@ -747,7 +774,7 @@ DEFINE_KPROBE_INIT(tcp_ack_update_rtt, tcp_ack_update_rtt, 6,
 
 	if (info->args->trace_mode & TRACE_MODE_RTT_MASK &&
 	    !info->args->has_filter) {
-		update_stats(first_rtt);
+		update_stats_log(first_rtt);
 		return 0;
 	}
 
@@ -757,7 +784,7 @@ DEFINE_KPROBE_INIT(tcp_ack_update_rtt, tcp_ack_update_rtt, 6,
 		return -1;
 
 	if (info->args->trace_mode & TRACE_MODE_RTT_MASK) {
-		update_stats(first_rtt);
+		update_stats_log(first_rtt);
 		return 0;
 	}
 

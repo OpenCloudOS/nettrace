@@ -24,6 +24,7 @@ typedef struct {
 	};
 	u16 func;
 	u8  func_status;
+	u8  no_event:1;
 } context_info_t;
 
 /* init the skb by the index of func args */

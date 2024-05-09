@@ -733,6 +733,37 @@ int stats_poll_handler()
 	return 0;
 }
 
+int func_stats_poll_handler()
+{
+	int map_fd = bpf_object__find_map_fd_by_name(trace_ctx.obj, "m_stats");
+	__u64 count;
+	trace_t *t;
+	int i;
+
+	if (!map_fd) {
+		pr_err("failed to find BPF map m_stats\n");
+		return -ENOTSUP;
+	}
+
+	while (!trace_stopped()) {
+		pr_info("function statistics:\n");
+		for (i = 1; i < TRACE_MAX; i++) {
+			bpf_map_lookup_elem(map_fd, &i, &count);
+
+			if (!count)
+				continue;
+			t = get_trace(i);
+			if (!t)
+				continue;
+			pr_info(" %-32s: %llu\n", t->name, count);
+		}
+		pr_info("\n");
+		sleep(1);
+	}
+
+	return 0;
+}
+
 void latency_poll_handler(void *ctx, int cpu, void *data, u32 size)
 {
 	analy_entry_t entry = {

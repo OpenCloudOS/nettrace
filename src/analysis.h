@@ -152,6 +152,7 @@ void async_poll_handler(void *ctx, int cpu, void *data, u32 size);
 void latency_poll_handler(void *ctx, int cpu, void *data, u32 size);
 
 int stats_poll_handler();
+int func_stats_poll_handler();
 
 static inline trace_t *get_trace_from_analy_entry(analy_entry_t *e)
 {
