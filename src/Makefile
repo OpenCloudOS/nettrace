@@ -42,6 +42,9 @@ ifneq ($(shell grep -c "sk_protocol.*8" $(HEADERS)/include/net/sock.h),0)
 endif
 	__KERN_VER := $(shell $(cmd_kversion))
 	CFLAGS += -D__KERN_VER=$(__KERN_VER)
+ifeq ($(shell echo $(__KERN_VER) | cut -c 1),3)
+	CFLAGS += -DCOMPAT_3_X
+endif
 else
 	CFLAGS += -DBPF_FEAT_STACK_TRACE
 endif

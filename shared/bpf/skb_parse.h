@@ -345,7 +345,9 @@ err:
 	return -1;
 }
 
-#if !defined(NO_BTF) || defined(BPF_FEAT_SK_PRPTOCOL_LEGACY)
+#ifndef COMPAT_3_X
+
+#if (!defined(NO_BTF) || defined(BPF_FEAT_SK_PRPTOCOL_LEGACY))
 static __always_inline u8 sk_get_protocol(struct sock *sk)
 {
 	u32 flags = _(((u32 *)(&sk->__sk_flags_offset))[0]);
@@ -548,6 +550,20 @@ static inline int probe_parse_pkt_sk(struct sock *sk, packet_t *pkt,
 err:
 	return -1;
 }
+
+#else
+
+static inline int __probe_parse_sk(parse_ctx_t *ctx)
+{
+	return -1;
+}
+
+static inline int probe_parse_pkt_sk(struct sock *sk, packet_t *pkt,
+				     pkt_args_t *args)
+{
+	return -1;
+}
+#endif
 
 static inline int __probe_parse_skb(parse_ctx_t *ctx)
 {

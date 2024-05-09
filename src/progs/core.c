@@ -74,38 +74,7 @@ static inline void try_trace_stack(context_info_t *info) { }
 
 static inline int filter_by_netns(context_info_t *info)
 {	
-	struct sk_buff *skb = info->skb;
-	struct net_device *dev;
-	u32 inode, netns;
-	struct net *ns;
-
-	if (!bpf_core_field_exists(possible_net_t, net))
-		return 0;
-
-	netns = info->args->netns;
-	if (!netns && !info->args->detail)
-		return 0;
-
-	dev = _C(skb, dev);
-	if (!dev) {
-		struct sock *sk = _C(skb, sk);
-		if (!sk)
-			goto no_ns;
-		ns = _C(sk, __sk_common.skc_net.net);
-	} else {
-		ns = _C(dev, nd_net.net);
-	}
-
-	if (!ns)
-		goto no_ns;
-
-	inode = _C(ns, ns.inum);
-	if (info->args->detail)
-		((detail_event_t *)info->e)->netns = inode;
-
-	return netns ? netns != inode : 0;
-no_ns:
-	return !!netns;
+	return 0;
 }
 
 static __always_inline void do_event_output(context_info_t *info,
@@ -591,6 +560,7 @@ DEFINE_KPROBE_SKB(ipt_do_table, 1, 3)
 	return bpf_ipt_do_table(info, table, state);
 }
 
+#ifndef COMPAT_3_X
 DEFINE_KPROBE_SKB(nf_hook_slow, 0, 4)
 {
 	struct nf_hook_state *state;
@@ -645,6 +615,7 @@ out:
 	handle_event_output(info, hooks_event);
 	return 0;
 }
+#endif
 
 static __always_inline int
 bpf_qdisc_handle(context_info_t *info, struct Qdisc *q)
@@ -680,7 +651,7 @@ DEFINE_TP(qdisc_enqueue, qdisc, qdisc_enqueue, 2, 24)
 	return bpf_qdisc_handle(info, q);
 }
 
-#ifndef NT_DISABLE_NFT
+#if !defined(NT_DISABLE_NFT) && !defined(COMPAT_3_X)
 
 /* use the 'ignored suffix rule' feature of CO-RE, as described in:
  * https://nakryiko.com/posts/bpf-core-reference-guide/#handling-incompatible-field-and-type-changes

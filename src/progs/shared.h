@@ -102,6 +102,7 @@ enum {
 	FUNC_STATUS_MATCHER,
 };
 
+#undef DEFINE_EVENT
 #define DEFINE_EVENT(name, fields...)		\
 typedef struct {				\
 	event_t event;				\
