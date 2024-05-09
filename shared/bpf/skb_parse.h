@@ -245,7 +245,7 @@ static try_inline int filter_port(parse_ctx_t *ctx, u32 sport, u32 dport)
 
 	return (args->sport && args->sport != sport) ||
 	       (args->dport && args->dport != dport) ||
-	       (args->port && args->port != dport && args->port != dport);
+	       (args->port && args->port != dport && args->port != sport);
 }
 
 static try_inline int probe_parse_ip(void *ip, parse_ctx_t *ctx)
