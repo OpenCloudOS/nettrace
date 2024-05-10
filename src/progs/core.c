@@ -302,6 +302,9 @@ static inline int pre_handle_entry(context_info_t *info)
 			ret = pre_handle_latency(info, match_val);
 		else if (match_val)
 			info->match_val = *match_val;
+		else if (args->match_mode &&
+			 !(info->func_status & (1 << FUNC_STATUS_MATCHER)))
+			ret = -1;
 	}
 
 	if (args->func_stats) {

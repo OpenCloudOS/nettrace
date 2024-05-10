@@ -140,6 +140,25 @@ trace_t *search_trace_enabled(char *name)
 	return NULL;
 }
 
+static int trace_set_target(trace_t *t, int target)
+{
+	int err = 0;
+
+	switch (target) {
+	case 1:
+		trace_set_enable(t);
+		break;
+	case 2:
+		err = trace_set_stack(t);
+		break;
+	case 3:
+		trace_set_status(t->index, FUNC_STATUS_MATCHER);
+		break;
+	}
+
+	return err;
+}
+
 int trace_enable(char *name, int target)
 {
 	bool found = false;
@@ -149,14 +168,8 @@ int trace_enable(char *name, int target)
 	trace_for_each(t) {
 		if (strcmp(t->name, name))
 			continue;
-		switch (target) {
-		case 1:
-			trace_set_enable(t);
-			break;
-		case 2:
-			err = trace_set_stack(t);
-			break;
-		}
+
+		err = trace_set_target(t, target);
 		if (err)
 			return err;
 		found = true;
@@ -179,14 +192,7 @@ static int __trace_group_enable(trace_group_t *group, int target)
 	}
 
 	list_for_each_entry(t, &group->traces, list) {
-		switch (target) {
-		case 1:
-			trace_set_enable(t->trace);
-			break;
-		case 2:
-			err = trace_set_stack(t->trace);
-			break;
-		}
+		err = trace_set_target(t->trace, target);
 		if (err)
 			return err;
 	}
@@ -490,6 +496,15 @@ static int trace_prepare_args()
 	bpf_args->__rate_limit = bpf_args->rate_limit;
 	bpf_args->has_filter = trace_has_pkt_filter();
 
+	if (args->trace_matcher) {
+		if (!(trace_ctx.mode_mask & TRACE_MODE_BPF_CTX_MASK)) {
+			pr_err("--trace-matcher not supported in this mode\n");
+			goto err;
+		}
+		trace_parse_traces(args->trace_matcher, 3);
+		bpf_args->match_mode = true;
+	}
+
 	if (args->latency_show && !mode_has_context()) {
 		pr_err("--latency-show not supported in this mode\n");
 		goto err;
@@ -573,11 +588,6 @@ static void trace_exec_cond()
 					 trace->cond))
 			trace_set_invalid_reason(trace, "cond");
 	}
-}
-
-static void trace_set_status(int func, int status)
-{
-	trace_ctx.bpf_args.trace_status[func] |= (1 << status);
 }
 
 static u8 trace_get_status(int func)

@@ -240,6 +240,11 @@ static void do_parse_args(int argc, char *argv[])
 			.desc = "print call stack for traces or group",
 		},
 		{
+			.lname = "trace-matcher", .dest = &trace_args->trace_matcher,
+			.type = OPTION_STRING,
+			.desc = "traces that can match packet(default all)",
+		},
+		{
 			.lname = "trace-noclone", .dest = &trace_args->traces_noclone,
 			.type = OPTION_BOOL,
 			.desc = "don't trace skb clone",

@@ -120,6 +120,7 @@ typedef struct trace_args {
 	u32  min_latency;
 	char *traces;
 	char *traces_stack;
+	char *trace_matcher;
 	char *pkt_len;
 	char *tcp_flags;
 	u32  count;
@@ -241,6 +242,11 @@ static inline void trace_set_retonly(trace_t *t)
 static inline bool trace_is_retonly(trace_t *t)
 {
 	return t->status & TRACE_RET_ONLY;
+}
+
+static inline void trace_set_status(int func, int status)
+{
+	trace_ctx.bpf_args.trace_status[func] |= (1 << status);
 }
 
 static inline bool trace_using_sk(trace_t *t)
