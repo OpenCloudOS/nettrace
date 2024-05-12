@@ -121,6 +121,7 @@ typedef struct trace_args {
 	char *traces;
 	char *traces_stack;
 	char *trace_matcher;
+	char *trace_exclude;
 	char *pkt_len;
 	char *tcp_flags;
 	u32  count;

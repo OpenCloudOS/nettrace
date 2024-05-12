@@ -154,6 +154,9 @@ static int trace_set_target(trace_t *t, int target)
 	case 3:
 		trace_set_status(t->index, FUNC_STATUS_MATCHER);
 		break;
+	case 4:
+		trace_set_invalid_reason(t, "exclude");
+		break;
 	}
 
 	return err;
@@ -497,6 +500,7 @@ static int trace_prepare_args()
 	bpf_args->__rate_limit = bpf_args->rate_limit;
 	bpf_args->has_filter = trace_has_pkt_filter();
 
+	trace_parse_traces(args->trace_exclude, 4);
 	if (args->trace_matcher) {
 		if (!(trace_ctx.mode_mask & TRACE_MODE_BPF_CTX_MASK)) {
 			pr_err("--trace-matcher not supported in this mode\n");

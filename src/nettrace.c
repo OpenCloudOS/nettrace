@@ -245,6 +245,11 @@ static void do_parse_args(int argc, char *argv[])
 			.desc = "traces that can match packet(default all)",
 		},
 		{
+			.lname = "trace-exclude", .dest = &trace_args->trace_exclude,
+			.type = OPTION_STRING,
+			.desc = "traces that should be disabled",
+		},
+		{
 			.lname = "trace-noclone", .dest = &trace_args->traces_noclone,
 			.type = OPTION_BOOL,
 			.desc = "don't trace skb clone",
