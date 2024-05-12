@@ -47,26 +47,10 @@ struct {
 #ifdef BPF_FEAT_STACK_TRACE
 static inline void try_trace_stack(context_info_t *info)
 {
-	int i = 0, key;
-	u16 *funcs;
-
-	if (!info->args->stack)
+	if (!info->args->stack || !(info->func_status & FUNC_STATUS_STACK))
 		return;
 
-	funcs = info->args->stack_funs;
-
-#pragma unroll
-	for (; i < MAX_FUNC_STACK; i++) {
-		if (!funcs[i])
-			break;
-		if (funcs[i] == info->func)
-			goto do_stack;
-	}
-	return;
-
-do_stack:
-	key = bpf_get_stackid(info->ctx, &m_stack, 0);
-	info->e->stack_id = key;
+	info->e->stack_id = bpf_get_stackid(info->ctx, &m_stack, 0);
 }
 #else
 static inline void try_trace_stack(context_info_t *info) { }
@@ -141,7 +125,7 @@ static __always_inline u8 get_func_status(context_info_t *info)
 
 static inline bool func_is_free(u8 status)
 {
-	return status & (1 << FUNC_STATUS_FREE);
+	return status & FUNC_STATUS_FREE;
 }
 
 static inline void consume_map_ctx(bpf_args_t *args, void *key)
@@ -272,7 +256,7 @@ static inline int pre_handle_entry(context_info_t *info)
 		else if (match_val)
 			info->match_val = *match_val;
 		else if (args->match_mode &&
-			 !(info->func_status & (1 << FUNC_STATUS_MATCHER)))
+			 !(info->func_status & FUNC_STATUS_MATCHER))
 			ret = -1;
 	}
 
@@ -353,7 +337,7 @@ static inline int handle_entry(context_info_t *info)
 	 * with pkt_args.
 	 */
 	if (!filter) {
-		if (info->func_status & (1 << FUNC_STATUS_SKB_INVAL)) {
+		if (info->func_status & FUNC_STATUS_SKB_INVAL) {
 			if (!skb || !info->sk)
 				goto err;
 			/* in this case, hash context by skb, but parse sock */
@@ -368,12 +352,12 @@ static inline int handle_entry(context_info_t *info)
 		goto no_filter;
 	}
 
-	if (info->func_status & (1 << FUNC_STATUS_SKB_INVAL)) {
+	if (info->func_status & FUNC_STATUS_SKB_INVAL) {
 		if (!skb || !info->sk)
 			goto err;
 		/* in this case, hash context by skb, but parse sock */
 		err = probe_parse_pkt_sk(info->sk, pkt, pkt_args);
-	} else if (info->func_status & (1 << FUNC_STATUS_SK)) {
+	} else if (info->func_status & FUNC_STATUS_SK) {
 		if (!info->sk) {
 			pr_bpf_debug("no sock available, func=%d", info->func);
 			goto err;

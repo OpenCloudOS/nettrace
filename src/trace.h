@@ -246,7 +246,7 @@ static inline bool trace_is_retonly(trace_t *t)
 
 static inline void trace_set_status(int func, int status)
 {
-	trace_ctx.bpf_args.trace_status[func] |= (1 << status);
+	trace_ctx.bpf_args.trace_status[func] |= status;
 }
 
 static inline bool trace_using_sk(trace_t *t)
@@ -257,19 +257,7 @@ static inline bool trace_using_sk(trace_t *t)
 
 static inline int trace_set_stack(trace_t *t)
 {
-	int i = 0;
-
-	for (; i < MAX_FUNC_STACK; i++) {
-		if (!trace_ctx.bpf_args.stack_funs[i]) {
-			trace_ctx.bpf_args.stack_funs[i] = t->index;
-			break;
-		}
-	}
-	if (i == MAX_FUNC_STACK) {
-		pr_err("stack trace is full!\n");
-		return -1;
-	}
-
+	trace_set_status(t->index, FUNC_STATUS_STACK);
 	trace_ctx.bpf_args.stack = true;
 	t->status |= TRACE_STACK;
 	return 0;

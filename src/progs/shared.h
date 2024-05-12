@@ -23,7 +23,6 @@ typedef struct {
 	bool latency_summary;
 	bool func_stats;
 	bool match_mode;
-	u16  stack_funs[MAX_FUNC_STACK];
 	u32  first_rtt;
 	u32  last_rtt;
 	u32  rate_limit;
@@ -95,12 +94,12 @@ enum {
 	FUNC_TYPE_MAX,
 };
 
-enum {
-	FUNC_STATUS_FREE,
-	FUNC_STATUS_SK,
-	FUNC_STATUS_SKB_INVAL,
-	FUNC_STATUS_MATCHER,
-};
+
+#define FUNC_STATUS_FREE	(1 << 0)
+#define FUNC_STATUS_SK		(1 << 1)
+#define FUNC_STATUS_SKB_INVAL	(1 << 2)
+#define FUNC_STATUS_MATCHER	(1 << 3)
+#define FUNC_STATUS_STACK	(1 << 4)
 
 #undef DEFINE_EVENT
 #define DEFINE_EVENT(name, fields...)		\
