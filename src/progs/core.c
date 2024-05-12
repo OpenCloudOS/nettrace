@@ -512,12 +512,12 @@ DEFINE_KPROBE_INIT(__netif_receive_skb_core_pskb,
 }
 
 static inline int bpf_ipt_do_table(context_info_t *info, struct xt_table *table,
-				       struct nf_hook_state *state)
+				   u32 hook)
 {
 	char *table_name;
 	DECLARE_EVENT(nf_event_t, e)
 
-	e->hook = _C(state, hook);
+	e->hook = hook;
 	if (bpf_core_type_exists(struct xt_table))
 		table_name = _C(table, name);
 	else
@@ -527,21 +527,32 @@ static inline int bpf_ipt_do_table(context_info_t *info, struct xt_table *table,
 	return handle_entry_output(info, e);
 }
 
+#ifdef COMPAT_3_X
+DEFINE_KPROBE_INIT(ipt_do_table_legacy, ipt_do_table, 0,
+		   .skb = ctx_get_arg(ctx, 0))
+{
+	struct xt_table *table = info_get_arg(info, 3);
+	u32 hook = (u64)info_get_arg(info, 1);
+
+	return bpf_ipt_do_table(info, table, hook);
+}
+#else
 DEFINE_KPROBE_INIT(ipt_do_table_legacy, ipt_do_table, 0,
 		   .skb = ctx_get_arg(ctx, 0))
 {
 	struct nf_hook_state *state = info_get_arg(info, 1);
 	struct xt_table *table = info_get_arg(info, 2);
 
-	return bpf_ipt_do_table(info, table, state);
+	return bpf_ipt_do_table(info, table, _C(state, hook));
 }
+#endif
 
 DEFINE_KPROBE_SKB(ipt_do_table, 1, 3)
 {
 	struct nf_hook_state *state = info_get_arg(info, 2);
 	struct xt_table *table = info_get_arg(info, 0);
 
-	return bpf_ipt_do_table(info, table, state);
+	return bpf_ipt_do_table(info, table, _C(state, hook));
 }
 
 #ifndef COMPAT_3_X
