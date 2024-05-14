@@ -171,6 +171,9 @@ typedef struct {
 	u16	l3_proto;
 	u8	l4_proto;
 	u8	tcp_flags;
+	u8	saddr_v6_enable:1,
+		daddr_v6_enable:1,
+		addr_v6_enable:1;
 
 #ifdef BPF_DEBUG
 	bool	bpf_debug;

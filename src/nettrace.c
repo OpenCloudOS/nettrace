@@ -347,6 +347,10 @@ static void do_parse_args(int argc, char *argv[])
 	FILL_ADDR(daddr, pkt_args)
 	FILL_ADDR(addr, pkt_args)
 
+	pkt_args->saddr_v6_enable = !!saddr_pf;
+	pkt_args->daddr_v6_enable = !!daddr_pf;
+	pkt_args->addr_v6_enable = !!addr_pf;
+
 	return;
 err:
 	exit(-EINVAL);
