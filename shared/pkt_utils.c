@@ -227,7 +227,11 @@ int ts_print_sock(char *buf, sock_t *ske, char *minfo, bool date_format)
 			  sizeof(saddr));
 		inet_ntop(AF_INET, (void *)&ske->l3.ipv4.daddr, daddr,
 			  sizeof(daddr));
-		goto print_ip;
+		break;
+	case ETH_P_IPV6:
+		sprintf(saddr, "ipv6");
+		sprintf(daddr, "ipv6");
+		break;
 #if 0
 	case ETH_P_IPV6:
 		inet_ntop(AF_INET6, (void *)ske->l3.ipv6.saddr, saddr,
@@ -237,13 +241,10 @@ int ts_print_sock(char *buf, sock_t *ske, char *minfo, bool date_format)
 		goto print_ip;
 #endif
 	default:
-		break;
+		BUF_FMT("ether protocol: %u", ske->proto_l3);
+		goto out;
 	}
 
-	BUF_FMT("ether protocol: %u", ske->proto_l3);
-	goto out;
-
-print_ip:
 	l4 = ske->proto_l4;
 	BUF_FMT("%s: ", i2l4(l4));
 	switch (l4) {
@@ -280,7 +281,6 @@ print_ip:
 	default:
 		break;
 	}
-	goto out;
 out:
 	return 0;
 }

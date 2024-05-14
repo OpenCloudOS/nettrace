@@ -362,13 +362,12 @@ static __always_inline u8 sk_get_protocol(struct sock *sk)
 }
 #endif
 
-static inline int __probe_parse_sk(parse_ctx_t *ctx)
+static inline int probe_parse_sk(struct sock *sk, sock_t *ske,
+				 pkt_args_t *args)
 {
 	struct inet_connection_sock *icsk;
-	pkt_args_t *args = ctx->args;
-	struct sock *sk = ctx->sk;
 	struct sock_common *skc;
-	sock_t *ske = ctx->ske;
+	u8 saddr[16], daddr[16];
 	u16 l3_proto;
 	u8 l4_proto;
 
@@ -383,6 +382,10 @@ static inline int __probe_parse_sk(parse_ctx_t *ctx)
 			goto err;
 		break;
 	case AF_INET6:
+		bpf_probe_read_kernel(saddr, 16, &skc->skc_v6_rcv_saddr);
+		bpf_probe_read_kernel(daddr, 16, &skc->skc_v6_daddr);
+		if (filter_ipv6_check(args, saddr, daddr))
+			goto err;
 		l3_proto = ETH_P_IPV6;
 		break;
 	default:
@@ -553,7 +556,7 @@ err:
 
 #else
 
-static inline int __probe_parse_sk(parse_ctx_t *ctx)
+static inline int probe_parse_sk(struct sock *sk, sock_t *ske, void *args)
 {
 	return -1;
 }
@@ -638,17 +641,6 @@ static __always_inline int probe_parse_skb(struct sk_buff *skb, packet_t *pkt,
 		.pkt = pkt,
 	};
 	return __probe_parse_skb(&ctx);
-}
-
-static __always_inline int probe_parse_sk(struct sock *sk, sock_t *ske,
-					  void *filter_args)
-{
-	parse_ctx_t ctx = {
-		.args = filter_args,
-		.ske = ske,
-		.sk = sk,
-	};
-	return __probe_parse_sk(&ctx);
 }
 
 static inline int direct_parse_skb(struct __sk_buff *skb, packet_t *pkt,
