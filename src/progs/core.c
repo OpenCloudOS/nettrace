@@ -558,28 +558,25 @@ DEFINE_KPROBE_SKB(ipt_do_table, 1, 3)
 #ifndef COMPAT_3_X
 DEFINE_KPROBE_SKB(nf_hook_slow, 0, 4)
 {
+	struct nf_hook_entries *entries = info_get_arg(info, 2);
 	struct nf_hook_state *state;
-	int num, err;
+	int num, err, i;
 
 	state = info_get_arg(info, 1);
-	if (info->args->hooks)
-		goto on_hooks;
+	if (!info->args->hooks) {
+		DECLARE_EVENT(nf_event_t, e)
 
-	DECLARE_EVENT(nf_event_t, e)
+		err = handle_entry(info);
+		if (err)
+			return err;
 
-	err = handle_entry(info);
-	if (err)
-		return err;
+		e->hook = _C(state, hook);
+		e->pf = _C(state, pf);
+		handle_event_output(info, e);
+		return 0;
+	}
 
-	e->hook = _C(state, hook);
-	e->pf = _C(state, pf);
-	handle_event_output(info, e);
-	return 0;
-
-on_hooks:;
-	struct nf_hook_entries *entries = info_get_arg(info, 2);
 	DECLARE_EVENT(nf_hooks_event_t, hooks_event)
-
 	err = handle_entry(info);
 	if (err)
 		return err;
@@ -588,25 +585,12 @@ on_hooks:;
 	hooks_event->pf = _C(state, pf);
 	num = _(entries->num_hook_entries);
 
-#define COPY_HOOK(i) do {					\
-	if (i >= num) goto out;					\
-	hooks_event->hooks[i] = (u64)_(entries->hooks[i].hook);	\
-} while (0)
-
-	COPY_HOOK(0);
-	COPY_HOOK(1);
-	COPY_HOOK(2);
-	COPY_HOOK(3);
-	COPY_HOOK(4);
-	COPY_HOOK(5);
-
-	/* following code can't unroll, don't know why......:
-	 * 
-	 * #pragma clang loop unroll(full)
-	 * 	for (i = 0; i < 8; i++)
-	 * 		COPY_HOOK(i);
-	 */
-out:
+#pragma clang loop unroll_count(6)
+	for (i = 0; i < 6; i++) {
+		if (i >= num)
+			break;
+		hooks_event->hooks[i] = (u64)_(entries->hooks[i].hook);
+	}
 	handle_event_output(info, hooks_event);
 	return 0;
 }

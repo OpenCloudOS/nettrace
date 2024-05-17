@@ -156989,7 +156989,7 @@ struct ip_esp_hdr {
 };
 
 struct nft_pktinfo {
-	struct sk_buff___2 *skb;
+	struct sk_buff *skb;
 	bool tprot_set;
 	u8 tprot;
 	struct xt_action_param xt;
