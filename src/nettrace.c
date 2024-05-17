@@ -97,7 +97,7 @@ static void do_parse_args(int argc, char *argv[])
 		{
 			.lname = "min-latency", .dest = &trace_args->min_latency,
 			.type = OPTION_U32,
-			.desc = "filter by the minial time to live of the skb in ms",
+			.desc = "filter by the minial time to live of the skb in us",
 		},
 		{
 			.lname = "pkt-len", .dest = &trace_args->pkt_len,
@@ -108,6 +108,89 @@ static void do_parse_args(int argc, char *argv[])
 			.lname = "tcp-flags", .dest = &trace_args->tcp_flags,
 			.type = OPTION_STRING,
 			.desc = "filter by TCP flags, such as: SAPR",
+		},
+		{ .type = OPTION_BLANK },
+		{
+			.lname = "basic", .dest = &trace_args->basic,
+			.type = OPTION_BOOL,
+			.desc = "use 'basic' trace mode, don't trace skb's life",
+		},
+		{
+			.lname = "diag", .dest = &trace_args->intel,
+			.type = OPTION_BOOL,
+			.desc = "enable 'diagnose' mode",
+		},
+		{
+			.lname = "diag-quiet", .dest = &trace_args->intel_quiet,
+			.type = OPTION_BOOL,
+			.desc = "only print abnormal packet",
+		},
+		{
+			.lname = "diag-keep", .dest = &trace_args->intel_keep,
+			.type = OPTION_BOOL,
+			.desc = "don't quit when abnormal packet found",
+		},
+		{
+			.lname = "drop", .dest = &trace_args->drop,
+			.type = OPTION_BOOL,
+			.desc = "skb drop monitor mode, for replace of 'droptrace'",
+		},
+#ifdef BPF_FEAT_STACK_TRACE
+		{
+			.lname = "drop-stack", .dest = &trace_args->drop_stack,
+			.type = OPTION_BOOL,
+			.desc = "print the kernel function call stack of kfree_skb",
+		},
+#endif
+		{
+			.lname = "sock", .dest = &trace_args->sock,
+			.type = OPTION_BOOL,
+			.desc = "enable 'sock' mode",
+		},
+		{
+			.lname = "monitor", .dest = &trace_args->monitor,
+			.type = OPTION_BOOL,
+			.desc = "enable 'monitor' mode",
+		},
+		{
+			.lname = "rtt", .dest = &trace_args->rtt,
+			.type = OPTION_BOOL,
+			.desc = "enable 'rtt' in statistics mode",
+		},
+		{
+			.lname = "rtt-detail", .dest = &trace_args->rtt_detail,
+			.type = OPTION_BOOL,
+			.desc = "enable 'rtt' in detail mode",
+		},
+		{
+			.lname = "filter-srtt", .dest = &bpf_args->first_rtt,
+			.type = OPTION_U32,
+			.desc = "filter by the minial first-acked rtt in ms",
+		},
+		{
+			.lname = "filter-minrtt", .dest = &bpf_args->last_rtt,
+			.type = OPTION_U32,
+			.desc = "filter by the minial last-acked rtt in ms",
+		},
+		{
+			.lname = "latency-show", .dest = &trace_args->latency_show,
+			.type = OPTION_BOOL,
+			.desc = "show latency between kernel functions",
+		},
+		{
+			.lname = "latency-free", .dest = &trace_args->latency_free,
+			.type = OPTION_BOOL,
+			.desc = "account the latency of skb free",
+		},
+		{
+			.lname = "latency", .dest = &trace_args->latency,
+			.type = OPTION_BOOL,
+			.desc = "enable 'latency' mode",
+		},
+		{
+			.lname = "latency-summary", .dest = &bpf_args->latency_summary,
+			.type = OPTION_BOOL,
+			.desc = "show latency by statistics",
 		},
 		{ .type = OPTION_BLANK },
 		{
@@ -142,63 +225,49 @@ static void do_parse_args(int argc, char *argv[])
 			.desc = "exit after receiving count packets",
 		},
 		{
-			.lname = "basic", .dest = &trace_args->basic,
-			.type = OPTION_BOOL,
-			.desc = "use 'basic' trace mode, don't trace skb's life",
-		},
-		{
-			.lname = "diag", .dest = &trace_args->intel,
-			.type = OPTION_BOOL,
-			.desc = "enable 'diagnose' mode",
-		},
-		{
-			.lname = "diag-quiet", .dest = &trace_args->intel_quiet,
-			.type = OPTION_BOOL,
-			.desc = "only print abnormal packet",
-		},
-		{
-			.lname = "diag-keep", .dest = &trace_args->intel_keep,
-			.type = OPTION_BOOL,
-			.desc = "don't quit when abnormal packet found",
-		},
-		{
 			.lname = "hooks", .dest = &bpf_args->hooks,
 			.type = OPTION_BOOL,
 			.desc = "print netfilter hooks if dropping by netfilter",
 		},
 		{
-			.lname = "drop", .dest = &trace_args->drop,
+			.lname = "tiny-show", .dest = &bpf_args->tiny_output,
 			.type = OPTION_BOOL,
-			.desc = "skb drop monitor mode, for replace of 'droptrace'",
-		},
-#ifdef BPF_FEAT_STACK_TRACE
-		{
-			.lname = "drop-stack", .dest = &trace_args->drop_stack,
-			.type = OPTION_BOOL,
-			.desc = "print the kernel function call stack of kfree_skb",
-		},
-#endif
-		{
-			.lname = "sock", .dest = &trace_args->sock,
-			.type = OPTION_BOOL,
-			.desc = "enable 'sock' mode",
-		},
-		{
-			.lname = "monitor", .dest = &trace_args->monitor,
-			.type = OPTION_BOOL,
-			.desc = "enable 'monitor' mode",
-		},
-		{
-			.lname = "pkt-fixed", .dest = &bpf_args->pkt_fixed,
-			.type = OPTION_BOOL,
-			.desc = "set this option if you are sure the target "
-				"packet is not NATed to get better "
-				"performance",
+			.desc = "set this option to show less infomation",
 		},
 		{
 			.lname = "trace-stack", .dest = &trace_args->traces_stack,
 			.type = OPTION_STRING,
 			.desc = "print call stack for traces or group",
+		},
+		{
+			.lname = "trace-matcher", .dest = &trace_args->trace_matcher,
+			.type = OPTION_STRING,
+			.desc = "traces that can match packet(default all)",
+		},
+		{
+			.lname = "trace-exclude", .dest = &trace_args->trace_exclude,
+			.type = OPTION_STRING,
+			.desc = "traces that should be disabled",
+		},
+		{
+			.lname = "trace-noclone", .dest = &trace_args->traces_noclone,
+			.type = OPTION_BOOL,
+			.desc = "don't trace skb clone",
+		},
+		{
+			.lname = "func-stats", .dest = &bpf_args->func_stats,
+			.type = OPTION_BOOL,
+			.desc = "only do the statistics for function call",
+		},
+		{
+			.lname = "rate-limit", .dest = &bpf_args->rate_limit,
+			.type = OPTION_U32,
+			.desc = "limit the output to N/s, not valid in diag/default mode",
+		},
+		{
+			.lname = "btf-path", .dest = &trace_args->btf_path,
+			.type = OPTION_STRING,
+			.desc = "custom the path of BTF info of vmlinux",
 		},
 		{ .type = OPTION_BLANK },
 		{
@@ -213,7 +282,7 @@ static void do_parse_args(int argc, char *argv[])
 		},
 #ifdef BPF_DEBUG
 		{
-			.lname = "bpf-debug", .dest = &bpf_args->bpf_debug,
+			.lname = "bpf-debug", .dest = &bpf_args->pkt.bpf_debug,
 			.type = OPTION_BOOL,
 			.desc = "show bpf debug information",
 		},
@@ -278,6 +347,10 @@ static void do_parse_args(int argc, char *argv[])
 	FILL_ADDR(daddr, pkt_args)
 	FILL_ADDR(addr, pkt_args)
 
+	pkt_args->saddr_v6_enable = !!saddr_pf;
+	pkt_args->daddr_v6_enable = !!daddr_pf;
+	pkt_args->addr_v6_enable = !!addr_pf;
+
 	return;
 err:
 	exit(-EINVAL);
@@ -286,15 +359,22 @@ err:
 static void do_exit(int code)
 {
 	static bool is_exited = false;
+	u64 event_count;
 
 	if (is_exited)
 		return;
 
 	is_exited = true;
+	event_count = get_event_count();
+
 	pr_info("end trace...\n");
 	pr_debug("begin destory BPF skel...\n");
 	trace_ctx.ops->trace_close();
 	pr_debug("BPF skel is destroied\n");
+	trace_ctx.stop = true;
+
+	pr_info("total event: %llu, %d context skipped\n",
+		event_count, ctx_count);
 }
 
 int main(int argc, char *argv[])

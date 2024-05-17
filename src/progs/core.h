@@ -2,6 +2,13 @@
 #define _H_PROG_CORE
 
 typedef struct {
+	u16 func1;
+	u16 func2;
+	u32 ts1;
+	u32 ts2;
+} match_val_t;
+
+typedef struct {
 	/* the bpf context args */
 	void *ctx;
 	struct sk_buff *skb;
@@ -9,47 +16,70 @@ typedef struct {
 	event_t *e;
 	/* the filter condition stored in map */
 	bpf_args_t *args;
-	/* used by fexit to pass the retval to event */
-	u64 retval;
+	union {
+		/* used by fexit to pass the retval to event */
+		u64 retval;
+		match_val_t match_val;
+		u32 matched;
+	};
 	u16 func;
+	u8  func_status;
+	u8  no_event:1;
 } context_info_t;
-
-#define MODE_SKIP_LIFE_MASK (TRACE_MODE_BASIC_MASK |	\
-			     TRACE_MODE_DROP_MASK |	\
-			     TRACE_MODE_SOCK_MASK |	\
-			     TRACE_MODE_MONITOR_MASK)
 
 /* init the skb by the index of func args */
 #define DEFINE_KPROBE_SKB(name, skb_index, arg_count)		\
 	DEFINE_KPROBE_INIT(name, name, arg_count,		\
 			   .skb = ctx_get_arg(ctx, skb_index))
 
-#ifndef COMPAT_MODE
-#define DECLARE_EVENT(type, name)			\
-	pure_##type __attribute__((__unused__)) *name;	\
-	int __attribute__((__unused__)) name##_size;	\
-	detail_##type __##name;				\
-	info->e = (void *)&__##name;			\
-	if (info->args->detail) {			\
-		name = (void *)info->e +		\
-		       offsetof(detail_##type, __event_filed);	\
-		__##name = (detail_##type) {0};		\
-		name##_size = sizeof(detail_##type);	\
-	} else {					\
-		name = (void *)info->e +		\
-		       offsetof(type, __event_filed);	\
-		*(type *)info->e = (type) {0};		\
-		name##_size = sizeof(type);		\
+/* BPF_NO_GLOBAL_DATA means this kernel version is old, we need to initialize
+ * all the event data.
+ */
+#ifdef BPF_NO_GLOBAL_DATA
+#define DECLARE_EVENT(type, name)				\
+	pure_##type __attribute__((__unused__)) *name;		\
+	type __attribute__((__unused__))__##name;		\
+	detail_##type __detail_##name = {0};			\
+	info->e = (void *)&__detail_##name;			\
+	if (info->args->detail) {				\
+		WRITE_ONCE(name, (void *)info->e +		\
+		       offsetof(detail_##type, __event_filed));	\
+	} else {						\
+		WRITE_ONCE(name, (void *)info->e +		\
+		       offsetof(type, __event_filed));		\
 	}
+
+#define handle_event_output(info, e)		\
+	do_event_output(info, (info->args->detail ? sizeof(__detail_##e) : sizeof(__##e)))
 #else
-/* use the detailed event version directly for compat mode. */
-#define DECLARE_EVENT(type, name)			\
-	detail_##type __##name = { 0 };			\
-	detail_##type __attribute__((__unused__)) *name;\
-	int __attribute__((__unused__)) name##_size;	\
-	name = &__##name;				\
-	info->e = (void *)name;				\
-	name##_size = sizeof(detail_##type);
+/* initialize only part event data if not detail */
+#define DECLARE_EVENT(type, name)				\
+	pure_##type __attribute__((__unused__)) *name;		\
+	type __attribute__((__unused__))__##name;		\
+	detail_##type __detail_##name;				\
+	info->e = (void *)&__detail_##name;			\
+	int name##_size;					\
+	if (info->args->detail) {				\
+		name##_size = sizeof(detail_##type);		\
+		__builtin_memset(info->e, 0, name##_size);	\
+		name = offsetof(detail_##type, __event_filed) +	\
+		       (void *)info->e;				\
+	} else {						\
+		name##_size = sizeof(type);			\
+		__builtin_memset(info->e, 0, name##_size);	\
+		name = offsetof(type, __event_filed) +		\
+		       (void *)info->e;				\
+	}
+
+#define handle_event_output(info, e) do_event_output(info, e##_size)
 #endif
+
+#define handle_entry_output(info, e)		\
+({						\
+	int err = handle_entry(info);		\
+	if (!err)				\
+		handle_event_output(info, e);	\
+	err;					\
+})
 
 #endif

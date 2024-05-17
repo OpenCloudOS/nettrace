@@ -41,8 +41,8 @@
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 #endif
 
-/* redefine all the CO-RE usage in COMPAT mode */
-#ifdef COMPAT_MODE
+/* redefine all the CO-RE usage if BTF not supported */
+#ifdef NO_BTF
 #undef bpf_core_type_exists
 #define bpf_core_type_exists(type) false
 
@@ -54,6 +54,14 @@
 
 #undef bpf_core_field_offset
 #define bpf_core_field_offset(type, field) offsetof(type, field)
+#endif
+
+#define likely(x)		__builtin_expect(!!(x), 1)
+#define unlikely(x)		__builtin_expect(!!(x), 0)
+
+#ifndef READ_ONCE
+#define READ_ONCE(x)		(*(volatile typeof(x) *)&x)
+#define WRITE_ONCE(x, v)	(*(volatile typeof(x) *)&x) = (v)
 #endif
 
 #endif

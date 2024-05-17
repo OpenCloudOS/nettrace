@@ -91,26 +91,16 @@ children:
     - tcf_classify:0
     - cls_bpf_classify:0
     - tcf_bpf_act:0
-    - name: pfifo_enqueue:0
-      custom: 1
+    - name: qdisc_dequeue:3
+      tp: qdisc/qdisc_dequeue
+      custom: true
+      skboffset: 32
       analyzer: qdisc
-      monitor: 1
-      target: pfifo_enqueue
-      rules:
-      - exp: ne 0
-        level: error
-        msg: failed to queue packet to qdisc
-    - name: pfifo_fast_enqueue:0
-      analyzer: qdisc
-      custom: 1
-      target: pfifo_fast_enqueue
-      monitor: 1
-      rules:
-      - exp: ne 0
-        level: error
-        msg: failed to queue packet to qdisc
-    - name: sch_direct_xmit:0
-      custom: 1
+    - &qdisc_enqueue
+      name: qdisc_enqueue:2
+      tp: qdisc/qdisc_enqueue
+      custom: true
+      skboffset: 24
       analyzer: qdisc
   - name: ipvlan
     desc: ipvlan network interface
@@ -283,6 +273,8 @@ children:
     desc: ip layer of packet out
     visual: true
     children:
+    - name: __ip_queue_xmit:1/0
+      skbinvalid: true
     - ip_output:2
     - ip_finish_output:2
     - ip_finish_output_gso:2
@@ -393,14 +385,18 @@ children:
     desc: tcp layer of packet out
     visiual: true
     children:
-    - name: __tcp_transmit_skb/0
+    - tcp_sendmsg_locked/0
+    - name: tcp_skb_entail/0:1
+      skbinvalid: true
+    - __tcp_push_pending_frames/0
+    - name: __tcp_transmit_skb:1/0
+      skbinvalid: true
       rules:
       - exp: ne 0
         level: warn
         msg: failed to xmit skb to ip layer
-    - tcp_sendmsg_locked/0
-    - __tcp_push_pending_frames/0
-    - __tcp_retransmit_skb/0:1
+    - name: __tcp_retransmit_skb/0:1
+      skbinvalid: true
 - name: udp
   desc: udp protocol layer (L4) of the network stack
   children:
@@ -458,6 +454,9 @@ children:
         msg: TCP socket is closed
     - *tcp_rcv_state_process
     - tcp_send_active_reset/0
+    - name: tcp_ack_update_rtt/0
+      custom: 1
+      analyzer: rtt
   - name: tcp-congestion
     desc: TCP congestion control releated hooks
     children:
@@ -515,6 +514,8 @@ children:
   children:
   - name: __kfree_skb
     skb: 0
+    analyzer: free
+  - name: kfree_skb_partial:0
     analyzer: free
   - name: skb_clone
     skb: 0

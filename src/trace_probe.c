@@ -59,7 +59,6 @@ static int probe_trace_attach()
 {
 	char kret_name[128];
 	trace_t *trace;
-	int err;
 
 	trace_for_each(trace) {
 		if (!(trace->status & TRACE_ATTACH_MANUAL))
@@ -97,9 +96,12 @@ static void probe_check_monitor()
 
 static int probe_trace_load()
 {
+	DECLARE_LIBBPF_OPTS(bpf_object_open_opts, opts,
+		.btf_custom_path = trace_ctx.args.btf_path,
+	);
 	int i = 0;
 
-	skel = kprobe__open();
+	skel = kprobe__open_opts(&opts);
 	if (!skel) {
 		pr_err("failed to open kprobe-based eBPF\n");
 		goto err;
@@ -121,23 +123,6 @@ static int probe_trace_load()
 
 	for (; i < ARRAY_SIZE(cpus); i++)
 		INIT_LIST_HEAD(&cpus[i]);
-
-	switch (trace_ctx.mode) {
-	case TRACE_MODE_BASIC:
-	case TRACE_MODE_DROP:
-	case TRACE_MODE_MONITOR:
-		probe_ops.trace_poll = basic_poll_handler;
-		break;
-	case TRACE_MODE_SOCK:
-		probe_ops.trace_poll = async_poll_handler;
-		break;
-	case TRACE_MODE_DIAG:
-	case TRACE_MODE_TIMELINE:
-		probe_ops.trace_poll = tl_poll_handler;
-		break;
-	default:
-		break;
-	}
 
 	return 0;
 err:
@@ -217,8 +202,8 @@ found:
 	put_fake_analy_ctx(pos->fake_ctx);
 	e->entry = pos;
 	pos->status &= ~ANALY_ENTRY_ONCPU;
-	pr_debug("found exit for entry: %s(%llx) on cpu %d with return "
-		 "value %llx, ctx:%llx:%d\n", trace->name, pos->event->key, cpu,
+	pr_debug("found exit for entry: %s(%x) on cpu %d with return "
+		 "value %llx, ctx:%llx:%u\n", trace->name, pos->event->key, cpu,
 		 e->event.val, PTR2X(pos->ctx), pos->ctx->refs);
 out:
 	return RESULT_CONT;
@@ -229,7 +214,7 @@ static analyzer_result_t probe_analy_entry(trace_t *trace, analy_entry_t *e)
 	struct list_head *list;
 
 	if (!trace_is_ret(trace)) {
-		pr_debug("tp found for %s(%llx), ctx:%llx:%d\n", trace->name,
+		pr_debug("entry found for %s(%llx), ctx:%llx:%d\n", trace->name,
 			 (u64)e->event->key, PTR2X(e->ctx),
 			 e->ctx->refs);
 		goto out;
@@ -248,7 +233,7 @@ out:
 
 static void probe_trace_ready()
 {
-	bpf_set_config_field(skel, bss, ready, true);
+	bpf_set_config_field(skel, bss, bpf_args_t, ready, true);
 }
 
 #ifdef BPF_FEAT_STACK_TRACE
@@ -283,7 +268,7 @@ static bool probe_trace_supported()
 }
 
 analyzer_t probe_analyzer = {
-	.mode = TRACE_MODE_DIAG_MASK | TRACE_MODE_TIMELINE_MASK,
+	.mode = TRACE_MODE_CTX_MASK | TRACE_MODE_TINY_MASK,
 	.analy_entry = probe_analy_entry,
 	.analy_exit = probe_analy_exit,
 };

@@ -40,9 +40,9 @@ typedef struct {
 
 typedef struct fake_analy_ctx {
 	analy_ctx_t *ctx;
-	u64 key;
 	struct hlist_node hash;
 	struct list_head list;
+	u32 key;
 	u16 refs;
 } fake_analy_ctx_t;
 
@@ -72,6 +72,13 @@ typedef struct {
 	u16	cpu;
 } analy_exit_t;
 
+typedef struct {
+	struct list_head list;
+	u16 size;
+	u16 cpu;
+	u8 data[0];
+} data_list_t;
+
 typedef enum analyzer_result {
 	RESULT_CONT,
 	RESULT_CONSUME,
@@ -89,6 +96,7 @@ typedef struct analyzer {
 #define ANALY_ENTRY_EXTINFO	(1 << 1)
 #define ANALY_ENTRY_MSG		(1 << 2)
 #define ANALY_ENTRY_ONCPU	(1 << 3)
+#define ANALY_ENTRY_DLIST	(1 << 4)
 
 #define ANALYZER(name) analyzer_##name
 #define DEFINE_ANALYZER_PART(name, type, mode_mask)			\
@@ -128,23 +136,23 @@ DECLARE_ANALYZER(ret);
 DECLARE_ANALYZER(iptable);
 DECLARE_ANALYZER(nf);
 DECLARE_ANALYZER(qdisc);
+DECLARE_ANALYZER(rtt);
 DECLARE_ANALYZER(default);
 
-#ifndef COMPAT_MODE
 #define define_pure_event(type, name, data)			\
 	pure_##type *name =					\
 		(!trace_ctx.detail ? (void *)(data) +		\
 			offsetof(type, __event_filed) :		\
 			(void *)(data) +			\
 			offsetof(detail_##type, __event_filed))
-#else
-#define define_pure_event(type, name, data)			\
-	detail_##type *name = (void *)(data)
-#endif
 
-void tl_poll_handler(void *raw_ctx, int cpu, void *data, u32 size);
+void ctx_poll_handler(void *raw_ctx, int cpu, void *data, u32 size);
 void basic_poll_handler(void *ctx, int cpu, void *data, u32 size);
 void async_poll_handler(void *ctx, int cpu, void *data, u32 size);
+void latency_poll_handler(void *ctx, int cpu, void *data, u32 size);
+
+int stats_poll_handler();
+int func_stats_poll_handler();
 
 static inline trace_t *get_trace_from_analy_entry(analy_entry_t *e)
 {
@@ -166,14 +174,33 @@ static inline void put_analy_ctx(analy_ctx_t *ctx)
 	ctx->refs--;
 }
 
-static inline u32 get_lifetime_ms(analy_ctx_t *ctx)
+static inline u32 get_entry_dela_us(analy_entry_t *n, analy_entry_t *o)
+{
+	if (n == o)
+		return 0;
+
+	return (n->event->pkt.ts - o->event->pkt.ts) / 1000;
+}
+
+static inline u32 get_lifetime_us(analy_ctx_t *ctx, bool skip_last)
 {
 	analy_entry_t *first, *last;
 
 	first = list_first_entry(&ctx->entries, analy_entry_t, list);
 	last = list_last_entry(&ctx->entries, analy_entry_t, list);
 
-	return (last->event->pkt.ts - first->event->pkt.ts) / 1000000;
+	if (skip_last) {
+		if (first == last)
+			return 0;
+		last = list_prev_entry(last, list);
+	}
+
+	return get_entry_dela_us(last, first);
+}
+
+static inline u32 get_lifetime_ms(analy_ctx_t *ctx, bool skip_last)
+{
+	return get_lifetime_us(ctx, skip_last) / 1000;
 }
 
 static inline void get_fake_analy_ctx(fake_analy_ctx_t *ctx)
@@ -191,11 +218,6 @@ static inline void put_fake_analy_ctx(fake_analy_ctx_t *ctx)
 		put_analy_ctx(ctx->ctx);
 }
 
-static inline bool event_is_ret(int size)
-{
-	return size - 8 <= sizeof(retevent_t);
-}
-
 static inline void entry_set_extinfo(analy_entry_t *e, char *info)
 {
 	e->extinfo = info;
@@ -208,10 +230,36 @@ static inline void entry_set_msg(analy_entry_t *e, char *info)
 	e->status |= ANALY_ENTRY_MSG;
 }
 
+static inline analy_entry_t *analy_entry_alloc(void *data, u32 size)
+{
+	analy_entry_t *entry = calloc(1, sizeof(*entry));
+	int copy_size = size;
+	void *event;
+
+	if (!entry)
+		return NULL;
+
+	if (size > MAX_EVENT_SIZE + 8) {
+		pr_err("trace data is too big! size: %u, max: %lu\n",
+		       size, MAX_EVENT_SIZE);
+		return NULL;
+	}
+	copy_size = MIN(size, MAX_EVENT_SIZE);
+	event = malloc(copy_size);
+
+	memcpy(event, data, copy_size);
+	entry->event = event;
+	return entry;
+}
+
 static inline bool mode_has_context()
 {
-	return (1 << trace_ctx.mode) & (TRACE_MODE_TIMELINE_MASK |
-		TRACE_MODE_DIAG_MASK);
+	return trace_ctx.mode_mask & TRACE_MODE_CTX_MASK;
+}
+
+static inline int func_get_type(void *data)
+{
+	return ((event_t *)data)->meta;
 }
 
 #endif

@@ -154,7 +154,9 @@ Usage:
     --pid            filter by current process id(pid)
     --min-latency    filter by the minial time to live of the skb in ms
     --pkt-len        filter by the IP packet length (include header) in byte
-    --tcp-flags      filter by TCP flags, such as: SAPR
+    --tcp-flags      filter by TCP flags, such as: SAPRF
+    --tcp-rtt        filter by the minial rtt, in ms
+    --tcp-srtt       filter by the minial srtt, in ms
 
     -t, --trace      enable trace group or trace
     --ret            show function return value
@@ -183,6 +185,10 @@ Usage:
 
 - `netns`：根据网络命名空间进行过滤，该参数后面跟的是网络命名空间的inode，可以通过`ls -l /proc/<pid>/ns/net`来查看对应进程的网络命名空间的inode号
 - `netns-current`：仅显示当前网络命名空间的报文，等价于`--netns 当前网络命名空间的inode`
+- `pid`：根据当前处理报文的进程的ID进行过滤
+- `tcp-flags`：根据TCP报文的flags进行过滤，支持的flag包括：SAPRF
+- `tcp-rtt`：sock和monitor模式下可用，筛选出rtt高于该参数的事件，单位ms
+- `tcp-srtt`：sock和monitor模式下可用，筛选出srtt高于该参数的事件，单位ms
 - `t/trace`：要启用的跟踪模块，默认启用所有
 - `ret`：跟踪和显示内核函数的返回值
 - `detail`：显示跟踪详细信息，包括当前的进程、网口和CPU等信息
@@ -694,6 +700,8 @@ begin trace...
 
 ### 3.4 套接口跟踪
 
+#### 3.4.1 常规用法
+
 套接口跟踪在原理上与skb的basic模式很类似，只不过跟踪对象从skb换成了sock。常规的过滤参数，如ip、端口等，在该模式下都可以直接使用，基本用法如下所示：
 
 ```shell
@@ -711,6 +719,40 @@ begin trace...
 ```
 
 其中，`info`里显示的内容分别是：报文在外数量、报文重传数量。`timer`显示的为当前套接口上的定时器和超时时间。目前，信息还在不断完善中。
+
+#### 3.4.2 TCP延迟分析
+
+在sock和monitor模式下，都可以去分析连接的RTT变化，支持根据rtt和srtt来进行过滤。这里是通过跟踪tcp_ack_update_rtt内核函数的调用来获取套接口的rtt更新事件的，sock模式下的使用方式如下：
+
+```shell
+./src/nettrace --sock -t tcp_ack_update_rtt
+begin trace...
+[2651534.413484] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:22 -> 10.85.114.159:53493 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:37ms, rtt:36ms*
+[2651534.429314] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:22 -> 10.85.114.159:53493 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:37ms, rtt:35ms*
+[2651534.875337] [tcp_ack_update_rtt.isra.51] TCP: 127.0.0.1:62522 -> 127.0.0.1:14275 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:19ms, rtt:0ms*
+[2651534.878344] [tcp_ack_update_rtt.isra.51] TCP: 127.0.0.1:14275 -> 127.0.0.1:62522 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:9ms, rtt:0ms*
+[2651534.917260] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:22 -> 10.85.114.159:53493 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:37ms, rtt:38ms*
+[2651534.934738] [tcp_ack_update_rtt.isra.51] TCP: 127.0.0.1:14275 -> 127.0.0.1:62530 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:2ms, rtt:0ms*
+[2651534.960925] [tcp_ack_update_rtt.isra.51] TCP: 127.0.0.1:62522 -> 127.0.0.1:14275 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:17ms, rtt:40ms*
+[2651534.972270] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:22 -> 10.85.114.159:53493 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:37ms, rtt:37ms*
+```
+
+SRTT代表的是经过平滑处理的RTT，而RTT代表的是本次发送的报文被确认过程中实际的RTT。可以通过参数来进行过滤，从而找出高延迟的TCP。下面的命令就是过滤出来RTT超过10ms的数据传输：
+
+```shell
+./src/nettrace --sock -t tcp_ack_update_rtt --tcp-rtt 10
+begin trace...
+[2651713.721553] [tcp_ack_update_rtt.isra.51] TCP: 127.0.0.1:14275 -> 127.0.0.1:62522 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:7ms, rtt:14ms*
+[2651713.745358] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:22 -> 10.85.114.159:53493 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:38ms, rtt:38ms*
+[2651713.759558] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:22 -> 10.85.114.159:53493 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:38ms, rtt:37ms*
+[2651713.769447] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:22 -> 10.85.114.159:53493 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:38ms, rtt:36ms*
+[2651713.773097] [tcp_ack_update_rtt.isra.51] TCP: 127.0.0.1:14275 -> 127.0.0.1:62522 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:8ms, rtt:40ms*
+[2651713.805746] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:22 -> 10.85.114.159:53493 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:37ms, rtt:39ms*
+[2651714.213333] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:18234 -> 10.159.124.73:10000 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:4ms, rtt:43ms*
+[2651714.232011] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:22 -> 10.85.114.159:53493 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:38ms, rtt:36ms*
+[2651714.306847] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:22 -> 10.85.114.159:53493 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:37ms, rtt:38ms*
+[2651714.348913] [tcp_ack_update_rtt.isra.51] TCP: 127.0.0.1:62522 -> 127.0.0.1:14275 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:17ms, rtt:40ms*
+```
 
 ### 3.5 监控模式
 
@@ -734,7 +776,18 @@ begin trace...
 [25.168000] [nf_hook_slow        ] ICMP: 192.168.122.1 -> 192.168.122.9 ping request, seq: 1, id: 1523 *ipv4 in chain: INPUT* *packet is dropped by netfilter (NF_DROP)*
 ```
 
-监控模式下，也可以使用普通模式的下各种参数，如报文过滤、`--detail`详情显示等。
+监控模式下，也可以使用普通模式的下各种参数，如报文过滤、`--detail`详情显示等。默认情况下，monitor模式下不跟踪rtt。但是如果指定了`--tcp-rtt`或者`--tcp-srtt`参数，那么就会跟踪rtt事件：
+
+```shell
+./src/nettrace --monitor --tcp-rtt 10 
+begin trace...
+[2651830.434898] [tcp_ack_update_rtt.isra.51] TCP: 127.0.0.1:14275 -> 127.0.0.1:62522 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:8ms, rtt:40ms*
+[2651830.435267] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:22 -> 10.85.114.159:53493 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:38ms, rtt:41ms*
+[2651830.484520] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:22 -> 10.85.114.159:53493 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:39ms, rtt:37ms*
+[2651830.529385] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:22 -> 10.85.114.159:53493 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:38ms, rtt:36ms*
+[2651830.578473] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:22 -> 10.85.114.159:53493 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:38ms, rtt:41ms*
+[2651830.752827] [tcp_retransmit_timer] TCP: 10.37.80.82:100 -> 10.154.16.12:8603 SYN_SENT CA_Open info:(0 0) mem:(w0 r0) *TCP retransmission timer out*
+```
 
 ## 四、问题汇总
 

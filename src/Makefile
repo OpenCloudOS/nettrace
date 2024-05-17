@@ -7,19 +7,43 @@ prog-nettrace-origin = \
 		dropreason.c
 prog-nettrace	= $(prog-nettrace-origin) nettrace.c
 
-ifndef COMPAT
+ifdef COMPAT
+	NO_GLOBAL_DATA	:= 1
+	NO_BTF		:= 1
+	INLINE		:= 1
+endif
+
+ifndef NO_BTF
 	bpf_progs += progs/tracing progs/feat_args_ext
 endif
 
 BPF_EXTRA_DEP := kheaders.h progs/core.c progs/core.h
 include ../common.mk
 
-ifdef COMPAT
+cmd_kversion := awk -F '=' 'NR>10{exit;}		\
+		$$1~/^VERSION/{				\
+			sub(/ /, "", $$2); a=$$2;	\
+		}					\
+		$$1~/^PATCHLEVEL/{			\
+			sub(/ /, "", $$2); b=$$2	\
+		}					\
+		$$1~/^SUBLEVEL/{			\
+			sub(/ /, "", $$2); c=$$2	\
+		}					\
+		END{printf "%s.%s.%s\n", a, b, c}'	\
+		$(HEADERS)/Makefile
+
+ifdef NO_BTF
 ifneq ($(shell grep -c get_stackid $(HEADERS)/include/uapi/linux/bpf.h),0)
 	CFLAGS += -DBPF_FEAT_STACK_TRACE
 endif
 ifneq ($(shell grep -c "sk_protocol.*8" $(HEADERS)/include/net/sock.h),0)
 	BPF_CFLAGS += -DBPF_FEAT_SK_PRPTOCOL_LEGACY
+endif
+	__KERN_VER := $(shell $(cmd_kversion))
+	CFLAGS += -D__KERN_VER=$(__KERN_VER)
+ifeq ($(shell echo $(__KERN_VER) | cut -c 1),3)
+	CFLAGS += -DCOMPAT_3_X
 endif
 else
 	CFLAGS += -DBPF_FEAT_STACK_TRACE

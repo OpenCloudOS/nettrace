@@ -16,7 +16,6 @@
 static time_t time_offset;
 static struct tm *convert_ts_to_date(u64 ts)
 {
-	struct tm *p;
 	time_t tmp;
 
 	if (!time_offset) {
@@ -31,25 +30,29 @@ static struct tm *convert_ts_to_date(u64 ts)
 	return localtime(&tmp);
 }
 
+int ts_print_ts(char *buf, u64 ts, bool date_format)
+{
+	struct tm *p;
+
+	if (date_format) {
+		p = convert_ts_to_date(ts);
+		return sprintf(buf, "[%d-%d-%d %02d:%02d:%02d.%06lld] ", 1900 + p->tm_year,
+			       1 + p->tm_mon, p->tm_mday, p->tm_hour, p->tm_min,
+			       p->tm_sec, ts % 1000000000 / 1000);
+	} else {
+		return sprintf(buf, "[%llu.%06llu] ", ts / 1000000000,
+			       ts % 1000000000 / 1000);
+	}
+}
+
 int ts_print_packet(char *buf, packet_t *pkt, char *minfo,
 		    bool date_format)
 {
 	static char saddr[MAX_ADDR_LENGTH], daddr[MAX_ADDR_LENGTH];
-	u64 ts = pkt->ts;
-	struct tm *p;
 	u8 flags, l4;
-	int pos = 0;
+	int pos;
 
-	if (date_format) {
-		p = convert_ts_to_date(ts);
-		BUF_FMT("[%d-%d-%d %02d:%02d:%02d.%06lld] ", 1900 + p->tm_year,
-			1 + p->tm_mon, p->tm_mday, p->tm_hour, p->tm_min,
-			p->tm_sec, ts % 1000000000 / 1000);
-	} else {
-		BUF_FMT("[%llu.%06llu] ", ts / 1000000000,
-			ts % 1000000000 / 1000);
-	}
-
+	pos = ts_print_ts(buf, pkt->ts, date_format);
 	if (minfo)
 		BUF_FMT("%s", minfo);
 
@@ -65,12 +68,14 @@ int ts_print_packet(char *buf, packet_t *pkt, char *minfo,
 		inet_ntop(AF_INET, (void *)&pkt->l3.ipv4.daddr, daddr,
 			  sizeof(daddr));
 		goto print_ip;
+#ifndef NT_DISABLE_IPV6
 	case ETH_P_IPV6:
 		inet_ntop(AF_INET6, (void *)pkt->l3.ipv6.saddr, saddr,
 			  sizeof(saddr));
 		inet_ntop(AF_INET6, (void *)pkt->l3.ipv6.daddr, daddr,
 			  sizeof(daddr));
 		goto print_ip;
+#endif
 	case ETH_P_ARP:
 		goto print_arp;
 	default:
@@ -222,21 +227,24 @@ int ts_print_sock(char *buf, sock_t *ske, char *minfo, bool date_format)
 			  sizeof(saddr));
 		inet_ntop(AF_INET, (void *)&ske->l3.ipv4.daddr, daddr,
 			  sizeof(daddr));
-		goto print_ip;
+		break;
+	case ETH_P_IPV6:
+		sprintf(saddr, "ipv6");
+		sprintf(daddr, "ipv6");
+		break;
+#if 0
 	case ETH_P_IPV6:
 		inet_ntop(AF_INET6, (void *)ske->l3.ipv6.saddr, saddr,
 			  sizeof(saddr));
 		inet_ntop(AF_INET6, (void *)ske->l3.ipv6.daddr, daddr,
 			  sizeof(daddr));
 		goto print_ip;
+#endif
 	default:
-		break;
+		BUF_FMT("ether protocol: %u", ske->proto_l3);
+		goto out;
 	}
 
-	BUF_FMT("ether protocol: %u", ske->proto_l3);
-	goto out;
-
-print_ip:
 	l4 = ske->proto_l4;
 	BUF_FMT("%s: ", i2l4(l4));
 	switch (l4) {
@@ -254,17 +262,18 @@ print_ip:
 	switch (l4) {
 	case IPPROTO_TCP: {
 		tcp_ca_data_t *ca_state = (void *)&ske->ca_state;
-		BUF_FMT(" %s %s info:(%u %u)", state_name[ske->state],
+		BUF_FMT(" %s %s out:(p%u r%u) unack:%u", state_name[ske->state],
 			ca_name[ca_state->icsk_ca_state],
 			ske->l4.tcp.packets_out,
-			ske->l4.tcp.retrans_out);
+			ske->l4.tcp.retrans_out,
+			ske->l4.tcp.snd_una);
 	}
 	case IPPROTO_UDP:
 		hz = kernel_hz();
 		hz = hz > 0 ? hz : 1;
 		BUF_FMT(" mem:(w%u r%u)", ske->wqlen, ske->rqlen);
 		if (ske->timer_pending)
-			BUF_FMT(" timer:(%s, %ld.%03lds)",
+			BUF_FMT(" timer:(%s, %u.%03us)",
 				timer_name[ske->timer_pending],
 				ske->timer_out / hz,
 				((ske->timer_out * 1000) / hz) % 1000);
@@ -272,7 +281,6 @@ print_ip:
 	default:
 		break;
 	}
-	goto out;
 out:
 	return 0;
 }

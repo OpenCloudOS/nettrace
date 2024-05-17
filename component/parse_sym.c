@@ -16,7 +16,6 @@ struct loc_result *loc_list;
 static int sym_init_data()
 {
 	size_t size = 1024 * 1024 * 4; // begin with 4M
-	size_t left = size;
 	char *cur, *tmp;
 	int count;
 	FILE *f;
@@ -38,9 +37,10 @@ static int sym_init_data()
 		if (feof(f))
 			break;
 
-		size *= 2;
+		count += cur - proc_syms;
+		size <<= 1;
 		tmp = realloc(proc_syms, size);
-		cur = tmp + (cur - proc_syms) + count;
+		cur = tmp + count;
 		proc_syms = tmp;
 	}
 
@@ -90,7 +90,7 @@ static struct sym_result *sym_lookup_cache(__u64 pc, bool exact)
 static struct sym_result *sym_lookup_proc(__u64 pc, bool exact)
 {
 	char _cname[MAX_SYM_LENGTH], _pname[MAX_SYM_LENGTH],
-	     *pname = _pname, *cname = _cname, *tmp;
+	     *pname = _pname, *cname = _cname;
 	struct sym_result *result;
 	__u64 cpc, ppc = 0;
 	FILE *f;
@@ -130,10 +130,7 @@ static struct sym_result *sym_lookup_proc(__u64 pc, bool exact)
 		sym_add_cache(result);
 		goto ok;
 	}
-
-out_close:
 	fclose(f);
-out_free:
 	free(result);
 err:
 	return NULL;

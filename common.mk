@@ -8,7 +8,7 @@ BPF_CFLAGS	= $(CFLAGS) -Wno-unused-function			\
 		  -Wno-compare-distinct-pointer-types -Wuninitialized	\
 		  -D__TARGET_ARCH_$(SRCARCH) -DBPF_NO_PRESERVE_ACCESS_INDEX
 HOST_CFLAGS	= \
-		-lbpf -lelf -lz -O2 -static $(CFLAGS)			\
+		-lbpf -lelf -lz -O2 -static $(CFLAGS) -Wall		\
 		-Wno-deprecated-declarations -DVERSION=$(VERSION)	\
 		-DRELEASE=$(RELEASE)					\
 		-I$(ROOT)/shared/ -I$(ROOT)/component
@@ -53,16 +53,24 @@ ifdef NO_GLOBAL_DATA
 	CFLAGS		+= -DBPF_NO_GLOBAL_DATA
 endif
 
-ifdef COMPAT
+ifdef DISABLE_IPV6
+	CFLAGS		+= -DNT_DISABLE_IPV6
+endif
+
+ifdef NO_BTF
 ifeq ($(wildcard $(HEADERS)),)
 $(error kernel headers not exist in COMPAT mode, please install it)
 endif
 	kheaders_cmd	:= ln -s vmlinux_header.h kheaders.h
-	CFLAGS		+= -DCOMPAT_MODE -DBPF_NO_GLOBAL_DATA
+	CFLAGS		+= -DNO_BTF
 	BPF_CFLAGS	+= $(KERNEL_CFLAGS)
 else
 	kheaders_cmd	:= ln -s ../shared/bpf/vmlinux.h kheaders.h
 	BPF_CFLAGS	+= -target bpf
+endif
+
+ifdef INLINE
+	CFLAGS		+= -DINLINE_MODE
 endif
 
 ifndef BPFTOOL

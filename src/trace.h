@@ -51,7 +51,7 @@ enum {
 
 typedef struct trace {
 	/* name of the kernel function this trace targeted */
-	char	name[128];
+	char	name[64];
 	char	*desc;
 	char	*msg;
 	/* name of the eBPF program */
@@ -68,6 +68,7 @@ typedef struct trace {
 	u8	sk;
 	/* the same as skb_offset */
 	u8	skoffset;
+	bool	skbinvalid;
 	/* traces in a global list */
 	struct list_head all;
 	/* traces in the same group */
@@ -110,12 +111,21 @@ typedef struct trace_args {
 	bool sock;
 	bool netns_current;
 	bool force;
+	bool latency_show;
+	bool latency_free;
+	bool rtt;
+	bool rtt_detail;
+	bool latency;
+	bool traces_noclone;
 	u32  min_latency;
 	char *traces;
 	char *traces_stack;
+	char *trace_matcher;
+	char *trace_exclude;
 	char *pkt_len;
 	char *tcp_flags;
 	u32  count;
+	char *btf_path;
 } trace_args_t;
 
 typedef struct {
@@ -131,6 +141,7 @@ typedef struct {
 	void (*trace_feat_probe)();
 	bool (*trace_supported)();
 	void (*prepare_traces)();
+	int  (*raw_poll)();
 	struct analyzer *analyzer;
 } trace_ops_t;
 
@@ -139,11 +150,14 @@ typedef struct {
 	trace_args_t	args;
 	bpf_args_t	bpf_args;
 	trace_mode_t	mode;
+	__u64		mode_mask;
 	bool		stop;
 	/* if drop reason feature is supported */
 	bool		drop_reason;
 	/* enable detail output */
 	bool		detail;
+	bool		skip_last;
+	bool		trace_clone;
 	struct bpf_object *obj;
 } trace_context_t;
 
@@ -158,6 +172,7 @@ extern trace_t *all_traces[];
 extern trace_group_t root_group;
 extern int trace_count;
 extern struct list_head trace_list;
+extern u32 ctx_count;
 
 #define DECLARE_TRACES(name, ...) extern trace_t trace_##name;
 DEFINE_ALL_PROBES(DECLARE_TRACES, DECLARE_TRACES, DECLARE_TRACES)
@@ -230,6 +245,11 @@ static inline bool trace_is_retonly(trace_t *t)
 	return t->status & TRACE_RET_ONLY;
 }
 
+static inline void trace_set_status(int func, int status)
+{
+	trace_ctx.bpf_args.trace_status[func] |= status;
+}
+
 static inline bool trace_using_sk(trace_t *t)
 {
 	return (trace_ctx.mode == TRACE_MODE_MONITOR && !t->skb) ||
@@ -238,19 +258,7 @@ static inline bool trace_using_sk(trace_t *t)
 
 static inline int trace_set_stack(trace_t *t)
 {
-	int i = 0;
-
-	for (; i < MAX_FUNC_STACK; i++) {
-		if (!trace_ctx.bpf_args.stack_funs[i]) {
-			trace_ctx.bpf_args.stack_funs[i] = t->index;
-			break;
-		}
-	}
-	if (i == MAX_FUNC_STACK) {
-		pr_err("stack trace is full!\n");
-		return -1;
-	}
-
+	trace_set_status(t->index, FUNC_STATUS_STACK);
 	trace_ctx.bpf_args.stack = true;
 	t->status |= TRACE_STACK;
 	return 0;
@@ -281,7 +289,7 @@ static inline bool trace_mode_timeline()
 	return trace_ctx.mode == TRACE_MODE_TIMELINE;
 }
 
-static inline bool trace_mode_intel()
+static inline bool trace_mode_diag()
 {
 	return trace_ctx.mode == TRACE_MODE_DIAG;
 }
@@ -294,5 +302,6 @@ int trace_bpf_load_and_attach();
 int trace_poll();
 bool trace_analyzer_enabled(struct analyzer *analyzer);
 int trace_pre_load();
+u64 get_event_count();
 
 #endif

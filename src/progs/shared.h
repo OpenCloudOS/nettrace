@@ -3,29 +3,53 @@
 
 #define MAX_FUNC_STACK 16
 
-#define DEFINE_BPF_ARGS()		\
-	DEFINE_FIELD(u32, trace_mode)	\
-	DEFINE_FIELD(u32, pid)		\
-	u32  netns;			\
-	bool drop_reason;		\
-	bool detail;			\
-	bool hooks;			\
-	bool ready;			\
-	bool stack;			\
-	bool pkt_fixed;			\
-	u16  stack_funs[MAX_FUNC_STACK];
-
 #include <skb_shared.h>
 
+#include "kprobe_trace.h"
+
 typedef struct {
+	pkt_args_t pkt;
+	u32  trace_mode;
+	u32  pid;
+	u32  netns;
+	u32  max_event;
+	bool drop_reason;
+	bool detail;
+	bool hooks;
+	bool ready;
+	bool stack;
+	bool tiny_output;
+	bool has_filter;
+	bool latency_summary;
+	bool func_stats;
+	bool match_mode;
+	u32  first_rtt;
+	u32  last_rtt;
+	u32  rate_limit;
+	u32  latency_min;
+	int  __rate_limit;
+	u64  __last_update;
+	u8   trace_status[TRACE_MAX];
+	u64  event_count;
+} bpf_args_t;
+
+typedef struct {
+	u16		meta;
+	u16		func;
+	u32		key;
 	union {
 		packet_t	pkt;
 		sock_t		ske;
 	};
-	u64		key;
-	/* For FEXIT program only for now */
-	u64		retval;
-	u32		func;
+	union {
+		/* For FEXIT program only for now */
+		u64	retval;
+		struct {
+			u16 latency_func1;
+			u16 latency_func2;
+			u32 latency;
+		};
+	};
 #ifdef BPF_FEAT_STACK_TRACE
 	u32		stack_id;
 #endif
@@ -33,13 +57,21 @@ typedef struct {
 } event_t;
 
 typedef struct {
+	u16 meta;
+	u16 func;
+	u32 key;
+	u64 ts;
+} tiny_event_t;
+
+typedef struct {
+	u16		meta;
+	u16		func;
+	u32		key;
 	union {
 		packet_t	pkt;
 		sock_t		ske;
 	};
-	u64		key;
 	u64		retval;
-	u32		func;
 #ifdef BPF_FEAT_STACK_TRACE
 	u32		stack_id;
 #endif
@@ -54,6 +86,22 @@ typedef struct {
 typedef struct {
 } pure_event_t;
 
+enum {
+	FUNC_TYPE_FUNC,
+	FUNC_TYPE_RET,
+	FUNC_TYPE_TINY,
+	FUNC_TYPE_TRACING_RET,
+	FUNC_TYPE_MAX,
+};
+
+
+#define FUNC_STATUS_FREE	(1 << 0)
+#define FUNC_STATUS_SK		(1 << 1)
+#define FUNC_STATUS_SKB_INVAL	(1 << 2)
+#define FUNC_STATUS_MATCHER	(1 << 3)
+#define FUNC_STATUS_STACK	(1 << 4)
+
+#undef DEFINE_EVENT
 #define DEFINE_EVENT(name, fields...)		\
 typedef struct {				\
 	event_t event;				\
@@ -97,12 +145,19 @@ DEFINE_EVENT(qdisc_event_t,
 	event_field(u32, flags)
 )
 
+DEFINE_EVENT(rtt_event_t,
+	event_field(u32, first_rtt)
+	event_field(u32, last_rtt)
+)
+
 #define MAX_EVENT_SIZE sizeof(detail_nf_hooks_event_t)
 
 typedef struct __attribute__((__packed__)) {
+	u16 meta;
+	u16 func;
+	u32 pad;
 	u64 ts;
 	u64 val;
-	u16 func;
 } retevent_t;
 
 typedef enum trace_mode {
@@ -112,6 +167,10 @@ typedef enum trace_mode {
 	TRACE_MODE_DIAG,
 	TRACE_MODE_SOCK,
 	TRACE_MODE_MONITOR,
+	TRACE_MODE_RTT,
+	TRACE_MODE_LATENCY,
+	/* following is some fake mode */
+	TRACE_MODE_TINY = 16,
 } trace_mode_t;
 
 enum rule_type {
@@ -141,12 +200,21 @@ typedef struct {
 #define TRACE_MODE_DROP_MASK		(1 << TRACE_MODE_DROP)
 #define TRACE_MODE_SOCK_MASK		(1 << TRACE_MODE_SOCK)
 #define TRACE_MODE_MONITOR_MASK		(1 << TRACE_MODE_MONITOR)
-#define TRACE_MODE_SKB_MASK		\
+#define TRACE_MODE_RTT_MASK		(1 << TRACE_MODE_RTT)
+#define TRACE_MODE_LATENCY_MASK		(1 << TRACE_MODE_LATENCY)
+#define TRACE_MODE_TINY_MASK		(1 << TRACE_MODE_TINY)
+
+#define TRACE_MODE_SKB_REQUIRE_MASK				\
 	(TRACE_MODE_BASIC_MASK | TRACE_MODE_TIMELINE_MASK |	\
 	 TRACE_MODE_DIAG_MASK | TRACE_MODE_DROP_MASK |		\
-	 TRACE_MODE_MONITOR_MASK)
-#define TRACE_MODE_ALL_MASK		\
-	(TRACE_MODE_SKB_MASK | TRACE_MODE_SOCK_MASK)
+	 TRACE_MODE_RTT_MASK | TRACE_MODE_LATENCY_MASK)
+#define TRACE_MODE_SOCK_REQUIRE_MASK	TRACE_MODE_SOCK_MASK
+#define TRACE_MODE_ALL_MASK					\
+	(TRACE_MODE_SKB_REQUIRE_MASK | TRACE_MODE_MONITOR_MASK |\
+	 TRACE_MODE_SOCK_REQUIRE_MASK)
+#define TRACE_MODE_BPF_CTX_MASK		\
+	(TRACE_MODE_DIAG_MASK | TRACE_MODE_TIMELINE_MASK |	\
+	 TRACE_MODE_LATENCY_MASK)
 #define TRACE_MODE_CTX_MASK		\
 	(TRACE_MODE_DIAG_MASK | TRACE_MODE_TIMELINE_MASK)
 

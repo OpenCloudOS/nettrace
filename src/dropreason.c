@@ -24,8 +24,8 @@ bool drop_reason_support()
 
 static int parse_reason_enum()
 {
-	char name[REASON_MAX_LEN], tmp[128];
-	int index = 0, pos;
+	char name[REASON_MAX_LEN];
+	int index = 0;
 	FILE *f;
 
 	f = fopen("/sys/kernel/debug/tracing/events/skb/kfree_skb/format",

@@ -16,7 +16,7 @@ static bool tracing_arch_supported()
 
 static bool tracing_trace_supported()
 {
-#ifdef COMPAT_MODE
+#ifdef NO_BTF
 	goto failed;
 #endif
 
@@ -39,7 +39,7 @@ failed:
 	return false;
 }
 
-#ifndef COMPAT_MODE
+#ifndef NO_BTF
 
 #include "progs/tracing.skel.h"
 #include "progs/feat_args_ext.skel.h"
@@ -63,34 +63,30 @@ static bool tracing_support_feat_args_ext()
 	return err == 0;
 }
 
-static void tracing_trace_attach_manual(char *prog_name, char *func)
-{
-	struct bpf_program *prog;
-
-	prog = bpf_pbn(skel->obj, prog_name);
-	if (!prog) {
-		pr_verb("failed to find prog %s\n", prog_name);
-		return;
-	}
-	bpf_program__set_attach_target(prog, 0, func);
-}
-
 static void tracing_adjust_target()
 {
-	char kret_name[128];
+	struct bpf_program *prog;
 	trace_t *trace;
-	int err;
 
 	trace_for_each(trace) {
 		if (!(trace->status & TRACE_ATTACH_MANUAL))
 			continue;
 
+		prog = bpf_pbn(trace_ctx.obj, trace->prog);
+		/* function name contain "." is not supported by BTF */
+		if (prog && strchr(trace->name, '.')) {
+			trace_set_invalid_reason(trace, "BTF invalid");
+			bpf_program__set_autoload(prog, false);
+		}
+
+#if 0
 		tracing_trace_attach_manual(trace->prog, trace->name);
 		if (!trace_is_ret(trace))
 			continue;
 
 		sprintf(kret_name, "ret%s", trace->prog);
 		tracing_trace_attach_manual(kret_name, trace->name);
+#endif
 	}
 }
 
@@ -165,9 +161,11 @@ static void tracing_check_args()
 
 static int tracing_trace_load()
 {
-	int i = 0;
+	DECLARE_LIBBPF_OPTS(bpf_object_open_opts, opts,
+		.btf_custom_path = trace_ctx.args.btf_path,
+	);
 
-	skel = tracing__open();
+	skel = tracing__open_opts(&opts);
 	if (!skel) {
 		pr_err("failed to open tracing-based eBPF\n");
 		goto err;
@@ -195,13 +193,6 @@ static int tracing_trace_load()
 	pr_debug("eBPF is loaded successfully\n");
 
 	bpf_set_config(skel, bss, trace_ctx.bpf_args);
-	switch (trace_ctx.mode) {
-	case TRACE_MODE_MONITOR:
-		tracing_ops.trace_poll = basic_poll_handler;
-		break;
-	default:
-		goto err;
-	}
 
 	return 0;
 err:
@@ -229,7 +220,7 @@ tracing_analy_entry(trace_t *trace, analy_entry_t *e)
 
 static void tracing_trace_ready()
 {
-	bpf_set_config_field(skel, bss, ready, true);
+	bpf_set_config_field(skel, bss, bpf_args_t, ready, true);
 }
 
 static void tracing_print_stack(int key)
@@ -249,13 +240,13 @@ static void tracing_print_stack(int key)
 		sym = sym_parse(ip[i]);
 		if (!sym)
 			break;
-		pr_info("    -> [%lx]%s\n", ip[i], sym->desc);
+		pr_info("    -> [%llx]%s\n", ip[i], sym->desc);
 	}
 	pr_info("\n");
 }
 
 analyzer_t tracing_analyzer = {
-	.mode = TRACE_MODE_DIAG_MASK | TRACE_MODE_TIMELINE_MASK,
+	.mode = TRACE_MODE_CTX_MASK,
 	.analy_entry = tracing_analy_entry,
 	.analy_exit = tracing_analy_exit,
 };

@@ -29,6 +29,10 @@
 /* take b if a offered; else, take c */
 #define nt_ternary_take(a, b, c) __nt_ternary_take(a, b, c)
 
+#define ___macro_to_str(m) #m
+#define __macro_to_str(m) ___macro_to_str(m)
+#define macro_to_str(m) __macro_to_str(m)
+
 #define ICSK_TIME_RETRANS	1
 #define ICSK_TIME_DACK		2
 #define ICSK_TIME_PROBE0	3
@@ -56,10 +60,12 @@ typedef struct {
 			u32	saddr;
 			u32	daddr;
 		} ipv4;
+#ifndef NT_DISABLE_IPV6
 		struct {
 			u8	saddr[16];
 			u8	daddr[16];
 		} ipv6;
+#endif
 	} l3;
 	union {
 		struct {
@@ -102,10 +108,12 @@ typedef struct {
 			u32	saddr;
 			u32	daddr;
 		} ipv4;
+#if 0
 		struct {
 			u8	saddr[16];
 			u8	daddr[16];
 		} ipv6;
+#endif
 	} l3;
 	union {
 		struct {
@@ -113,6 +121,7 @@ typedef struct {
 			u16	dport;
 			u32	packets_out;
 			u32	retrans_out;
+			u32	snd_una;
 		} tcp;
 		struct {
 			u16	sport;
@@ -120,7 +129,7 @@ typedef struct {
 		} udp;
 		l4_min_t min;
 	} l4;
-	long timer_out;
+	u32 timer_out;
 	u32 wqlen;
 	u32 rqlen;
 	u16 proto_l3;
@@ -162,6 +171,13 @@ typedef struct {
 	u16	l3_proto;
 	u8	l4_proto;
 	u8	tcp_flags;
+	u8	saddr_v6_enable:1,
+		daddr_v6_enable:1,
+		addr_v6_enable:1;
+
+#ifdef BPF_DEBUG
+	bool	bpf_debug;
+#endif
 } pkt_args_t;
 
 #define args_check(args, attr, value) (args->attr && args->attr != value)
