@@ -203,7 +203,7 @@ static inline int filter_ipv6_check(pkt_args_t *args, void *saddr, void *daddr)
 	return (args->saddr_v6_enable && !is_ipv6_equal(args->saddr_v6, saddr)) ||
 	       (args->daddr_v6_enable && !is_ipv6_equal(args->daddr_v6, daddr)) ||
 	       (args->addr_v6_enable && !is_ipv6_equal(args->addr_v6, daddr) &&
-				 !is_ipv6_equal(args->addr_v6, daddr));
+				 !is_ipv6_equal(args->addr_v6, saddr));
 }
 
 static inline int filter_ipv4_check(pkt_args_t *args, u32 saddr,
@@ -214,7 +214,7 @@ static inline int filter_ipv4_check(pkt_args_t *args, u32 saddr,
 
 	return (args->saddr && args->saddr != saddr) ||
 	       (args->daddr && args->daddr != daddr) ||
-	       (args->addr && args->addr != daddr && args->addr != daddr);
+	       (args->addr && args->addr != daddr && args->addr != saddr);
 }
 
 static inline int filter_port(pkt_args_t *args, u32 sport, u32 dport)
