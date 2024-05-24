@@ -15,6 +15,8 @@ nettrace - Linux系统下的网络报文跟踪、网络问题诊断工具
 
 ## OPTIONS
 
+### 过滤类参数
+
 `-s,--saddr` *source_address*
   根据IP源地址来进行报文筛选
 
@@ -50,19 +52,65 @@ nettrace - Linux系统下的网络报文跟踪、网络问题诊断工具
   根据进程号进行过滤
 
 `--min-latency` *latency in ms*
-  根据报文的寿命进行过滤，仅打印处理时长超过该值的报文，单位为ms。该参数仅在默认和`diag`模式下可用。
+  根据报文的寿命进行过滤，仅打印处理时长超过该值的报文，单位为us。该参数在`basic`和
+  `sock`模式下不可用。
 
 `--pkt-len` *pkt_len*
-  根据报文长度进行过滤，可以指定范围，如`--pkt-len 10-20`；也可以指定确切的值，如`--pkt-len 64`
+  根据报文长度进行过滤，可以指定范围，如`--pkt-len 10-20`；也可以指定确切的值，
+  如`--pkt-len 64`
 
 `--tcp-flags` *flags*
   根据TCP报文中的flag进行过滤，有效的flag包括`SARF`，可以指定多个，如：`--tcp-flags FA`
 
-`--tcp-rtt` *rtt*
-  sock和monitor模式下可用，筛选出rtt高于该参数的事件，单位ms
+### 模式类参数
 
-`--tcp-srtt` *rtt*
-  sock和monitor模式下可用，筛选出srtt高于该参数的事件，单位ms
+`--basic`
+  启用`basic`跟踪模式。默认情况下，启用的是生命周期跟踪模式。启用该模式后，会直接打印
+  出报文所经过的内核函数/tracepoint
+
+`--diag`
+  启用诊断模式
+
+`--diag-quiet`
+  只显示出现存在问题的报文，不显示正常的报文
+
+`--diag-keep`
+  持续跟踪。`diag`模式下，默认在跟踪到异常报文后会停止跟踪，使用该参数后，会持续跟踪下去。
+
+`--drop`
+  进行系统丢包监控，取代原先的`droptrace`
+
+`--drop-stack`
+  打印`kfree_skb`内核函数的调用堆栈，等价于`--trace-stack kfree_skb`
+
+`--sock`
+  启用套接口模式。这个模式下，不会再跟踪报文，而会跟踪套接口。
+
+`--monitor`
+  启用监控模式。一种轻量化的实时监控系统中网络异常的模式（对内核版本有一定要求）。
+
+`--rtt`
+  启用RTT统计模式，会统计TCP RTT的分布情况
+
+`--rtt-detail`
+  启用RTT详细模式，输出符合过滤条件的每个报文的RTT数据
+
+`--filter-srtt` *rtt*
+  根据srtt来进行过滤，`rtt/rtt-detail`模式下可用，单位ms
+
+`--filter-minrtt` *rtt*
+  根据minrtt来进行过滤，`rtt/rtt-detail`模式下可用，单位ms
+
+`--latency-show`
+  显示延迟（协议栈处理耗时）信息，`basic/sock`模式下不可用
+
+`--latency`
+  启用延迟分析模式，可以高效分析每个报文协议栈处理耗时
+
+`--latency-summary`
+  启用延迟分析统计模式，可以统计协议栈处理耗时的分布情况
+
+### 功能类参数
 
 `-t,--trace` *traces*
   要启用（跟踪）的内核函数、tracepoint。
@@ -87,40 +135,36 @@ nettrace - Linux系统下的网络报文跟踪、网络问题诊断工具
 `--date`
   以时间格式打印（以2022-10-24 xx:xx:xx.xxxxxx格式打印），而不是时间戳
 
-`--basic`
-  启用`basic`跟踪模式。默认情况下，启用的是生命周期跟踪模式。启用该模式后，会直接打印
-  出报文所经过的内核函数/tracepoint
-
-`--diag`
-  启用诊断模式
-
-`--diag-quiet`
-  只显示出现存在问题的报文，不显示正常的报文
-
-`--diag-keep`
-  持续跟踪。`diag`模式下，默认在跟踪到异常报文后会停止跟踪，使用该参数后，会持续跟踪下去。
-
-`--sock`
-  启用套接口模式。这个模式下，不会再跟踪报文，而会跟踪套接口。
-
-`--monitor`
-  启用监控模式。一种轻量化的实时监控系统中网络异常的模式（对内核版本有一定要求）。
-
 `-c,--count`
-  抓取count个报文后退出程序
+  指定要跟踪的报文个数c，达到该个数后自动退出
 
 `--hooks`
   打印netfilter上的钩子函数
 
-`--drop`
-  进行系统丢包监控，取代原先的`droptrace`
-
-`--drop-stack`
-  打印kfree_skb内核函数的调用堆栈，等价于`--trace-stack kfree_skb`
+`--tiny-show`
+  精简显示，只显示第一个报文的内容，用于提升性能
 
 `--trace-stack` *traces*
   指定需要进行堆栈打印的内核函数，可以指定多个，用“,”分隔。出于性能考虑，启用堆栈打印的
   内核函数不能超过16个。用法和格式与`--trace`完全一致。
+
+`--trace-matcher`
+  指定进行报文匹配的内核函数，默认所有的函数，用于提升性能
+
+`--trace-exclude`
+  不进行跟踪的函数
+
+`--trace-noclone`
+  不跟踪报文的克隆时间，即不把克隆出来的报文和当前报文放到一块跟踪
+
+`--func-stats`
+  只统计内核函数被调用的次数，不打印具体的报文，可指定过滤条件
+
+`--rate-limit`
+  进行限速，限制每秒事件输出的数量
+
+`--btf-path`
+  手动指定BTF文件的路径
 
 `-v`
   显示程序启动的日志信息

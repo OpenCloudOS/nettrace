@@ -10,6 +10,7 @@ nettrace \- Linux系统下的网络报文跟踪、网络问题诊断工具
 \fB\fCnettrace\fR是基于eBPF的集网络报文跟踪（故障定位）、网络故障诊断、网络异常监控于一体的网
 络工具集，旨在能够提供一种更加高效、易用的方法来解决复杂场景下的网络问题。
 .SH OPTIONS
+.SS 过滤类参数
 .TP
 \fB\fC\-s,\-\-saddr\fR \fIsource_address\fP
 根据IP源地址来进行报文筛选
@@ -46,19 +47,63 @@ nettrace \- Linux系统下的网络报文跟踪、网络问题诊断工具
 根据进程号进行过滤
 .TP
 \fB\fC\-\-min\-latency\fR \fIlatency in ms\fP
-根据报文的寿命进行过滤，仅打印处理时长超过该值的报文，单位为ms。该参数仅在默认和\fB\fCdiag\fR模式下可用。
+根据报文的寿命进行过滤，仅打印处理时长超过该值的报文，单位为us。该参数在\fB\fCbasic\fR和
+\fB\fCsock\fR模式下不可用。
 .TP
 \fB\fC\-\-pkt\-len\fR \fIpkt_len\fP
-根据报文长度进行过滤，可以指定范围，如\fB\fC\-\-pkt\-len 10\-20\fR；也可以指定确切的值，如\fB\fC\-\-pkt\-len 64\fR
+根据报文长度进行过滤，可以指定范围，如\fB\fC\-\-pkt\-len 10\-20\fR；也可以指定确切的值，
+如\fB\fC\-\-pkt\-len 64\fR
 .TP
 \fB\fC\-\-tcp\-flags\fR \fIflags\fP
 根据TCP报文中的flag进行过滤，有效的flag包括\fB\fCSARF\fR，可以指定多个，如：\fB\fC\-\-tcp\-flags FA\fR
+.SS 模式类参数
 .TP
-\fB\fC\-\-tcp\-rtt\fR \fIrtt\fP
-sock和monitor模式下可用，筛选出rtt高于该参数的事件，单位ms
+\fB\fC\-\-basic\fR
+启用\fB\fCbasic\fR跟踪模式。默认情况下，启用的是生命周期跟踪模式。启用该模式后，会直接打印
+出报文所经过的内核函数/tracepoint
 .TP
-\fB\fC\-\-tcp\-srtt\fR \fIrtt\fP
-sock和monitor模式下可用，筛选出srtt高于该参数的事件，单位ms
+\fB\fC\-\-diag\fR
+启用诊断模式
+.TP
+\fB\fC\-\-diag\-quiet\fR
+只显示出现存在问题的报文，不显示正常的报文
+.TP
+\fB\fC\-\-diag\-keep\fR
+持续跟踪。\fB\fCdiag\fR模式下，默认在跟踪到异常报文后会停止跟踪，使用该参数后，会持续跟踪下去。
+.TP
+\fB\fC\-\-drop\fR
+进行系统丢包监控，取代原先的\fB\fCdroptrace\fR
+.TP
+\fB\fC\-\-drop\-stack\fR
+打印\fB\fCkfree_skb\fR内核函数的调用堆栈，等价于\fB\fC\-\-trace\-stack kfree_skb\fR
+.TP
+\fB\fC\-\-sock\fR
+启用套接口模式。这个模式下，不会再跟踪报文，而会跟踪套接口。
+.TP
+\fB\fC\-\-monitor\fR
+启用监控模式。一种轻量化的实时监控系统中网络异常的模式（对内核版本有一定要求）。
+.TP
+\fB\fC\-\-rtt\fR
+启用RTT统计模式，会统计TCP RTT的分布情况
+.TP
+\fB\fC\-\-rtt\-detail\fR
+启用RTT详细模式，输出符合过滤条件的每个报文的RTT数据
+.TP
+\fB\fC\-\-filter\-srtt\fR \fIrtt\fP
+根据srtt来进行过滤，\fB\fCrtt/rtt\-detail\fR模式下可用，单位ms
+.TP
+\fB\fC\-\-filter\-minrtt\fR \fIrtt\fP
+根据minrtt来进行过滤，\fB\fCrtt/rtt\-detail\fR模式下可用，单位ms
+.TP
+\fB\fC\-\-latency\-show\fR
+显示延迟（协议栈处理耗时）信息，\fB\fCbasic/sock\fR模式下不可用
+.TP
+\fB\fC\-\-latency\fR
+启用延迟分析模式，可以高效分析每个报文协议栈处理耗时
+.TP
+\fB\fC\-\-latency\-summary\fR
+启用延迟分析统计模式，可以统计协议栈处理耗时的分布情况
+.SS 功能类参数
 .TP
 \fB\fC\-t,\-\-trace\fR \fItraces\fP
 要启用（跟踪）的内核函数、tracepoint。
@@ -83,40 +128,36 @@ sock和monitor模式下可用，筛选出srtt高于该参数的事件，单位ms
 \fB\fC\-\-date\fR
 以时间格式打印（以2022\-10\-24 xx:xx:xx.xxxxxx格式打印），而不是时间戳
 .TP
-\fB\fC\-\-basic\fR
-启用\fB\fCbasic\fR跟踪模式。默认情况下，启用的是生命周期跟踪模式。启用该模式后，会直接打印
-出报文所经过的内核函数/tracepoint
-.TP
-\fB\fC\-\-diag\fR
-启用诊断模式
-.TP
-\fB\fC\-\-diag\-quiet\fR
-只显示出现存在问题的报文，不显示正常的报文
-.TP
-\fB\fC\-\-diag\-keep\fR
-持续跟踪。\fB\fCdiag\fR模式下，默认在跟踪到异常报文后会停止跟踪，使用该参数后，会持续跟踪下去。
-.TP
-\fB\fC\-\-sock\fR
-启用套接口模式。这个模式下，不会再跟踪报文，而会跟踪套接口。
-.TP
-\fB\fC\-\-monitor\fR
-启用监控模式。一种轻量化的实时监控系统中网络异常的模式（对内核版本有一定要求）。
-.TP
 \fB\fC\-c,\-\-count\fR
-抓取count个报文后退出程序
+指定要跟踪的报文个数c，达到该个数后自动退出
 .TP
 \fB\fC\-\-hooks\fR
 打印netfilter上的钩子函数
 .TP
-\fB\fC\-\-drop\fR
-进行系统丢包监控，取代原先的\fB\fCdroptrace\fR
-.TP
-\fB\fC\-\-drop\-stack\fR
-打印kfree\fIskb内核函数的调用堆栈，等价于`\-\-trace\-stack kfree\fPskb`
+\fB\fC\-\-tiny\-show\fR
+精简显示，只显示第一个报文的内容，用于提升性能
 .TP
 \fB\fC\-\-trace\-stack\fR \fItraces\fP
 指定需要进行堆栈打印的内核函数，可以指定多个，用“,”分隔。出于性能考虑，启用堆栈打印的
 内核函数不能超过16个。用法和格式与\fB\fC\-\-trace\fR完全一致。
+.TP
+\fB\fC\-\-trace\-matcher\fR
+指定进行报文匹配的内核函数，默认所有的函数，用于提升性能
+.TP
+\fB\fC\-\-trace\-exclude\fR
+不进行跟踪的函数
+.TP
+\fB\fC\-\-trace\-noclone\fR
+不跟踪报文的克隆时间，即不把克隆出来的报文和当前报文放到一块跟踪
+.TP
+\fB\fC\-\-func\-stats\fR
+只统计内核函数被调用的次数，不打印具体的报文，可指定过滤条件
+.TP
+\fB\fC\-\-rate\-limit\fR
+进行限速，限制每秒事件输出的数量
+.TP
+\fB\fC\-\-btf\-path\fR
+手动指定BTF文件的路径
 .TP
 \fB\fC\-v\fR
 显示程序启动的日志信息
