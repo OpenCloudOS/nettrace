@@ -22,10 +22,11 @@
 - 网络故障诊断：将以往的经验集成到工具的知识库，通过知识匹配的方式来主动诊断当前网络故障，给出诊断结果以及修复建议。该功能入手简单、易用性强，无需过多的网络经验即可进行网络问题定位。
 - 网络异常监控：常态化地部署到生产环境中，主动地发现、上报环境上的网络异常。
 - `droptrace`：用于跟踪、监控系统中的丢包事件的工具，点击[这里](docs/droptrace.md)查看详情介绍。该功能已被遗弃，可以使用`nettrace --drop`实现相同的功能。
+- 性能分析：通过跟踪协议栈处理延迟、TCP RTT等信息进行网络性能分析。
 
-## 二、安装方法
+## 二、编译安装
 
-nettrace是采用C语言编写的基于eBPF（libbpf）的命令行工具，在使用和安装时可以用编译好的RPM包和二进制程序。**注意**：本工具目前仅在`4.14`及以上的内核版本上进行过兼容性测试，因此请确保当前的系统所使用的的内核版本在`4.14`以上。
+nettrace是采用C语言编写的基于eBPF（libbpf）的命令行工具，在使用和安装时可以用编译好的RPM包和二进制程序。本工具对各个版本的内核都进行了兼容，最低可支持centos7的3.10版本的内核（需要自己编译）。
 
 ### 2.1 RPM/DEB安装
 
@@ -87,19 +88,46 @@ cd nettrace
 make all
 ```
 
-**注意**：对于不支持BTF的内核（内核版本低于5.3），在编译的时候需要加参数`COMPAT=1`，采用兼容模式进行编译，如下所示：
+支持的编译选项有以下几个：
 
-```shell
-make COMPAT=1 all
-```
+- **NO_BTF**：
 
-启用该参数，eBPF程序会以BPF_PROBE_READ的方式来读取数据；否则，eBPF程序会以BPF_CORE_READ的方式来读取。可以使用KERNEL来手动指定要使用的内核源码（内核头文件）：
+  **注意**：对于不支持BTF的内核（内核版本低于5.3），在编译的时候需要加参数`NO_BTF=1`，采用兼容模式进行编译，如下所示：
 
-```shell
-make KERNEL=/home/ubuntu/kernel COMPAT=1 all
-```
+  ```shell
+  make NO_BTF=1 all
+  ```
 
-**注意：** 兼容模式编译出来的nettrace工具只能运行在和`KERNEL`内核版本相同的环境上。如果没有指定`KERNEL`，那采用的就是当前编译环境上的内核头文件，这就要求编译环境和运行环境所使用的内核要完全相同才能正常运行。否则，会发生意想不到的意外。
+  启用该参数，eBPF程序会以BPF_PROBE_READ的方式来读取数据；否则，eBPF程序会以BPF_CORE_READ的方式来读取。
+
+- **INLINE**：
+
+  以完全内联的方便编译BPF程序，对于不支持subprog的内核（内核版本在4.15及以下）需要指定这个参数：
+  ```shell
+  make NO_BTF=1 INLINE=1 all
+  ```
+  由于采用完全的内联，这种方式编译出来的nettrace工具的体积会比常规的较大。
+
+- **NO_GLOBAL_DATA**：
+
+  对于不支持global data的内核版本（内核版本在5.4以下）需要指定这个参数，从而禁用global data的一些特性：
+  ```shell
+  make NO_BTF=1 NO_GLOBAL_DATA=1 all
+  ```
+
+- **COMPAT**：
+
+  上面三种的联合。对于版本较低的内核，可以直接使用这个参数来使能上面的三个参数。
+
+- **KERNEL**：手动指定要使用的内核源码（内核头文件）：
+
+  ```shell
+  make KERNEL=/home/ubuntu/kernel NO_BTF=1 all
+  ```
+
+  需要和NO_BTF一起使用，因为基于BTF编译的话是不需要头文件的。
+
+  **注意：** 兼容模式编译出来的nettrace工具只能运行在和`KERNEL`内核版本相同的环境上。如果没有指定`KERNEL`，那采用的就是当前编译环境上的内核头文件，这就要求编译环境和运行环境所使用的内核要完全相同才能正常运行。否则，会发生意想不到的意外。
 
 对于发行版版本较低，难以安装高版本clang的情况下，可以基于docker来进行代码的编译，具体可参考[2.4](#2.4-基于docker编译)章节来进行安装。
 
@@ -117,16 +145,16 @@ make KERN_VER=266002 COMPAT=1 all
 
 ### 2.4 基于docker编译
 
-对于**支持BTF**的内核，无需安装任何依赖，可以直接使用以下命令来进行nettrace的编译，其中：`<nettrace path>`要替换成nettrace代码的绝对路径：
+对于**支持BTF**的内核，无需安装任何依赖，可以直接使用以下命令来进行nettrace的编译：
 
 ```shell
-docker run -it --rm --network=host --privileged -v <nettrace path>:/root/nettrace -v /lib/modules/:/lib/modules/ -v /usr/src/:/usr/src/ imagedong/nettrace-build make -C /root/nettrace/ all
+docker run -it --rm --network=host --privileged -v $(pwd):$(pwd) -v /lib/modules/:/lib/modules/ -v /usr/src/:/usr/src/ imagedong/nettrace-build make -C $(pwd) all
 ```
 
 对于**不支持BTF**的系统，这需要先安装`kernel-headers`软件包，如上面的手动编译里面所说的。ubuntu系统使用命令`apt install linux-headers-$(uname -r) -y`进行安装；centos使用命令`yum install kernel-headers kernel-devel -y`进行安装。然后使用下面的命令进行编译：
 
 ```shell
-docker run -it --rm --network=host --privileged -v <nettrace path>:/root/nettrace -v /lib/modules/:/lib/modules/ -v /usr/src/:/usr/src/ imagedong/nettrace-build make -C /root/nettrace/ COMPAT=1 all
+docker run -it --rm --network=host --privileged -v $(pwd):$(pwd) -v /lib/modules/:/lib/modules/ -v /usr/src/:/usr/src/ imagedong/nettrace-build make -C $(pwd) NO_BTF=1 all
 ```
 
 **注意：** 兼容模式编译出来的nettrace工具只能运行在和`KERNEL`内核版本相同的环境上。如果没有指定`KERNEL`，那采用的就是当前编译环境上的内核头文件，这就要求编译环境和运行环境所使用的内核要完全相同才能正常运行。否则，会发生意想不到的意外。
@@ -137,7 +165,7 @@ docker run -it --rm --network=host --privileged -v <nettrace path>:/root/nettrac
 
 nettrace是用来跟踪内核报文和诊断网络故障的，在进行报文跟踪时可以使用一定的过滤条件来跟踪特定的报文。其基本命令行参数为：
 
-```shell
+```
 $ nettrace -h
 nettrace: a tool to trace skb in kernel and diagnose network problem
 
@@ -152,28 +180,43 @@ Usage:
     --netns          filter by net namespace inode
     --netns-current  filter by current net namespace
     --pid            filter by current process id(pid)
-    --min-latency    filter by the minial time to live of the skb in ms
+    --min-latency    filter by the minial time to live of the skb in us
     --pkt-len        filter by the IP packet length (include header) in byte
-    --tcp-flags      filter by TCP flags, such as: SAPRF
-    --tcp-rtt        filter by the minial rtt, in ms
-    --tcp-srtt       filter by the minial srtt, in ms
+    --tcp-flags      filter by TCP flags, such as: SAPR
 
-    -t, --trace      enable trace group or trace
-    --ret            show function return value
-    --detail         show extern packet info, such as pid, ifname, etc
-    --date           print timestamp in date-time format
-    -c, --count      exit after receiving count packets
     --basic          use 'basic' trace mode, don't trace skb's life
     --diag           enable 'diagnose' mode
     --diag-quiet     only print abnormal packet
     --diag-keep      don't quit when abnormal packet found
-    --hooks          print netfilter hooks if dropping by netfilter
     --drop           skb drop monitor mode, for replace of 'droptrace'
     --drop-stack     print the kernel function call stack of kfree_skb
     --sock           enable 'sock' mode
     --monitor        enable 'monitor' mode
-    --pkt-fixed      set this option if you are sure the target packet is not NATed to get better performance
+    --rtt            enable 'rtt' in statistics mode
+    --rtt-detail     enable 'rtt' in detail mode
+    --filter-srtt    filter by the minial first-acked rtt in ms
+    --filter-minrtt  filter by the minial last-acked rtt in ms
+    --latency-show   show latency between kernel functions
+    --latency-free   account the latency of skb free
+    --latency        enable 'latency' mode
+    --latency-summary
+                     show latency by statistics
+
+    -t, --trace      enable trace group or trace. Some traces are disabled by default, use "all" to enable all
+    --force          skip some check and force load nettrace
+    --ret            show function return value
+    --detail         show extern packet info, such as pid, ifname, etc
+    --date           print timestamp in date-time format
+    -c, --count      exit after receiving count packets
+    --hooks          print netfilter hooks if dropping by netfilter
+    --tiny-show      set this option to show less infomation
     --trace-stack    print call stack for traces or group
+    --trace-matcher  traces that can match packet(default all)
+    --trace-exclude  traces that should be disabled
+    --trace-noclone  don't trace skb clone
+    --func-stats     only do the statistics for function call
+    --rate-limit     limit the output to N/s, not valid in diag/default mode
+    --btf-path       custom the path of BTF info of vmlinux
 
     -v               show log information
     --debug          show debug information
@@ -181,31 +224,51 @@ Usage:
     -V, --version    show nettrace version
 ```
 
-其中，参数`s/d/addr/S/D/port/p/pid`用于进行报文的过滤，可以通过IP地址、端口、协议等属性进行过滤。其中，通过IPv6地址进行过滤目前也已经实现了支持。其他参数的用途包括：
+**过滤类参数**
+
+参数`s/d/addr/S/D/port/p/pid`用于进行报文的过滤，可以通过IP地址（包括IPv6地址）、端口、协议等属性进行过滤。其他参数的用途包括：
 
 - `netns`：根据网络命名空间进行过滤，该参数后面跟的是网络命名空间的inode，可以通过`ls -l /proc/<pid>/ns/net`来查看对应进程的网络命名空间的inode号
 - `netns-current`：仅显示当前网络命名空间的报文，等价于`--netns 当前网络命名空间的inode`
 - `pid`：根据当前处理报文的进程的ID进行过滤
+- `min-latency`：根据报文的寿命进行过滤，仅打印处理时长超过该值的报文，单位为us。该参数仅在`默认`/`diag`/`latency`模式下可用。
+- `pkt-len`：根据IP报文总长度（包括报文头部）来进行过滤
 - `tcp-flags`：根据TCP报文的flags进行过滤，支持的flag包括：SAPRF
-- `tcp-rtt`：sock和monitor模式下可用，筛选出rtt高于该参数的事件，单位ms
-- `tcp-srtt`：sock和monitor模式下可用，筛选出srtt高于该参数的事件，单位ms
-- `t/trace`：要启用的跟踪模块，默认启用所有
-- `ret`：跟踪和显示内核函数的返回值
-- `detail`：显示跟踪详细信息，包括当前的进程、网口和CPU等信息
-- `date`：以时间格式打印（以2022-10-24 xx:xx:xx.xxxxxx格式打印），而不是时间戳
+
+**模式类参数**
+
 - `basic`：启用`basic`跟踪模式。默认情况下，启用的是生命周期跟踪模式。启用该模式后，会直接打印出报文所经过的内核函数/tracepoint。
 - `diag`：启用诊断模式
 - `diag-quiet`：只显示出现存在问题的报文，不显示正常的报文
 - `diag-keep`：持续跟踪。`diag`模式下，默认在跟踪到异常报文后会停止跟踪，使用该参数后，会持续跟踪下去。
-- `sock`：启用套接口模式。这个模式下，不会再跟踪报文，而会跟踪套接口。
-- `monitor`：启用监控模式。一种轻量化的实时监控系统中网络异常的模式（对内核版本有一定要求）。
-- `hooks`：结合netfilter做的适配，详见下文
 - `drop`：进行系统丢包监控，取代原先的`droptrace`
 - `drop-stack`: 打印kfree_skb内核函数的调用堆栈，等价于`--trace-stack kfree_skb`
-- `min-latency`：根据报文的寿命进行过滤，仅打印处理时长超过该值的报文，单位为ms。该参数仅在默认和`diag`模式下可用。
-- `trace-stack`：指定需要进行堆栈打印的内核函数，可以指定多个，用“,”分隔。出于性能考虑，启用堆栈打印的内核函数不能超过16个。
+- `sock`：启用套接口模式。这个模式下，不会再跟踪报文，而会跟踪套接口。
+- `monitor`：启用监控模式。一种轻量化的实时监控系统中网络异常的模式（对内核版本有一定要求）。
+- `rtt`：启用RTT统计模式，会统计TCP RTT的分布情况
+- `rtt-detail`：启用RTT详细模式，输出符合过滤条件的每个报文的RTT数据
+- `filter-srtt`：根据srtt来进行过滤，`rtt/rtt-detail`模式下可用，单位ms
+- `filter-minrtt`：根据minrtt来进行过滤，`rtt/rtt-detail`模式下可用，单位ms
+- `latency-show`：显示延迟（协议栈处理耗时）信息，`basic/sock`模式下不可用
+- `latency`：启用延迟分析模式，可以高效分析每个报文协议栈处理耗时
+- `latency-summary`：启用延迟分析统计模式，可以统计协议栈处理耗时的分布情况
 
-下面我们首先来看一下默认模式下的工具使用方法。
+**显示类参数**
+
+- `t/trace`：要启用的跟踪模块，默认启用所有
+- `ret`：跟踪和显示内核函数的返回值
+- `detail`：显示跟踪详细信息，包括当前的进程、网口和CPU等信息
+- `date`：以时间格式打印（以2022-10-24 xx:xx:xx.xxxxxx格式打印），而不是时间戳
+- `c/count`：指定要跟踪的报文个数c，达到该个数后自动退出
+- `hooks`：结合netfilter做的适配，详见下文
+- `tiny-show`：精简显示，只显示第一个报文的内容，用于提升性能
+- `trace-stack`：指定需要进行堆栈打印的内核函数，可以指定多个，用“,”分隔。
+- `trace-matcher`：指定进行报文匹配的内核函数，默认所有的函数，用于提升性能
+- `trace-exclude`：不进行跟踪的函数
+- `trace-noclone`：不跟踪报文的克隆时间，即不把克隆出来的报文和当前报文放到一块跟踪
+- `func-stats`：只统计内核函数被调用的次数，不打印具体的报文，可指定过滤条件
+- `rate-limit`：进行限速，限制每秒事件输出的数量
+- `btf-path`：手动指定BTF文件的路径
 
 ### 3.1 生命周期
 
@@ -214,48 +277,9 @@ Usage:
 #### 3.1.1 跟踪ping报文
 
 ```shell
-sudo ./nettrace -p icmp
-begin trace...
-***************** ffff889be8fbd500,ffff889be8fbcd00 ***************
-[1272349.614564] [dev_gro_receive     ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
-[1272349.614579] [__netif_receive_skb_core] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
-[1272349.614585] [ip_rcv              ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
-[1272349.614592] [ip_rcv_core         ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
-[1272349.614599] [skb_clone           ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
-[1272349.614616] [nf_hook_slow        ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
-[1272349.614629] [nft_do_chain        ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
-[1272349.614635] [ip_rcv_finish       ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
-[1272349.614643] [ip_route_input_slow ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
-[1272349.614647] [fib_validate_source ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
-[1272349.614652] [ip_local_deliver    ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
-[1272349.614658] [nf_hook_slow        ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
-[1272349.614663] [ip_local_deliver_finish] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
-[1272349.614666] [icmp_rcv            ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
-[1272349.614671] [icmp_echo           ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
-[1272349.614675] [icmp_reply          ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
-[1272349.614715] [consume_skb         ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
-[1272349.614722] [packet_rcv          ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
-[1272349.614725] [consume_skb         ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 48220
-
-***************** ffff889be8fbde00 ***************
-[1272349.614681] [nf_hook_slow        ] ICMP: 172.27.0.6 -> 169.254.128.15 ping reply, seq: 48220
-[1272349.614688] [ip_output           ] ICMP: 172.27.0.6 -> 169.254.128.15 ping reply, seq: 48220
-[1272349.614690] [nf_hook_slow        ] ICMP: 172.27.0.6 -> 169.254.128.15 ping reply, seq: 48220
-[1272349.614693] [ip_finish_output    ] ICMP: 172.27.0.6 -> 169.254.128.15 ping reply, seq: 48220
-[1272349.614697] [ip_finish_output2   ] ICMP: 172.27.0.6 -> 169.254.128.15 ping reply, seq: 48220
-[1272349.614705] [__dev_queue_xmit    ] ICMP: 172.27.0.6 -> 169.254.128.15 ping reply, seq: 48220
-[1272349.614709] [dev_hard_start_xmit ] ICMP: 172.27.0.6 -> 169.254.128.15 ping reply, seq: 48220
-[1272351.286866] [consume_skb         ] ICMP: 172.27.0.6 -> 169.254.128.15 ping reply, seq: 48220
-```
-
-上面的*中间的表示当前所跟踪的skb的地址，由于当前的报文被克隆过，因此当前跟踪上下文存在两个报文。
-
-#### 3.1.2 指定过滤条件
-
-```shell
 sudo ./nettrace -p icmp --saddr 169.254.128.15
 begin trace...
-***************** ffff889be8fbc700,ffff889be8fbdc00 ***************
+***************** e8fbc700,e8fbdc00 ***************
 [1273445.360831] [dev_gro_receive     ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 54754
 [1273445.360844] [__netif_receive_skb_core] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 54754
 [1273445.360847] [ip_rcv              ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 54754
@@ -277,43 +301,45 @@ begin trace...
 [1273445.360933] [consume_skb         ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 54754
 ```
 
-#### 3.1.3 显示详细信息
+上面的*中间的表示当前所跟踪的skb的地址，由于当前的报文被克隆过，因此当前跟踪上下文存在两个报文。如果不想跟踪被克隆的报文（不想将被克隆的报文和原报文一起显示），那么可以加个`--trace-noclone`参数。
+
+#### 3.1.2 显示详细信息
 
 ```shell
 sudo ./nettrace -p icmp --saddr 169.254.128.15 --detail
 begin trace...
-***************** ffff889be8fbcd00,ffff889be8fbcc00 ***************
-[1273732.110173] [ffff889be8fbcd00][dev_gro_receive     ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
-[1273732.110185] [ffff889be8fbcd00][__netif_receive_skb_core][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
-[1273732.110189] [ffff889be8fbcd00][ip_rcv              ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
-[1273732.110192] [ffff889be8fbcd00][ip_rcv_core         ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
-[1273732.110196] [ffff889be8fbcd00][skb_clone           ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
-[1273732.110204] [ffff889be8fbcc00][nf_hook_slow        ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
-[1273732.110211] [ffff889be8fbcc00][nft_do_chain        ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
-[1273732.110222] [ffff889be8fbcc00][ip_rcv_finish       ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
-[1273732.110229] [ffff889be8fbcc00][ip_route_input_slow ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
-[1273732.110234] [ffff889be8fbcc00][fib_validate_source ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
-[1273732.110240] [ffff889be8fbcc00][ip_local_deliver    ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
-[1273732.110243] [ffff889be8fbcc00][nf_hook_slow        ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
-[1273732.110252] [ffff889be8fbcc00][ip_local_deliver_finish][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
-[1273732.110255] [ffff889be8fbcc00][icmp_rcv            ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
-[1273732.110260] [ffff889be8fbcc00][icmp_echo           ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
-[1273732.110267] [ffff889be8fbcc00][icmp_reply          ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
-[1273732.110283] [ffff889be8fbcc00][consume_skb         ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
-[1273732.110291] [ffff889be8fbcd00][packet_rcv          ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
-[1273732.110294] [ffff889be8fbcd00][consume_skb         ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+***************** e8fbcd00,e8fbcc00 ***************
+[1273732.110173] [e8fbcd00][dev_gro_receive     ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110185] [e8fbcd00][__netif_receive_skb_core][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110189] [e8fbcd00][ip_rcv              ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110192] [e8fbcd00][ip_rcv_core         ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110196] [e8fbcd00][skb_clone           ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110204] [e8fbcc00][nf_hook_slow        ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110211] [e8fbcc00][nft_do_chain        ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110222] [e8fbcc00][ip_rcv_finish       ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110229] [e8fbcc00][ip_route_input_slow ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110234] [e8fbcc00][fib_validate_source ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110240] [e8fbcc00][ip_local_deliver    ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110243] [e8fbcc00][nf_hook_slow        ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110252] [e8fbcc00][ip_local_deliver_finish][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110255] [e8fbcc00][icmp_rcv            ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110260] [e8fbcc00][icmp_echo           ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110267] [e8fbcc00][icmp_reply          ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110283] [e8fbcc00][consume_skb         ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110291] [e8fbcd00][packet_rcv          ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110294] [e8fbcd00][consume_skb         ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
 ```
 
 可以看到，每个报文的地址、所在CPU、网口和进程信息都被打印了出来。
 
-#### 3.1.4 NAT跟踪
+#### 3.1.3 NAT跟踪
 
-在对报文进行跟踪时，一旦报文被跟踪起来（命中过滤条件），那么这个报文即使内容发生了变化也会持续被跟踪，知道报文被释放。下面是NAT场景下的跟踪，可以看到报文的源地址由`192.168.122.8`通过SNAT被修改成了`9.135.224.89`，但是报文依然被跟踪到了：
+在对报文进行跟踪时，一旦报文被跟踪起来（命中过滤条件），那么这个报文即使内容发生了变化也会持续被跟踪，直到报文被释放。下面是NAT场景下的跟踪，可以看到报文的源地址由`192.168.122.8`通过SNAT被修改成了`9.135.224.89`，但是报文依然被跟踪到了：
 
 ```shell
 $ sudo ./nettrace -p icmp --addr 192.168.122.8
 begin tracing......
-<------------------- skb: ffff88818f02f900 ---------------------->
+<------------------- skb: 8f02f900 ---------------------->
 463697.331957: [__netif_receive_skb_core]: ICMP: 192.168.122.8 -> 10.123.119.98, ping request   , seq: 0
 463697.331972: [nf_hook_slow            ]: ICMP: 192.168.122.8 -> 10.123.119.98, ping request   , seq: 0
 463697.331985: [nf_hook_slow            ]: ICMP: 192.168.122.8 -> 10.123.119.98, ping request   , seq: 0
@@ -333,47 +359,14 @@ begin tracing......
 463697.332060: [consume_skb             ]: ICMP: 9.135.224.89  -> 10.123.119.98, ping request   , seq: 0
 ```
 
-#### 3.1.5 寿命过滤
+#### 3.1.4 堆栈打印
 
-在特定场景下，如网络时延问题诊断的时候，我们可能仅关注处理时长超过一定时间的报文。此时，就需要根据报文的处理时长进行输出过滤。目前，是根据报文从被跟踪到，直到被销毁来作为报文的处理时长的，这个后续可能要优化，因为内核里会存在“延迟批量销毁skb”的行为。下面的命令会过滤处理时长超过1ms的报文：
-
-```shell
-$ sudo ./nettrace -p icmp --min-latency 1
-begin trace...
-***************** ff1100007b5fe000 ***************
-[66.725587] [napi_gro_receive_entry] ICMP: 192.168.122.1 -> 192.168.122.8 ping request, seq: 1, id: 32535
-[66.727131] [dev_gro_receive     ] ICMP: 192.168.122.1 -> 192.168.122.8 ping request, seq: 1, id: 32535
-[66.727675] [__netif_receive_skb_core] ICMP: 192.168.122.1 -> 192.168.122.8 ping request, seq: 1, id: 32535
-[66.728330] [ip_rcv_core.isra.0  ] ICMP: 192.168.122.1 -> 192.168.122.8 ping request, seq: 1, id: 32535
-[66.728922] [ip_route_input_slow ] ICMP: 192.168.122.1 -> 192.168.122.8 ping request, seq: 1, id: 32535
-[66.729206] [fib_validate_source ] ICMP: 192.168.122.1 -> 192.168.122.8 ping request, seq: 1, id: 32535
-[66.729868] [ip_local_deliver    ] ICMP: 192.168.122.1 -> 192.168.122.8 ping request, seq: 1, id: 32535
-[66.730428] [ip_local_deliver_finish] ICMP: 192.168.122.1 -> 192.168.122.8 ping request, seq: 1, id: 32535
-[66.731109] [icmp_rcv            ] ICMP: 192.168.122.1 -> 192.168.122.8 ping request, seq: 1, id: 32535
-[66.731879] [icmp_echo           ] ICMP: 192.168.122.1 -> 192.168.122.8 ping request, seq: 1, id: 32535
-[66.732456] [icmp_reply.constprop.0] ICMP: 192.168.122.1 -> 192.168.122.8 ping request, seq: 1, id: 32535
-[66.739716] [consume_skb         ] ICMP: 192.168.122.1 -> 192.168.122.8 ping request, seq: 1, id: 32535
-
-***************** ff1100007b5fe100 ***************
-[66.735628] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 192.168.122.1 ping reply, seq: 1, id: 32535
-[66.736355] [ip_output           ] ICMP: 192.168.122.8 -> 192.168.122.1 ping reply, seq: 1, id: 32535
-[66.736600] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 192.168.122.1 ping reply, seq: 1, id: 32535
-[66.737234] [ip_finish_output    ] ICMP: 192.168.122.8 -> 192.168.122.1 ping reply, seq: 1, id: 32535
-[66.737995] [ip_finish_output2   ] ICMP: 192.168.122.8 -> 192.168.122.1 ping reply, seq: 1, id: 32535
-[66.738682] [__dev_queue_xmit    ] ICMP: 192.168.122.8 -> 192.168.122.1 ping reply, seq: 1, id: 32535
-[66.739011] [sch_direct_xmit     ] ICMP: 192.168.122.8 -> 192.168.122.1 ping reply, seq: 1, id: 32535
-[66.739287] [dev_hard_start_xmit ] ICMP: 192.168.122.8 -> 192.168.122.1 ping reply, seq: 1, id: 32535
-[66.740110] [consume_skb         ] ICMP: 192.168.122.8 -> 192.168.122.1 ping reply, seq: 1, id: 32535
-```
-
-#### 3.1.6 堆栈打印
-
-可以通过`--trace-stack`来指定需要进行内核堆栈打印的`traces`，使用方式与`--trace`完全一致。出于性能的考虑，目前启用堆栈打印的内核函数不能超过16个。基本用法：
+可以通过`--trace-stack`来指定需要进行内核堆栈打印的`traces`，使用方式与`--trace`完全一致。出于性能的考虑，尽量不要一次跟踪多个内核函数的堆栈。基本用法：
 
 ```shell
 $ sudo ./nettrace -p icmp --trace-stack consume_skb,icmp_rcv
 begin trace...
-***************** ffff88882cafd200,ffff88882cafdc00 ***************
+***************** 2cafd200,2cafdc00 ***************
 [2846531.810609] [nf_hook_slow        ] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956 *ipv4 in chain: OUTPUT*
 [2846531.810612] [ip_output           ] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956
 [2846531.810613] [nf_hook_slow        ] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956 *ipv4 in chain: POST_ROUTING*
@@ -436,6 +429,51 @@ Call Stack:
     -> entry_SYSCALL_64_after_hwframe+0x72
 ```
 
+#### 3.1.5 降低开销
+
+默认情况下，每个被跟踪的函数都会尝试进行报文的解析和匹配，这个是比较产生较大的开销的。在网络带宽较大的情况下，会严重影响系统的性能。最坏的情况下，可能会导致性能下降80%。为了提升跟踪所产生的开销，可以指定进行报文匹配的函数。例如，对于收包阶段，可以指定`__netif_receive_skb_core`作为报文匹配函数。由于GRO相关的函数调用频率比较高，如果定位的问题和GRO无关，可以将GRO的两个函数从跟踪列表中排出掉：
+
+```shell
+./nettrace --trace-matcher __netif_receive_skb_core --trace-exclude napi_gro_receive_entry,dev_gro_receive -p tcp --port 12345 --tcp-flags S
+```
+
+使用这种方式进行跟踪所产生的性能开销要小得多，预计在10-20%的样子。
+
+#### 3.1.6 精简显示
+
+精简显示模式下，除了第一个函数，其他函数上报的事件数据量都比较小，因此可以显著节省系统开销。在报文内容不被修改的情况下，可以使用这种方式：
+
+```shell
+$ ./nettrace --tiny-show -p tcp --port 9999
+begin trace...
+***************** 63618400,636184e8 ***************
+[11485.683405] [__tcp_transmit_skb  ] TCP: 127.0.0.1:39642 -> 127.0.0.1:9999 seq:1977307561, ack:0, flags:
+[11485.683413] [skb_clone           ]
+[11485.683416] [__ip_queue_xmit     ]
+[11485.683418] [nf_hook_slow        ]
+[11485.683423] [nft_do_chain        ]
+[11485.683425] [ip_output           ]
+[11485.683427] [nf_hook_slow        ]
+[11485.683428] [nft_do_chain        ]
+[11485.683432] [ip_finish_output    ]
+[11485.683434] [ip_finish_output2   ]
+[11485.683435] [__dev_queue_xmit    ]
+[11485.683437] [dev_hard_start_xmit ]
+[11485.683438] [enqueue_to_backlog  ]
+[11485.683441] [__netif_receive_skb_core.constprop.0]
+[11485.683442] [ip_rcv              ]
+[11485.683444] [ip_rcv_core         ]
+[11485.683445] [nf_hook_slow        ]
+[11485.683446] [ip_local_deliver    ]
+[11485.683447] [nf_hook_slow        ]
+[11485.683449] [ip_local_deliver_finish]
+[11485.683450] [tcp_v4_rcv          ]
+[11485.683452] [__inet_lookup_listener]
+[11485.683454] [tcp_v4_send_reset   ]
+[11485.683469] [kfree_skb           ]
+[11485.683486] [__kfree_skb         ]
+```
+
 ### 3.2 诊断模式
 
 使用方式与上面的一致，加个`diag`参数即可使用诊断模式。上文的生命周期模式对于使用者的要求比较高，需要了解内核协议栈各个函数的用法、返回值的意义等，易用性较差。诊断模式是在生命周期模式的基础上，提供了更加丰富的信息，使得没有网络开发经验的人也可进行复杂网络问题的定位和分析。
@@ -451,7 +489,7 @@ Call Stack:
 ```shell
 ./nettrace -p icmp --diag --saddr 192.168.122.8
 begin trace...
-***************** ffff889fad356200 ***************
+***************** ad356200 ***************
 [3445.575957] [__netif_receive_skb_core] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
 [3445.575978] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *ipv4 in chain: PRE_ROUTING*
 [3445.575990] [nft_do_chain        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *iptables table:nat, chain:PREROUT* *packet is accepted*
@@ -486,7 +524,7 @@ begin trace...
 ```shell
 ./nettrace -p icmp --diag --saddr 192.168.122.8
 begin trace...
-***************** ffff889fb3c64f00 ***************
+***************** b3c64f00 ***************
 [4049.295546] [__netif_receive_skb_core] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
 [4049.295566] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *ipv4 in chain: PRE_ROUTING*
 [4049.295578] [nft_do_chain        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *iptables table:nat, chain:PREROUT* *packet is accepted*
@@ -536,7 +574,7 @@ end trace...
 ```shell
 ./nettrace -p icmp --diag --saddr 192.168.122.8 --hooks
 begin trace...
-***************** ffff889faa054500 ***************
+***************** aa054500 ***************
 [5810.702473] [__netif_receive_skb_core] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943
 [5810.702491] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943 *ipv4 in chain: PRE_ROUTING*
 [5810.702504] [nft_do_chain        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943 *iptables table:nat, chain:PREROUT* *packet is accepted*
@@ -590,7 +628,7 @@ end trace...
 ```shell
 ./nettrace --diag --diag-quiet
 begin trace...
-***************** ffff888f97730ee0 ***************
+***************** 97730ee0 ***************
 [365673.326016] [ip_output           ] TCP: 127.0.0.1:40392 -> 127.0.0.1:9999 seq:3067626996, ack:0, flags:S
 [365673.326026] [ip_finish_output    ] TCP: 127.0.0.1:40392 -> 127.0.0.1:9999 seq:3067626996, ack:0, flags:S
 [365673.326029] [ip_finish_output2   ] TCP: 127.0.0.1:40392 -> 127.0.0.1:9999 seq:3067626996, ack:0, flags:S
@@ -624,7 +662,7 @@ XDP导致的丢包（XDP转发会给提示）：
 ```shell
 ./nettrace -p icmp --diag --diag-quiet 
 begin trace...
-***************** ffff889f015acc00 ***************
+***************** 015acc00 ***************
 [18490.607809] [__netif_receive_skb_core] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
 [18490.607828] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *ipv4 in chain: PRE_ROUTING*
 [18490.607840] [nft_do_chain        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *iptables table:nat, chain:PREROUT* *packet is accepted*
@@ -700,8 +738,6 @@ begin trace...
 
 ### 3.4 套接口跟踪
 
-#### 3.4.1 常规用法
-
 套接口跟踪在原理上与skb的basic模式很类似，只不过跟踪对象从skb换成了sock。常规的过滤参数，如ip、端口等，在该模式下都可以直接使用，基本用法如下所示：
 
 ```shell
@@ -720,49 +756,15 @@ begin trace...
 
 其中，`info`里显示的内容分别是：报文在外数量、报文重传数量。`timer`显示的为当前套接口上的定时器和超时时间。目前，信息还在不断完善中。
 
-#### 3.4.2 TCP延迟分析
-
-在sock和monitor模式下，都可以去分析连接的RTT变化，支持根据rtt和srtt来进行过滤。这里是通过跟踪tcp_ack_update_rtt内核函数的调用来获取套接口的rtt更新事件的，sock模式下的使用方式如下：
-
-```shell
-./src/nettrace --sock -t tcp_ack_update_rtt
-begin trace...
-[2651534.413484] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:22 -> 10.85.114.159:53493 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:37ms, rtt:36ms*
-[2651534.429314] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:22 -> 10.85.114.159:53493 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:37ms, rtt:35ms*
-[2651534.875337] [tcp_ack_update_rtt.isra.51] TCP: 127.0.0.1:62522 -> 127.0.0.1:14275 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:19ms, rtt:0ms*
-[2651534.878344] [tcp_ack_update_rtt.isra.51] TCP: 127.0.0.1:14275 -> 127.0.0.1:62522 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:9ms, rtt:0ms*
-[2651534.917260] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:22 -> 10.85.114.159:53493 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:37ms, rtt:38ms*
-[2651534.934738] [tcp_ack_update_rtt.isra.51] TCP: 127.0.0.1:14275 -> 127.0.0.1:62530 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:2ms, rtt:0ms*
-[2651534.960925] [tcp_ack_update_rtt.isra.51] TCP: 127.0.0.1:62522 -> 127.0.0.1:14275 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:17ms, rtt:40ms*
-[2651534.972270] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:22 -> 10.85.114.159:53493 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:37ms, rtt:37ms*
-```
-
-SRTT代表的是经过平滑处理的RTT，而RTT代表的是本次发送的报文被确认过程中实际的RTT。可以通过参数来进行过滤，从而找出高延迟的TCP。下面的命令就是过滤出来RTT超过10ms的数据传输：
-
-```shell
-./src/nettrace --sock -t tcp_ack_update_rtt --tcp-rtt 10
-begin trace...
-[2651713.721553] [tcp_ack_update_rtt.isra.51] TCP: 127.0.0.1:14275 -> 127.0.0.1:62522 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:7ms, rtt:14ms*
-[2651713.745358] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:22 -> 10.85.114.159:53493 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:38ms, rtt:38ms*
-[2651713.759558] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:22 -> 10.85.114.159:53493 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:38ms, rtt:37ms*
-[2651713.769447] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:22 -> 10.85.114.159:53493 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:38ms, rtt:36ms*
-[2651713.773097] [tcp_ack_update_rtt.isra.51] TCP: 127.0.0.1:14275 -> 127.0.0.1:62522 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:8ms, rtt:40ms*
-[2651713.805746] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:22 -> 10.85.114.159:53493 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:37ms, rtt:39ms*
-[2651714.213333] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:18234 -> 10.159.124.73:10000 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:4ms, rtt:43ms*
-[2651714.232011] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:22 -> 10.85.114.159:53493 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:38ms, rtt:36ms*
-[2651714.306847] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:22 -> 10.85.114.159:53493 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:37ms, rtt:38ms*
-[2651714.348913] [tcp_ack_update_rtt.isra.51] TCP: 127.0.0.1:62522 -> 127.0.0.1:14275 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:17ms, rtt:40ms*
-```
-
 ### 3.5 监控模式
 
 常规的网络定位手段，包括上面的报文跟踪、诊断等方式，由于开销过大，不适合在生产环境中部署和常态化运行。监控模式能够提供一种更加轻量级别的网络异常、丢包监控。由于这种模式是基于`TRACING`类型的BPF，因此其对于内核版本有较高的要求。以下是内核版本要求：
 
-|  TencentOS | 开源版本 | BPF特性 | monitor |
-|---|---|---|---|
-|5.4.119-19.0009 | 5.5 | TRACING | 可用，不可监控内核模块中的函数和参数个数超过6的内核函数 |
-| 开发中 | 5.11 | BTF_MODULES | 可用，不可监控参数个数超过6的内核函数 |
-| 开发中 | upstream | TRACING支持6+参数 | 完全可用 |
+| TencentOS       | 开源版本 | BPF特性           | monitor                                                 |
+| --------------- | -------- | ----------------- | ------------------------------------------------------- |
+| 5.4.119-19.0009 | 5.5      | TRACING           | 可用，不可监控内核模块中的函数和参数个数超过6的内核函数 |
+| 开发中          | 5.11     | BTF_MODULES       | 可用，不可监控参数个数超过6的内核函数                   |
+| 开发中          | upstream | TRACING支持6+参数 | 完全可用                                                |
 
 其中，“TRACING支持6+参数”内核特性已经合入到upstream：[bpf, x86: allow function arguments up to 12 for TRACING](https://git.kernel.org/pub/scm/linux/kernel/git/bpf/bpf-next.git/commit/?id=f892cac2371447b3a26dad117c7bcdf2c93215e1)
 
@@ -776,10 +778,10 @@ begin trace...
 [25.168000] [nf_hook_slow        ] ICMP: 192.168.122.1 -> 192.168.122.9 ping request, seq: 1, id: 1523 *ipv4 in chain: INPUT* *packet is dropped by netfilter (NF_DROP)*
 ```
 
-监控模式下，也可以使用普通模式的下各种参数，如报文过滤、`--detail`详情显示等。默认情况下，monitor模式下不跟踪rtt。但是如果指定了`--tcp-rtt`或者`--tcp-srtt`参数，那么就会跟踪rtt事件：
+监控模式下，也可以使用普通模式的下各种参数，如报文过滤、`--detail`详情显示等。默认情况下，monitor模式下不跟踪rtt。但是如果指定了`--filter-minrtt`或者`--filter-srtt`参数，那么就会跟踪rtt事件：
 
 ```shell
-./src/nettrace --monitor --tcp-rtt 10 
+./src/nettrace --monitor --filter-minrtt 10 
 begin trace...
 [2651830.434898] [tcp_ack_update_rtt.isra.51] TCP: 127.0.0.1:14275 -> 127.0.0.1:62522 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:8ms, rtt:40ms*
 [2651830.435267] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:22 -> 10.85.114.159:53493 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:38ms, rtt:41ms*
@@ -788,6 +790,117 @@ begin trace...
 [2651830.578473] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:22 -> 10.85.114.159:53493 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:38ms, rtt:41ms*
 [2651830.752827] [tcp_retransmit_timer] TCP: 10.37.80.82:100 -> 10.154.16.12:8603 SYN_SENT CA_Open info:(0 0) mem:(w0 r0) *TCP retransmission timer out*
 ```
+
+### 3.6 性能分析
+
+本工具目前支持的性能分析方法有两种，一种是采集主机上的tcp连接的rtt情况，从而判断当前的网络处理延迟情况；一种是采集当前主机协议栈处理网络报文的耗时情况，从而可以判断当前主机引入性能问题的环节。
+
+#### 3.6.1 协议栈延迟分析
+
+在特定场景下，如网络时延问题诊断的时候，我们可能要关注处理时长协议栈哪个环节处理比较耗时。此时，就需要根据报文的处理时长进行输出过滤。目前，是根据报文从被跟踪到，直到被释放的前一个函数来作为报文的处理时长的。这里没有考虑报文被释放的延迟，是因为内核里会存在“延迟批量销毁skb”的行为，影响延迟测量的准确性。下面的命令会过滤处理时长超过1ms的报文：
+
+```shell
+$ sudo ./nettrace -p icmp --latency-show
+begin trace...
+***************** 723c4700 ***************
+[37898.357352] [__netif_receive_skb_core.constprop.0] ICMP: 192.168.122.9 -> 192.168.122.1 ping request, seq: 3, id: 9573
+[37898.357368] [enqueue_to_backlog  ] ICMP: 192.168.122.9 -> 192.168.122.1 ping request, seq: 3, id: 9573 latency: 0.016ms
+[37898.357374] [__netif_receive_skb_core.constprop.0] ICMP: 192.168.122.9 -> 192.168.122.1 ping request, seq: 3, id: 9573 latency: 0.005ms
+[37898.357378] [ip_rcv              ] ICMP: 192.168.122.9 -> 192.168.122.1 ping request, seq: 3, id: 9573 latency: 0.003ms
+[37898.357381] [ip_rcv_core         ] ICMP: 192.168.122.9 -> 192.168.122.1 ping request, seq: 3, id: 9573 latency: 0.003ms
+[37898.357384] [nf_hook_slow        ] ICMP: 192.168.122.9 -> 192.168.122.1 ping request, seq: 3, id: 9573 latency: 0.003ms *ipv4 in chain: PRE_ROUTING*
+[37898.357391] [ip_route_input_slow ] ICMP: 192.168.122.9 -> 192.168.122.1 ping request, seq: 3, id: 9573 latency: 0.006ms
+[37898.357398] [fib_validate_source ] ICMP: 192.168.122.9 -> 192.168.122.1 ping request, seq: 3, id: 9573 latency: 0.006ms
+[37898.357401] [ip_local_deliver    ] ICMP: 192.168.122.9 -> 192.168.122.1 ping request, seq: 3, id: 9573 latency: 0.003ms
+[37898.357404] [nf_hook_slow        ] ICMP: 192.168.122.9 -> 192.168.122.1 ping request, seq: 3, id: 9573 latency: 0.002ms *ipv4 in chain: INPUT*
+[37898.357408] [ip_local_deliver_finish] ICMP: 192.168.122.9 -> 192.168.122.1 ping request, seq: 3, id: 9573 latency: 0.003ms
+[37898.357415] [icmp_rcv            ] ICMP: 192.168.122.9 -> 192.168.122.1 ping request, seq: 3, id: 9573 latency: 0.007ms
+[37898.357419] [icmp_echo           ] ICMP: 192.168.122.9 -> 192.168.122.1 ping request, seq: 3, id: 9573 latency: 0.004ms
+[37898.357424] [icmp_reply          ] ICMP: 192.168.122.9 -> 192.168.122.1 ping request, seq: 3, id: 9573 latency: 0.004ms
+[37898.357476] [consume_skb         ] ICMP: 192.168.122.9 -> 192.168.122.1 ping request, seq: 3, id: 9573 latency: 0.052ms *packet is freed (normally)*
+total latency: 0.071ms
+```
+
+可以使用`--min-latency`来根据协议栈处理耗时对报文进行过滤，单位是us，例如：`nettrace -p icmp --min-latency 1000`，可过滤处理耗时超过1ms的报文。指定该参数的时候，会默认显示延迟信息。
+
+上面的这种方式可以显示协议栈各个处理环节的详细延迟信息，但是效率是比较低的，特别是在网络流量很大的时候。这时因为上面的模式下，是将每个匹配到的报文事件上送到用户态，在用户态程序中进行的延迟过滤。为了提升性能，可以使用延迟跟踪模式。这种模式产生的性能开销比较小，缺点是只能跟踪报文开始（第一次匹配到）到截止（释放前的函数）的耗时，不能查看各个环节的耗时。如下面的例子是用来跟踪从网卡驱动收到报文到报文被放到TCP收报队列过程中的延迟超过0.01ms的报文：
+
+```shell
+./nettrace --latency -t __netif_receive_skb_core,tcp_queue_rcv -p tcp --min-latency 10
+[6818.364134] [__kfree_skb         ][__netif_receive_skb_core -> tcp_queue_rcv] TCP: 192.168.122.1:43880 -> 192.168.122.20:22 seq:4194587762, ack:397286758, flags:AP latency: 0.013ms
+[6818.367748] [__kfree_skb         ][__netif_receive_skb_core -> tcp_queue_rcv] TCP: 192.168.122.1:43880 -> 192.168.122.20:22 seq:4194588110, ack:397286802, flags:AP latency: 0.006ms
+[6819.092093] [__kfree_skb         ][__netif_receive_skb_core -> tcp_queue_rcv] TCP: 192.168.122.1:43880 -> 192.168.122.20:22 seq:4194589206, ack:397287394, flags:AP latency: 0.026ms
+[6819.300052] [__kfree_skb         ][__netif_receive_skb_core -> tcp_queue_rcv] TCP: 192.168.122.1:43880 -> 192.168.122.20:22 seq:4194589242, ack:397287430, flags:AP latency: 0.025ms
+[6819.575742] [__kfree_skb         ][__netif_receive_skb_core -> tcp_queue_rcv] TCP: 192.168.122.1:43880 -> 192.168.122.20:22 seq:4194589278, ack:397287466, flags:AP latency: 0.025ms
+[6819.959797] [__kfree_skb         ][__netif_receive_skb_core -> tcp_queue_rcv] TCP: 192.168.122.1:43880 -> 192.168.122.20:22 seq:4194589314, ack:397287502, flags:AP latency: 0.026ms
+[6820.123652] [__kfree_skb         ][__netif_receive_skb_core -> tcp_queue_rcv] TCP: 192.168.122.1:43880 -> 192.168.122.20:22 seq:4194589350, ack:397287546, flags:AP latency: 0.027ms
+[6820.292053] [__kfree_skb         ][__netif_receive_skb_core -> tcp_queue_rcv] TCP: 192.168.122.1:43880 -> 192.168.122.20:22 seq:4194589386, ack:397287590, flags:AP latency: 0.025ms
+```
+
+默认情况下，是不会将报文被释放的延迟当作协议栈处理耗时的，可以通过加上`--latency-free`来将报文释放的耗时也考虑进去。这对于收报过程中的网络延迟分析比较有用，比如我们可以通过报文被释放的延迟来分析出来收包队列中的数据被用户态取走而释放的延迟。
+
+除此之外，还可以通过指定`--latency-summary`来进行协议栈处理延迟的统计，如下所示：
+
+```shell
+./nettrace --latency -t __netif_receive_skb_core,tcp_queue_rcv -p tcp --latency-summary
+latency distribution:             21
+                     0 -     1us: 0        0.0000
+                     2 -     3us: 1        0.0476
+                     4 -     7us: 6        0.2857
+                     8 -    15us: 3        0.1428
+                    16 -    31us: 11       0.5238
+                    32 -    63us: 0        0.0000
+                    64 -   127us: 0        0.0000
+                   128 -   255us: 0        0.0000
+                   256 -   511us: 0        0.0000
+latency distribution:             21
+                     0 -     1us: 0        0.0000
+                     2 -     3us: 1        0.0476
+                     4 -     7us: 6        0.2857
+                     8 -    15us: 3        0.1428
+                    16 -    31us: 11       0.5238
+                    32 -    63us: 0        0.0000
+                    64 -   127us: 0        0.0000
+                   128 -   255us: 0        0.0000
+                   256 -   511us: 0        0.0000
+end trace...
+```
+
+这里的统计信息会每秒刷新。通过这个分布，可以分析出来当前协议栈处理耗时的一个大体情况。
+
+#### 3.6.2 基于RTT的性能分析
+
+rtt模式下可以去分析连接的RTT变化，支持根据rtt和srtt来进行过滤。这里是通过跟踪tcp_ack_update_rtt内核函数的调用来获取套接口的rtt更新事件的，默认情况下是统计RTT的分布情况的，使用方式如下：
+
+```shell
+./nettrace --rtt
+begin trace...
+rtt distribution:                 29
+                     0 -     1ms: 12       0.4137
+                     2 -     3ms: 0        0.0000
+                     4 -     7ms: 0        0.0000
+                     8 -    15ms: 0        0.0000
+                    16 -    31ms: 0        0.0000
+                    32 -    63ms: 0        0.0000
+                    64 -   127ms: 1        0.0344
+                   128 -   255ms: 4        0.1379
+                   256 -   511ms: 12       0.4137
+```
+
+上面的信息分别代表：加上`--rtt-detail`参数，即可查看每个报文的rtt情况。在需要监控系统中超过一定阈值的RTT的情况下，比较适合使用这种方式。例如，下面是监控系统中数据传输延迟超过10ms的报文情况：
+
+```shell
+./nettrace --sock -t tcp_ack_update_rtt --filter-srtt 10
+begin trace...
+[11281.589357] [tcp_ack_update_rtt  ] TCP: 192.168.0.111:42890 -> 43.129.25.208:38000 ESTABLISHED CA_Open out:(p0 r0) unack:196997740 mem:(w0 r0) timer:(loss_probe, 0.176s) *rtt:152ms, rtt_min:152ms*
+[11281.802090] [tcp_ack_update_rtt  ] TCP: 192.168.0.111:42890 -> 43.129.25.208:38000 ESTABLISHED CA_Open out:(p0 r0) unack:196998022 mem:(w0 r0) timer:(loss_probe, 0.124s) *rtt:209ms, rtt_min:209ms*
+[11282.201314] [tcp_ack_update_rtt  ] TCP: 192.168.0.111:42890 -> 43.129.25.208:38000 ESTABLISHED CA_Open out:(p0 r0) unack:196998304 mem:(w0 r0) timer:(loss_probe, 0.032s) *rtt:308ms, rtt_min:308ms*
+[11282.408500] [tcp_ack_update_rtt  ] TCP: 192.168.0.111:42882 -> 43.129.25.208:38000 ESTABLISHED CA_Open out:(p0 r0) unack:2248556186 mem:(w0 r0) timer:(loss_probe, 0.376s) *rtt:131ms, rtt_min:131ms*
+[11282.408513] [tcp_ack_update_rtt  ] TCP: 192.168.0.111:42914 -> 43.129.25.208:38000 ESTABLISHED CA_Open out:(p0 r0) unack:564521627 mem:(w0 r0) timer:(loss_probe, 0.376s) *rtt:128ms, rtt_min:128ms*
+[11282.408518] [tcp_ack_update_rtt  ] TCP: 192.168.0.111:42884 -> 43.129.25.208:38000 ESTABLISHED CA_Open out:(p0 r0) unack:106249688 mem:(w0 r0) timer:(loss_probe, 0.376s) *rtt:128ms, rtt_min:128ms*
+```
+
+`rtt`代表的是经过平滑处理的RTT，而`rtt_min`代表的是本次发送的报文被确认过程中实际的RTT。
 
 ## 四、问题汇总
 

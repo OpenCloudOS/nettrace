@@ -79,6 +79,19 @@ int kernel_version()
 	return kv_to_num(major, minor, patch);
 }
 
+char *kernel_version_str()
+{
+	static char version[16];
+	int major, minor, patch;
+	struct utsname buf;
+
+	uname(&buf);
+	sscanf(buf.release, "%d.%d.%d", &major, &minor, &patch);
+	sprintf(version, "%d.%d.%d", major, minor, patch);
+
+	return version;
+}
+
 bool debugfs_mounted()
 {
 	return simple_exec("mount | grep debugfs") == 0;
