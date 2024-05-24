@@ -595,11 +595,6 @@ static void trace_exec_cond()
 	}
 }
 
-static u8 trace_get_status(int func)
-{
-	return trace_ctx.bpf_args.trace_status[func];
-}
-
 static void trace_prepare_status()
 {
 	u32 mode = trace_ctx.mode_mask;

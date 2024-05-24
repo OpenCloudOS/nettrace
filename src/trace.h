@@ -250,10 +250,14 @@ static inline void trace_set_status(int func, int status)
 	trace_ctx.bpf_args.trace_status[func] |= status;
 }
 
+static inline u8 trace_get_status(int func)
+{
+	return trace_ctx.bpf_args.trace_status[func];
+}
+
 static inline bool trace_using_sk(trace_t *t)
 {
-	return (trace_ctx.mode == TRACE_MODE_MONITOR && !t->skb) ||
-	       trace_ctx.mode == TRACE_MODE_SOCK;
+	return trace_get_status(t->index) & FUNC_STATUS_SK;
 }
 
 static inline int trace_set_stack(trace_t *t)
