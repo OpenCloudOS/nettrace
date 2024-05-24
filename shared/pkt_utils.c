@@ -76,13 +76,11 @@ int ts_print_packet(char *buf, packet_t *pkt, char *minfo,
 			  sizeof(daddr));
 		goto print_ip;
 #endif
-	case ETH_P_ARP:
-		goto print_arp;
 	default:
 		break;
 	}
 
-	BUF_FMT("ether protocol: %u", pkt->proto_l3);
+	BUF_FMT("ether protocol: 0x%04x", pkt->proto_l3);
 	goto out;
 
 print_ip:
@@ -150,9 +148,6 @@ print_ip:
 	default:
 		break;
 	}
-	goto out;
-
-print_arp:
 out:
 	return 0;
 }
