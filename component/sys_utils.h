@@ -20,6 +20,7 @@ int	exec(char *cmd, char *output);
 int	liberate_l();
 bool	fsearch(FILE *f, char *target);
 int	kernel_version();
+char	*kernel_version_str();
 bool	debugfs_mounted();
 bool	kernel_has_config(char *name);
 int	kernel_hz();

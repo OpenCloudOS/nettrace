@@ -742,6 +742,12 @@ int trace_prepare()
 		err = -ENOTSUP;
 		goto err;
 	}
+#else
+	if (strcmp(kernel_version_str(), macro_to_str(__KERN_VER)) != 0) {
+		pr_warn("running kernel version(%s) is not compatible with the compile version(%s), "
+			"result maybe incorrect!\n",
+			kernel_version_str(), macro_to_str(__KERN_VER));
+	}
 #endif
 
 	err = trace_prepare_args();
