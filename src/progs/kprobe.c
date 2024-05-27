@@ -88,22 +88,43 @@
 #define FNC(name)
 
 static inline int handle_exit(struct pt_regs *ctx, int func);
-static inline void get_ret(int func);
+static inline void get_ret(context_info_t *info);
 static inline int default_handle_entry(context_info_t *info);
 
 #include "core.c"
 
-static inline void get_ret(int func)
+static __always_inline int get_ret_key(int func)
 {
-	int *ref = bpf_map_lookup_elem(&m_ret, &func);
+#ifndef BPF_MAP_TYPE_PERCPU_ARRAY
+	return func * bpf_get_smp_processor_id();
+#else
+	return func;
+#endif
+}
+
+static inline void get_ret(context_info_t *info)
+{
+	int *ref, key;
+
+	if (!(info->func_status & FUNC_STATUS_RET))
+		return;
+
+	key = get_ret_key(info->func);
+	ref = bpf_map_lookup_elem(&m_ret, &key);
 	if (!ref)
 		return;
 	(*ref)++;
 }
 
-static inline int put_ret(int func)
+static inline int put_ret(bpf_args_t *args, int func)
 {
-	int *ref = bpf_map_lookup_elem(&m_ret, &func);
+	int *ref, key;
+
+	if (!(get_func_status(args, func) & FUNC_STATUS_RET))
+		return 1;
+
+	key = get_ret_key(func);
+	ref = bpf_map_lookup_elem(&m_ret, &key);
 	if (!ref || *ref <= 0)
 		return 1;
 	(*ref)--;
@@ -112,9 +133,10 @@ static inline int put_ret(int func)
 
 static inline int handle_exit(struct pt_regs *ctx, int func)
 {
+	bpf_args_t *args = (void *)CONFIG();
 	retevent_t event;
 
-	if (!((bpf_args_t *)CONFIG())->ready || put_ret(func))
+	if (!args->ready || put_ret(args, func))
 		return 0;
 
 	event = (retevent_t) {

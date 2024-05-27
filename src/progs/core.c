@@ -113,14 +113,12 @@ static inline bool mode_has_context(bpf_args_t *args)
 	return args->trace_mode & TRACE_MODE_BPF_CTX_MASK;
 }
 
-static __always_inline u8 get_func_status(context_info_t *info)
+static __always_inline u8 get_func_status(bpf_args_t *args, u16 func)
 {
-	u16 func = info->func;
-
 	if (func >= TRACE_MAX)
 		return 0;
 
-	return info->args->trace_status[func];
+	return args->trace_status[func];
 }
 
 static inline bool func_is_free(u8 status)
@@ -178,7 +176,7 @@ static inline int pre_tiny_output(context_info_t *info)
 	if (func_is_free(info->func_status))
 		consume_map_ctx(info->args, &info->skb);
 	else
-		get_ret(info->func);
+		get_ret(info);
 	return 1;
 }
 
@@ -243,7 +241,7 @@ static inline int pre_handle_entry(context_info_t *info)
 	if (args->max_event && args->event_count >= args->max_event)
 		return -1;
 
-	info->func_status = get_func_status(info);
+	info->func_status = get_func_status(info->args, info->func);
 	if (mode_has_context(args)) {
 		match_val_t *match_val = bpf_map_lookup_elem(&m_matched,
 							     &info->skb);
@@ -414,7 +412,7 @@ out:
 #endif
 
 	if (mode_ctx)
-		get_ret(info->func);
+		get_ret(info);
 	return 0;
 err:
 	return -1;
