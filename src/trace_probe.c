@@ -236,7 +236,7 @@ static void probe_trace_ready()
 	bpf_set_config_field(skel, bss, bpf_args_t, ready, true);
 }
 
-#ifdef BPF_FEAT_STACK_TRACE
+#ifdef __F_STACK_TRACE
 static void probe_print_stack(int key)
 {
 	int map_fd = bpf_map__fd(skel->maps.m_stack);

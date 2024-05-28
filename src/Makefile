@@ -33,20 +33,37 @@ cmd_kversion := awk -F '=' 'NR>10{exit;}		\
 		END{printf "%s.%s.%s\n", a, b, c}'	\
 		$(HEADERS)/Makefile
 
+str_count	= $(shell grep -c $2 $(HEADERS)/$1 2>/dev/null)
+struct_field	= $(shell awk 'BEGIN{start=0}/struct $2 {/{start=1} \
+		  /$3/{if (start==1) print 1} \
+		  /}/{start=0}' $(HEADERS)/$1 2>/dev/null)
+
 ifdef NO_BTF
-ifneq ($(shell grep -c get_stackid $(HEADERS)/include/uapi/linux/bpf.h),0)
-	CFLAGS += -DBPF_FEAT_STACK_TRACE
+ifeq ($(call str_count,include/uapi/linux/bpf.h,BPF_PROG_TYPE_TRACEPOINT),0)
+$(error BPF_PROG_TYPE_TRACEPOINT not supported by your kernel!)
 endif
-ifneq ($(shell grep -c "sk_protocol.*8" $(HEADERS)/include/net/sock.h),0)
-	BPF_CFLAGS += -DBPF_FEAT_SK_PRPTOCOL_LEGACY
+
+ifneq ($(call str_count,include/uapi/linux/bpf.h,get_stackid),0)
+	CFLAGS += -D__F_STACK_TRACE
 endif
+
+ifneq ($(call str_count,include/net/sock.h,sk_protocol.*8),0)
+	BPF_CFLAGS += -D__F_SK_PRPTOCOL_LEGACY
+endif
+
+ifeq ($(call str_count,include/net/sock.h,__sk_flags_offset),0)
+	BPF_CFLAGS += -D__F_NO_SK_FLAGS_OFFSET
+endif
+
+ifeq ($(call struct_field,include/net/netfilter/nf_tables.h,nft_chain,\*name),)
+	CFLAGS += -D__F_NFT_NAME_ARRAY
+endif
+
 	__KERN_VER := $(shell $(cmd_kversion))
 	CFLAGS += -D__KERN_VER=$(__KERN_VER)
-ifeq ($(shell echo $(__KERN_VER) | cut -c 1),3)
-	CFLAGS += -DCOMPAT_3_X
-endif
+	CFLAGS += -D__KERN_MAJOR=$(shell echo $(__KERN_VER) | cut -c 1)
 else
-	CFLAGS += -DBPF_FEAT_STACK_TRACE
+	CFLAGS += -D__F_STACK_TRACE
 endif
 
 progs/kprobe_trace.h:

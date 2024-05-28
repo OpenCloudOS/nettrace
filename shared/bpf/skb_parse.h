@@ -344,9 +344,9 @@ err:
 	return -1;
 }
 
-#ifndef COMPAT_3_X
+#ifndef __F_DISABLE_SOCK
 
-#if (!defined(NO_BTF) || defined(BPF_FEAT_SK_PRPTOCOL_LEGACY))
+#if (!defined(NO_BTF) || defined(__F_SK_PRPTOCOL_LEGACY))
 static __always_inline u8 sk_get_protocol(struct sock *sk)
 {
 	u32 flags = _(((u32 *)(&sk->__sk_flags_offset))[0]);
@@ -397,7 +397,7 @@ static inline int probe_parse_sk(struct sock *sk, sock_t *ske,
 		goto err;
 
 #ifdef NO_BTF
-#ifdef BPF_FEAT_SK_PRPTOCOL_LEGACY
+#ifdef __F_SK_PRPTOCOL_LEGACY
 	l4_proto = sk_get_protocol(sk);
 #else
 	l4_proto = _C(sk, sk_protocol);
@@ -504,7 +504,7 @@ static inline int probe_parse_pkt_sk(struct sock *sk, packet_t *pkt,
 		goto err;
 
 #ifdef NO_BTF
-#ifdef BPF_FEAT_SK_PRPTOCOL_LEGACY
+#ifdef __F_SK_PRPTOCOL_LEGACY
 	l4_proto = sk_get_protocol(sk);
 #else
 	l4_proto = _C(sk, sk_protocol);
