@@ -737,6 +737,10 @@ int trace_prepare()
 		err = -ENOTSUP;
 		goto err;
 	}
+	if (!kernel_has_config("DEBUG_INFO_BTF_MODULES")) {
+		pr_warn("DEBUG_INFO_BTF_MODULES not enabled, some infomation, "
+			"such as nf_tables, maybe incorrect\n");
+	}
 #else
 	if (strcmp(kernel_version_str(), macro_to_str(__KERN_VER)) != 0) {
 		pr_warn("running kernel version(%s) is not compatible with the compile version(%s), "
