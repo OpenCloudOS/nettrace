@@ -21,7 +21,7 @@ struct {
 	__uint(max_entries, TRACE_MAX);
 } m_ret SEC(".maps");
 
-#ifdef BPF_FEAT_STACK_TRACE
+#ifdef __F_STACK_TRACE
 struct {
 	__uint(type, BPF_MAP_TYPE_STACK_TRACE);
 	__uint(max_entries, 16384);
@@ -31,7 +31,11 @@ struct {
 #endif
 
 struct {
+#ifdef BPF_MAP_TYPE_LRU_HASH
 	__uint(type, BPF_MAP_TYPE_LRU_HASH);
+#else
+	__uint(type, BPF_MAP_TYPE_HASH);
+#endif
 	__uint(max_entries, 102400);
 	__uint(key_size, sizeof(u64));
 	__uint(value_size, sizeof(match_val_t));
@@ -44,7 +48,7 @@ struct {
 	__uint(max_entries, 512);
 } m_stats SEC(".maps");
 
-#ifdef BPF_FEAT_STACK_TRACE
+#ifdef __F_STACK_TRACE
 static inline void try_trace_stack(context_info_t *info)
 {
 	if (!info->args->stack || !(info->func_status & FUNC_STATUS_STACK))
@@ -525,7 +529,7 @@ static inline int bpf_ipt_do_table(context_info_t *info, struct xt_table *table,
 	return handle_entry_output(info, e);
 }
 
-#ifdef COMPAT_3_X
+#if __KERN_MAJOR == 3
 DEFINE_KPROBE_INIT(ipt_do_table_legacy, ipt_do_table, 0,
 		   .skb = ctx_get_arg(ctx, 0))
 {
@@ -553,12 +557,10 @@ DEFINE_KPROBE_SKB(ipt_do_table, 1, 3)
 	return bpf_ipt_do_table(info, table, _C(state, hook));
 }
 
-#ifndef COMPAT_3_X
 DEFINE_KPROBE_SKB(nf_hook_slow, 0, 4)
 {
-	struct nf_hook_entries *entries = info_get_arg(info, 2);
 	struct nf_hook_state *state;
-	int num, err, i;
+	int err;
 
 	state = info_get_arg(info, 1);
 	if (!info->args->hooks) {
@@ -574,13 +576,18 @@ DEFINE_KPROBE_SKB(nf_hook_slow, 0, 4)
 		return 0;
 	}
 
+#if __KERN_MAJOR != 3
 	DECLARE_EVENT(nf_hooks_event_t, hooks_event)
+	struct nf_hook_entries *entries;
+	int num, i;
+
 	err = handle_entry(info);
 	if (err)
 		return err;
 
 	hooks_event->hook = _C(state, hook);
 	hooks_event->pf = _C(state, pf);
+	entries = info_get_arg(info, 2);
 	num = _(entries->num_hook_entries);
 
 #pragma clang loop unroll_count(6)
@@ -590,9 +597,9 @@ DEFINE_KPROBE_SKB(nf_hook_slow, 0, 4)
 		hooks_event->hooks[i] = (u64)_(entries->hooks[i].hook);
 	}
 	handle_event_output(info, hooks_event);
+#endif
 	return 0;
 }
-#endif
 
 static __always_inline int
 bpf_qdisc_handle(context_info_t *info, struct Qdisc *q)
@@ -628,7 +635,7 @@ DEFINE_TP(qdisc_enqueue, qdisc, qdisc_enqueue, 2, 24)
 	return bpf_qdisc_handle(info, q);
 }
 
-#if !defined(NT_DISABLE_NFT) && !defined(COMPAT_3_X)
+#if !defined(NT_DISABLE_NFT)
 
 /* use the 'ignored suffix rule' feature of CO-RE, as described in:
  * https://nakryiko.com/posts/bpf-core-reference-guide/#handling-incompatible-field-and-type-changes
@@ -650,9 +657,8 @@ struct nft_pktinfo___new {
 DEFINE_KPROBE_INIT(nft_do_chain, nft_do_chain, 2,
 		   .skb = _(((struct nft_pktinfo *)ctx_get_arg(ctx, 0))->skb))
 {
-	struct nft_pktinfo *pkt = info_get_arg(info, 0);
+	struct nf_hook_state __attribute__((__unused__))*state;
 	void *chain_name, *table_name;
-	struct nf_hook_state *state;
 	struct nft_chain *chain;
 	struct nft_table *table;
 	int err;
@@ -662,17 +668,17 @@ DEFINE_KPROBE_INIT(nft_do_chain, nft_do_chain, 2,
 	if (err)
 		return err;
 
-	if (bpf_core_type_exists(struct nft_pktinfo)) {
-		if (!bpf_core_field_exists(pkt->xt))
-			state = _C((struct nft_pktinfo___new *)pkt, state);
-		else
-			state = _C(pkt, xt.state);
-	} else {
-		/* don't use CO-RE, as nft may be a module */
-		state = _(pkt->xt.state);
-	}
-
+#if __KERN_MAJOR == 3
+	chain = _C((struct nf_hook_ops *)info_get_arg(info, 1), priv);
+#else
 	chain = info_get_arg(info, 1);
+#endif
+
+#ifdef __F_NFT_NAME_ARRAY
+	table = _(chain->table);
+	chain_name = &chain->name;
+	table_name = &table->name;
+#else
 	if (bpf_core_type_exists(struct nft_chain)) {
 		table = _C(chain, table);
 		chain_name = _C(chain, name);
@@ -682,8 +688,7 @@ DEFINE_KPROBE_INIT(nft_do_chain, nft_do_chain, 2,
 		chain_name = _(chain->name);
 		table_name = _(table->name);
 	}
-	e->hook	= _C(state, hook);
-	e->pf	= _C(state, pf);
+#endif
 
 	bpf_probe_read_kernel_str(e->chain, sizeof(e->chain), chain_name);
 	bpf_probe_read_kernel_str(e->table, sizeof(e->table), table_name);

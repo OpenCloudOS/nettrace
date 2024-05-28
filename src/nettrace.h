@@ -13,7 +13,6 @@
 		nt_ternary_take(BPF_NO_GLOBAL_DATA, ", no-global-data",	\
 				", global-data")			\
 		nt_ternary_take(NT_DISABLE_IPV6, ", no-ipv6", "")	\
-		nt_ternary_take(COMPAT_3_X, ", compat-3.X", "")		\
 		"\n")
 
 #endif

@@ -50,7 +50,7 @@ typedef struct {
 			u32 latency;
 		};
 	};
-#ifdef BPF_FEAT_STACK_TRACE
+#ifdef __F_STACK_TRACE
 	u32		stack_id;
 #endif
 	int		__event_filed[0];
@@ -72,7 +72,7 @@ typedef struct {
 		sock_t		ske;
 	};
 	u64		retval;
-#ifdef BPF_FEAT_STACK_TRACE
+#ifdef __F_STACK_TRACE
 	u32		stack_id;
 #endif
 	u32		pid;
@@ -229,5 +229,9 @@ typedef struct {
 #define TRACE_PREFIX_LEN	MACRO_SIZE(TRACE_PREFIX)
 #define TRACE_NAME(name)	MACRO_CONCAT(TRACE_PREFIX, name)
 #define TRACE_RET_NAME(name)	MACRO_CONCAT(TRACE_RET_PREFIX, name)
+
+#if defined(__F_NO_SK_FLAGS_OFFSET) && defined(__F_SK_PRPTOCOL_LEGACY)
+#define __F_DISABLE_SOCK
+#endif
 
 #endif

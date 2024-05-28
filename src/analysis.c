@@ -219,7 +219,7 @@ do_latency:
 out:
 	pr_info("%s\n", buf);
 
-#ifdef BPF_FEAT_STACK_TRACE
+#ifdef __F_STACK_TRACE
 	if (trace_is_stack(t) && e->meta != FUNC_TYPE_TINY)
 		trace_ctx.ops->print_stack(e->stack_id);
 #endif
