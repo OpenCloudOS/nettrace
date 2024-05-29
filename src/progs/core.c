@@ -105,7 +105,11 @@ static inline void handle_tiny_output(context_info_t *info)
 	tiny_event_t e = {
 		.func = info->func,
 		.meta = FUNC_TYPE_TINY,
+#ifdef __PROG_TYPE_TRACING
+		.key = (u64)(void *)_(info->skb),
+#else
 		.key = (u64)(void *)info->skb,
+#endif
 		.ts = bpf_ktime_get_ns(),
 	};
 
@@ -406,7 +410,11 @@ out:
 	pr_debug_skb("pkt matched");
 	try_trace_stack(info);
 	pkt->ts = bpf_ktime_get_ns();
+#ifdef __PROG_TYPE_TRACING
+	e->key = (u64)(void *)_(skb);
+#else
 	e->key = (u64)(void *)skb;
+#endif
 	e->func = info->func;
 
 	try_set_latency(args, e, &info->match_val);

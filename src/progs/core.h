@@ -19,6 +19,7 @@ typedef struct {
 	union {
 		/* used by fexit to pass the retval to event */
 		u64 retval;
+		/* match only used in context mode, no conflict with retval */
 		match_val_t match_val;
 		u32 matched;
 	};
