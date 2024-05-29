@@ -25,15 +25,16 @@
 	int TRACE_RET_NAME(name)(void **ctx)			\
 	{							\
 		context_info_t info;				\
-								\
-		if (pre_handle_exit(ctx, INDEX_##name, &info.retval, acount)) \
+		u64 __retval = 0;				\
+		if (pre_handle_exit(ctx, INDEX_##name, &__retval, acount)) \
 			return 0;				\
+		info = (context_info_t) {0};			\
 		/* initialize info only after the check pass */	\
 		info = (context_info_t) {			\
 			.func = INDEX_##name,			\
 			.ctx = ctx,				\
 			.args = (void *)CONFIG(),		\
-			.retval = info.retval,			\
+			.retval = __retval,			\
 			info_init				\
 		};						\
 		if (pre_handle_entry(&info)) return 0;		\
