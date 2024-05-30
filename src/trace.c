@@ -721,7 +721,7 @@ static void trace_print_enabled()
 		} else {
 			fmt = "tracepoint";
 		}
-		pr_verb("\t%s: %s, prog: %s, status: %x\n", fmt, trace->name,
+		pr_verb("\t%s: %s, prog: %s, status: 0x%x\n", fmt, trace->name,
 			trace->prog, trace_get_status(trace->index));
 	}
 }
