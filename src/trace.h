@@ -225,8 +225,14 @@ static inline bool trace_is_usable(trace_t *t)
 	return trace_is_enable(t) && !trace_is_invalid(t);
 }
 
+static inline void trace_set_status(int func, int status)
+{
+	trace_ctx.bpf_args.trace_status[func] |= status;
+}
+
 static inline void trace_set_ret(trace_t *t)
 {
+	trace_set_status(t->index, FUNC_STATUS_RET);
 	t->status |= TRACE_RET;
 }
 
@@ -243,11 +249,6 @@ static inline void trace_set_retonly(trace_t *t)
 static inline bool trace_is_retonly(trace_t *t)
 {
 	return t->status & TRACE_RET_ONLY;
-}
-
-static inline void trace_set_status(int func, int status)
-{
-	trace_ctx.bpf_args.trace_status[func] |= status;
 }
 
 static inline u8 trace_get_status(int func)

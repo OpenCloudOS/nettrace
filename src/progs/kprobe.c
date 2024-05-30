@@ -95,11 +95,7 @@ static inline int default_handle_entry(context_info_t *info);
 
 static __always_inline int get_ret_key(int func)
 {
-#ifndef BPF_MAP_TYPE_PERCPU_ARRAY
-	return func * bpf_get_smp_processor_id();
-#else
 	return func;
-#endif
 }
 
 static inline void get_ret(context_info_t *info)
