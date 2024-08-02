@@ -142,10 +142,8 @@ static inline int handle_exit(struct pt_regs *ctx, int func)
 		.val = PT_REGS_RC(ctx),
 	};
 
-	if (func == INDEX_skb_clone) {
-		bool matched = true;
-		bpf_map_update_elem(&m_matched, &event.val, &matched, 0);
-	}
+	if (func == INDEX_skb_clone)
+		init_ctx_match((void *)event.val, func);
 
 	EVENT_OUTPUT(ctx, event);
 	return 0;
