@@ -55,7 +55,7 @@ char *get_drop_reason(int index)
 	if (!drop_reason_inited && parse_reason_enum())
 		return NULL;
 	if (index <= 0 || index > drop_reason_max)
-		return "unknown";
+		return NULL;
 
 	return drop_reasons[index];
 }

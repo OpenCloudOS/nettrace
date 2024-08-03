@@ -234,4 +234,8 @@ typedef struct {
 #define __F_DISABLE_SOCK
 #endif
 
+#ifdef INLINE_MODE
+#define __F_INIT_EVENT
+#endif
+
 #endif

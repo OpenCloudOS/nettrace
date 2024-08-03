@@ -315,7 +315,7 @@ static inline void try_set_latency(bpf_args_t *args, event_t *e,
 	e->latency_func2 = val->func2;
 }
 
-static inline int handle_entry(context_info_t *info)
+static int auto_inline handle_entry(context_info_t *info)
 {
 	bpf_args_t *args = (void *)info->args;
 	struct sk_buff *skb = info->skb;
@@ -434,31 +434,35 @@ static inline int default_handle_entry(context_info_t *info)
 {
 	bool detail = info->args->detail;
 	detail_event_t __e;
-	int size, err;
+#ifndef __F_INIT_EVENT
+	int size;
+#endif
+	int err;
 
 	info->e = (void *)&__e;
-	size = sizeof(__e);
 
-	/* the kernel of version 4.X can't spill const variable to stack,
-	 * so we need to initialize the whole event.
-	 */
-#ifdef INLINE_MODE
-	__builtin_memset(&__e, 0, size);
-#else
+#ifndef __F_INIT_EVENT
 	if (!detail) {
 		size = sizeof(event_t);
 		__builtin_memset(&__e, 0, size);
 	} else {
+		size = sizeof(__e);
 		__builtin_memset(&__e, 0, size);
 	}
+#else
+	/* the kernel of version 4.X can't spill const variable to stack,
+	 * so we need to initialize the whole event.
+	 */
+	__builtin_memset(&__e, 0, sizeof(__e));
 #endif
 
 	err = handle_entry(info);
 	if (!err) {
-#ifdef INLINE_MODE
-		size = detail ? sizeof(__e) : sizeof(event_t);
-#endif
+#ifdef __F_INIT_EVENT
+		do_event_output(info, detail ? sizeof(__e) : sizeof(event_t));
+#else
 		do_event_output(info, size);
+#endif
 	}
 
 	return err;

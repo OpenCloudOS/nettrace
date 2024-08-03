@@ -9,4 +9,5 @@ GPATH
 GTAGS
 GRTAGS
 kheaders.h
-build.sh
+build*.sh
+release.sh

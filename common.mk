@@ -73,6 +73,10 @@ ifdef INLINE
 	CFLAGS		+= -DINLINE_MODE
 endif
 
+ifdef INIT
+	CFLAGS		+= -D__F_INIT_EVENT
+endif
+
 ifndef BPFTOOL
 ifneq ("$(shell bpftool gen help 2>&1 | grep skeleton)","")
 	BPFTOOL		:= bpftool

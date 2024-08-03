@@ -108,6 +108,10 @@ make all
   ```
   由于采用完全的内联，这种方式编译出来的nettrace工具的体积会比常规的较大。
 
+- **INIT**
+
+  让BPF程序初始化所有的event数据，而不是局部初始化。对于内核版较低的情况，如果出现`bpf_perf_event_output`调用失败的错误，可以通过制定这个参数为1来解决问题。`INLINE=1`涵盖了`INIT=1`。
+
 - **NO_GLOBAL_DATA**：
 
   对于不支持global data的内核版本（内核版本在5.4以下）需要指定这个参数，从而禁用global data的一些特性：
