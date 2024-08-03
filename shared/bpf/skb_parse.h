@@ -78,6 +78,9 @@ const volatile bool bpf_func_exist[BPF_LOCAL_FUNC_MAX] = {0};
 #ifdef INLINE_MODE
 #undef inline
 #define inline inline __attribute__((always_inline))
+#define auto_inline inline
+#else
+#define auto_inline
 #endif
 
 #ifdef BPF_DEBUG

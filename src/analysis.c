@@ -789,10 +789,27 @@ DEFINE_ANALYZER_ENTRY(free, TRACE_MODE_CTX_MASK | TRACE_MODE_TINY_MASK)
 	return RESULT_CONT;
 }
 
+enum skb_drop_reason_subsys {
+	SKB_DROP_REASON_SUBSYS_CORE,
+	SKB_DROP_REASON_SUBSYS_MAC80211_UNUSABLE,
+	SKB_DROP_REASON_SUBSYS_MAC80211_MONITOR,
+	SKB_DROP_REASON_SUBSYS_OPENVSWITCH,
+	SKB_DROP_REASON_SUBSYS_VXLAN,
+	SKB_DROP_REASON_SUBSYS_NUM
+};
+const char *reason_subsys[] = {
+	[SKB_DROP_REASON_SUBSYS_MAC80211_UNUSABLE] = "MAC80211_UNUSABLE",
+	[SKB_DROP_REASON_SUBSYS_MAC80211_MONITOR] = "MAC80211_MONITOR",
+	[SKB_DROP_REASON_SUBSYS_OPENVSWITCH] = "OPENVSWITCH",
+	[SKB_DROP_REASON_SUBSYS_VXLAN] = "VXLAN",
+};
+
+#define SKB_DROP_REASON_SUBSYS_MASK 0xffff0000
 DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_ALL_MASK | TRACE_MODE_TINY_MASK)
 {
 	define_pure_event(drop_event_t, event, e->event);
-	char *reason = NULL, *sym_str, *info;
+	char *reason_str, *sym_str, *info, __reason[32];
+	u32 reason = event->reason, subsys;
 	struct sym_result *sym;
 
 	if (mode_has_context()) {
@@ -803,13 +820,29 @@ DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_ALL_MASK | TRACE_MODE_TINY_MASK)
 	if (e->event->meta == FUNC_TYPE_TINY)
 		goto out;
 
-	reason = get_drop_reason(event->reason);
+	subsys = reason & SKB_DROP_REASON_SUBSYS_MASK;
+	reason = reason & ~SKB_DROP_REASON_SUBSYS_MASK;
+	if (subsys) {
+		subsys >>= 16;
+		if (subsys < SKB_DROP_REASON_SUBSYS_NUM)
+			sprintf(__reason, "%s:%d", reason_subsys[subsys],
+				reason);
+		else
+			sprintf(__reason, "%d:%d", subsys, reason);
+		reason_str = __reason;
+	} else {
+		reason_str = get_drop_reason(reason);
+		if (!reason_str) {
+			sprintf(__reason, "%d", reason);
+			reason_str = __reason;
+		}
+	}
 	sym = sym_parse(event->location);
 	sym_str = sym ? sym->desc : "unknow";
 
 	info = malloc(1024);
 	if (trace_ctx.drop_reason)
-		sprintf(info, PFMT_EMPH_STR(" *reason: %s, %s*"), reason,
+		sprintf(info, PFMT_EMPH_STR(" *reason: %s, %s*"), reason_str,
 			sym_str);
 	else
 		sprintf(info, PFMT_EMPH_STR(" *%s*"), sym_str);
@@ -824,7 +857,7 @@ DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_ALL_MASK | TRACE_MODE_TINY_MASK)
 	sprintf(info, PFMT_EMPH_STR("    location")":\n\t%s", sym_str);
 	if (trace_ctx.drop_reason) {
 		sprintf_end(info, PFMT_EMPH_STR("\n    drop reason")":\n\t%s",
-			    reason ?: "unknow");
+			    reason_str);
 	}
 	entry_set_extinfo(e, info);
 out:
