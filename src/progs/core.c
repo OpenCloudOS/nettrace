@@ -482,37 +482,29 @@ static inline int default_handle_entry(context_info_t *info)
 DEFINE_ALL_PROBES(KPROBE_DEFAULT, TP_DEFAULT, FNC)
 
 
-#ifndef __PROG_TYPE_TRACING
-struct kfree_skb_args {
-	u64 pad;
-	void *skb;
-	void *location;
-	unsigned short protocol;
-	int reason;
-};
+#ifdef __PROG_TYPE_TRACING
 #define info_tp_args(info, offset, index) (void *)((u64 *)(info->ctx) + index)
 #else
-struct kfree_skb_args {
-	void *skb;
-	void *location;
-	u64 reason;
-};
 #define info_tp_args(info, offset, index) ((void *)(info->ctx) + offset)
 #endif
 
 DEFINE_TP(kfree_skb, skb, kfree_skb, 0, 8)
 {
-	struct kfree_skb_args *args = info->ctx;
 	int reason = 0;
 
-	if (bpf_core_type_exists(enum skb_drop_reason))
-		reason = (int)args->reason;
-	else if (info->args->drop_reason)
-		reason = (int)_(args->reason);
+	if (bpf_core_type_exists(enum skb_drop_reason)) {
+		if (bpf_core_field_exists(struct trace_event_raw_kfree_skb, rx_sk))
+			reason = *(int *)info_tp_args(info, 36, 3);
+		else
+			reason = *(int *)info_tp_args(info, 28, 2);
+	} else if (info->args->drop_reason) {
+		/* use probe, or we will fail if drop reason not supported */
+		reason = _(*(int *)info_tp_args(info, 28, 0));
+	}
 
 	DECLARE_EVENT(drop_event_t, e)
 
-	e->location = (unsigned long)args->location;
+	e->location = *(u64 *)info_tp_args(info, 16, 1);
 	e->reason = reason;
 
 	return handle_entry_output(info, e);
@@ -637,13 +629,13 @@ bpf_qdisc_handle(context_info_t *info, struct Qdisc *q)
 
 DEFINE_TP(qdisc_dequeue, qdisc, qdisc_dequeue, 3, 32)
 {
-	struct Qdisc *q = info_tp_args(info, 8, 0);
+	struct Qdisc *q = *(struct Qdisc **)info_tp_args(info, 8, 0);
 	return bpf_qdisc_handle(info, q);
 }
 
 DEFINE_TP(qdisc_enqueue, qdisc, qdisc_enqueue, 2, 24)
 {
-	struct Qdisc *q = info_tp_args(info, 8, 0);
+	struct Qdisc *q = *(struct Qdisc **)info_tp_args(info, 8, 0);
 	return bpf_qdisc_handle(info, q);
 }
 

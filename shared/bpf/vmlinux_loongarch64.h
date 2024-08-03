@@ -140618,6 +140618,7 @@ struct trace_event_raw_kfree_skb {
 	struct trace_entry ent;
 	void *skbaddr;
 	void *location;
+	void *rx_sk;
 	short unsigned int protocol;
 	enum skb_drop_reason reason;
 	char __data[0];
