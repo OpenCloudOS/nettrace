@@ -51,6 +51,11 @@
 #define be16 u16
 #define be32 u32
 
+#define ETH_ALEN	6
+#define	ARPOP_REQUEST	1
+#define	ARPOP_REPLY	2
+
+
 typedef struct {
 	u16	sport;
 	u16	dport;
@@ -91,6 +96,8 @@ typedef struct {
 		} icmp;
 		struct {
 			u16	op;
+			u8	source[ETH_ALEN];
+			u8	dest[ETH_ALEN];
 		} arp_ext;
 		struct
 		{

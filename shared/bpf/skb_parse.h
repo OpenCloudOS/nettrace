@@ -208,9 +208,43 @@ static inline int filter_port(pkt_args_t *args, u32 sport, u32 dport)
 	       (args->port && args->port != dport && args->port != sport);
 }
 
+struct arphdr_all {
+	__be16		ar_hrd;
+	__be16		ar_pro;
+	unsigned char	ar_hln;
+	unsigned char	ar_pln;
+	__be16		ar_op;
+
+	unsigned char	ar_sha[ETH_ALEN];	/* sender hardware address	*/
+	unsigned char	ar_sip[4];		/* sender IP address		*/
+	unsigned char	ar_tha[ETH_ALEN];	/* target hardware address	*/
+	unsigned char	ar_tip[4];		/* target IP address		*/
+};
+
+static inline int probe_parse_arp(void *l3, packet_t *pkt, pkt_args_t *args)
+{
+	struct arphdr_all *arp = l3;
+
+	pkt->l4.arp_ext.op = bpf_ntohs(_(arp->ar_op));
+	if (pkt->l4.arp_ext.op != ARPOP_REQUEST && pkt->l4.arp_ext.op != ARPOP_REPLY)
+		return 0;
+
+	bpf_probe_read_kernel(&pkt->l3.ipv4.saddr, 4, arp->ar_sip);
+	bpf_probe_read_kernel(&pkt->l3.ipv4.daddr, 4, arp->ar_tip);
+
+	if (filter_ipv4_check(args, pkt->l3.ipv4.saddr, pkt->l3.ipv4.daddr))
+		return -1;
+
+	bpf_probe_read_kernel(pkt->l4.arp_ext.source, ETH_ALEN, arp->ar_sha);
+	bpf_probe_read_kernel(pkt->l4.arp_ext.dest, ETH_ALEN, arp->ar_tha);
+
+	return 0;
+}
+
 static inline int probe_parse_l4(void *l4, packet_t *pkt, pkt_args_t *args)
 {
 	switch (pkt->proto_l4) {
+	case IPPROTO_IP:
 	case IPPROTO_TCP: {
 		struct tcphdr *tcp = l4;
 		u16 sport = _(tcp->source);
@@ -627,7 +661,8 @@ static __always_inline int probe_parse_skb(struct sk_buff *skb, struct sock *sk,
 		l3_proto = bpf_ntohs(_(eth->h_proto));
 	}
 
-	if (filter_check(args, l3_proto, l3_proto))
+	if (filter_enabled(args, l4_proto) && !args->l3_proto &&
+	    l3_proto != ETH_P_IP && l3_proto != ETH_P_IPV6)
 		return -1;
 
 	pkt->proto_l3 = l3_proto;
@@ -637,6 +672,8 @@ static __always_inline int probe_parse_skb(struct sk_buff *skb, struct sock *sk,
 	case ETH_P_IPV6:
 	case ETH_P_IP:
 		return probe_parse_l3(skb, args, pkt, l3, ctx);
+	case ETH_P_ARP:
+		return probe_parse_arp(l3, pkt, args);
 	default:
 		return filter_enabled(args, l4_proto) ? -1 : 0;
 	}

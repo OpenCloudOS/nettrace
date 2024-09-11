@@ -78,6 +78,7 @@ static proto_item_t l4_protos[] = {
 };
 
 char *l4_proto_names[] = {
+	[0]	= "TCP",
 	[1]	= "ICMP",
 	[2]	= "IGMP",
 	[4]	= "IPIP",
