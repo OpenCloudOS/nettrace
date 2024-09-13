@@ -225,6 +225,12 @@ static void tracing_trace_ready()
 
 static void tracing_print_stack(int key)
 {
+	if (key <= 0)
+	{
+		pr_info("Call Stack Error! Invalid stack id:%d.\n", key);
+		return;
+	}
+
 	int map_fd = bpf_map__fd(skel->maps.m_stack);
 	__u64 ip[PERF_MAX_STACK_DEPTH] = {};
 	struct sym_result *sym;
