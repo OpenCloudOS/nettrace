@@ -80,9 +80,8 @@ typedef struct {
 } data_list_t;
 
 typedef enum analyzer_result {
-	RESULT_CONT,
+	RESULT_CONT = 0,
 	RESULT_CONSUME,
-	RESULT_FINISH,
 } analyzer_result_t;
 
 typedef struct analyzer {
