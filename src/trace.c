@@ -157,6 +157,10 @@ static int trace_set_target(trace_t *t, int target)
 	case 4:
 		trace_set_invalid_reason(t, "exclude");
 		break;
+	case 5:
+		trace_set_status(t->index, FUNC_STATUS_CFREE);
+		t->status |= TRACE_CFREE;
+		break;
 	}
 
 	return err;
@@ -508,6 +512,14 @@ static int trace_prepare_args()
 		}
 		trace_parse_traces(args->trace_matcher, 3);
 		bpf_args->match_mode = true;
+	}
+
+	if (args->trace_free) {
+		if (!(trace_ctx.mode_mask & TRACE_MODE_BPF_CTX_MASK)) {
+			pr_err("--trace_free not supported in this mode\n");
+			goto err;
+		}
+		trace_parse_traces(args->trace_free, 5);
 	}
 
 	if (args->latency_show && !mode_has_context()) {

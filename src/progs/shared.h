@@ -100,6 +100,7 @@ enum {
 #define FUNC_STATUS_MATCHER	(1 << 3)
 #define FUNC_STATUS_STACK	(1 << 4)
 #define FUNC_STATUS_RET		(1 << 5)
+#define FUNC_STATUS_CFREE	(1 << 6) /* custom skb free function */
 
 #undef DEFINE_EVENT
 #define DEFINE_EVENT(name, fields...)		\

@@ -26,6 +26,7 @@ struct analyzer;
 #define TRACE_STACK		(1 << 4)
 #define TRACE_ATTACH_MANUAL	(1 << 5)
 #define TRACE_RET_ONLY		(1 << 6)
+#define TRACE_CFREE		(1 << 7)
 
 #define trace_for_each(pos)		\
 	list_for_each_entry(pos, &trace_list, all)
@@ -121,6 +122,7 @@ typedef struct trace_args {
 	char *traces_stack;
 	char *trace_matcher;
 	char *trace_exclude;
+	char *trace_free;
 	char *pkt_len;
 	char *tcp_flags;
 	u32  count;

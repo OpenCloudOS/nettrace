@@ -577,6 +577,12 @@ static void ctx_poll_cb(data_list_t *dlist)
 	if (try_run_entry(trace, analyzer, entry))
 		goto check_pending;
 
+	if (trace->status & TRACE_CFREE) {
+		pr_debug("custom free hit %s\n", trace ? trace->name : "");
+		put_fake_analy_ctx(fake);
+		hlist_del(&fake->hash);
+	}
+
 	list_add_tail(&entry->list, &analy_ctx->entries);
 check_pending:
 	if (analy_ctx->refs <= 0) {

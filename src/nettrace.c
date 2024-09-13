@@ -255,6 +255,11 @@ static void do_parse_args(int argc, char *argv[])
 			.desc = "don't trace skb clone",
 		},
 		{
+			.lname = "trace-free", .dest = &trace_args->trace_free,
+			.type = OPTION_STRING,
+			.desc = "custom the free functions",
+		},
+		{
 			.lname = "func-stats", .dest = &bpf_args->func_stats,
 			.type = OPTION_BOOL,
 			.desc = "only do the statistics for function call",

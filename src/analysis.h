@@ -184,11 +184,13 @@ static inline u32 get_entry_dela_us(analy_entry_t *n, analy_entry_t *o)
 static inline u32 get_lifetime_us(analy_ctx_t *ctx, bool skip_last)
 {
 	analy_entry_t *first, *last;
+	trace_t *t;
 
 	first = list_first_entry(&ctx->entries, analy_entry_t, list);
 	last = list_last_entry(&ctx->entries, analy_entry_t, list);
 
-	if (skip_last) {
+	t = get_trace_from_analy_entry(last);
+	if (skip_last && !(t->status & TRACE_CFREE)) {
 		if (first == last)
 			return 0;
 		last = list_prev_entry(last, list);
