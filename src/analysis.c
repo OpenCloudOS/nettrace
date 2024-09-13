@@ -2,6 +2,7 @@
 
 #include <linux/netfilter.h>
 #include <linux/netfilter_arp.h>
+#include <linux/netfilter_ipv6.h>
 #include <linux/netfilter_bridge.h>
 #include <unistd.h>
 #undef __USE_MISC
@@ -919,6 +920,14 @@ const char *hook_names[][8] = {
 		[NF_ARP_IN]	= "ARP_IN",
 		[NF_ARP_OUT]	= "ARP_OUT",
 		[NF_ARP_FORWARD]= "ARP_FORWARD",
+	},
+	[NFPROTO_IPV6] = {
+		[NF_IP6_PRE_ROUTING]	= "PRE_ROUTING",
+		[NF_IP6_LOCAL_IN]	= "INPUT",
+		[NF_IP6_FORWARD]	= "FORWARD",
+		[NF_IP6_LOCAL_OUT]	= "OUTPUT",
+		[NF_IP6_POST_ROUTING]	= "POST_ROUTING",
+		[NF_IP6_NUMHOOKS]	= "NUMHOOKS",
 	},
 	[NFPROTO_NUMPROTO] = {},
 };
