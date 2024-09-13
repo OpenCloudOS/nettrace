@@ -147,12 +147,12 @@ static inline void free_map_ctx(bpf_args_t *args, void *key)
 
 static inline void init_ctx_match(void *skb, u16 func)
 {
-	match_val_t _matched = {
+	match_val_t matched = {
 		.ts1 = bpf_ktime_get_ns() / 1000,
 		.func1 = func,
 	};
 
-	bpf_map_update_elem(&m_matched, &skb, &_matched, 0);
+	bpf_map_update_elem(&m_matched, &skb, &matched, 0);
 }
 
 static __always_inline void update_stats_key(u32 key)
@@ -288,19 +288,21 @@ static inline int pre_handle_entry(context_info_t *info)
  */
 static inline void handle_entry_finish(context_info_t *info, int err)
 {
+	if (err < 0)
+		return;
+
 	if (mode_has_context(info->args)) {
 		if (func_is_free(info->func_status)) {
 			if (info->matched)
 				consume_map_ctx(info->args, &info->skb);
-		} else if (err >= 0) {
+		} else if (!info->matched) {
 			init_ctx_match(info->skb, info->func);
 		}
 	} else {
-		if (err >= 0)
-			info->args->event_count++;
+		info->args->event_count++;
 	}
 
-	if (err >= 0 && info->args->func_stats)
+	if (info->args->func_stats)
 		update_stats_key(info->func);
 }
 
