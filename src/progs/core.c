@@ -461,7 +461,14 @@ static inline int default_handle_entry(context_info_t *info)
 	err = handle_entry(info);
 	if (!err) {
 #ifdef __F_INIT_EVENT
+#ifdef __F_OUTPUT_WHOLE
+		/* output the whole detail event, as the compiler can save
+		 * the size to stack sometimes.
+		 */
+		do_event_output(info, sizeof(__e));
+#else
 		do_event_output(info, detail ? sizeof(__e) : sizeof(event_t));
+#endif
 #else
 		do_event_output(info, size);
 #endif

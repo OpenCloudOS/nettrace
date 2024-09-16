@@ -36,7 +36,7 @@ typedef struct {
 /* BPF_NO_GLOBAL_DATA means this kernel version is old, we need to initialize
  * all the event data.
  */
-#ifdef BPF_NO_GLOBAL_DATA
+#if defined(BPF_NO_GLOBAL_DATA) || defined(__F_INIT_EVENT)
 #define DECLARE_EVENT(type, name)				\
 	pure_##type __attribute__((__unused__)) *name;		\
 	type __attribute__((__unused__))__##name;		\
@@ -50,8 +50,14 @@ typedef struct {
 		       offsetof(type, __event_filed));		\
 	}
 
+#ifdef __F_OUTPUT_WHOLE
+#define handle_event_output(info, e)		\
+	do_event_output(info, sizeof(__detail_##e))
+#else
 #define handle_event_output(info, e)		\
 	do_event_output(info, (info->args->detail ? sizeof(__detail_##e) : sizeof(__##e)))
+#endif
+
 #else
 /* initialize only part event data if not detail */
 #define DECLARE_EVENT(type, name)				\
