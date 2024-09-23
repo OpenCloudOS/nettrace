@@ -39,7 +39,7 @@ static int parse_reason_enum()
 
 	while (true) {
 		if (!fsearch(f, "{") ||
-		    fscanf(f, "%d, \"%31[A-Z_]", &index, name) != 2)
+		    fscanf(f, "%d, \"%31[A-Z_0-9]", &index, name) != 2)
 			break;
 		strcpy(drop_reasons[index], name);
 	}
