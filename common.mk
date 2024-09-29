@@ -7,8 +7,13 @@ CFLAGS		+= -I./ -I$(ROOT)/shared/bpf/ -g
 BPF_CFLAGS	= $(CFLAGS) -Wno-unused-function			\
 		  -Wno-compare-distinct-pointer-types -Wuninitialized	\
 		  -D__TARGET_ARCH_$(SRCARCH) -DBPF_NO_PRESERVE_ACCESS_INDEX
+
+ifeq ("$(shell pkg-config --print-requires-private libelf | grep libzstd)","libzstd")
+LIBELF_ZSTD_FLAGS = -lzstd
+endif
+
 HOST_CFLAGS	= \
-		-lbpf -lelf -lz -O2 -static $(CFLAGS) -Wall		\
+		-lbpf -lelf -lz $(LIBELF_ZSTD_FLAGS) -O2 -static $(CFLAGS) -Wall		\
 		-Wno-deprecated-declarations -DVERSION=$(VERSION)	\
 		-DRELEASE=$(RELEASE)					\
 		-I$(ROOT)/shared/ -I$(ROOT)/component
