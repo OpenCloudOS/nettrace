@@ -340,32 +340,19 @@ static int auto_inline handle_entry(context_info_t *info)
 	if (filter && args_check(args, pid, pid))
 		goto err;
 
-	/* why we call probe_parse_skb/probe_parse_pkt_sk double times?
-	 * because in the inline mode, 4.15 kernel will be confused
-	 * with pkt_args.
+	/* why we call probe_parse_skb double times? because in the inline
+	 * mode, 4.15 kernel will be confused with pkt_args.
 	 */
 	if (!filter) {
-		if (info->func_status & FUNC_STATUS_SKB_INVAL) {
-			if (!skb || !info->sk)
-				goto err;
-			/* in this case, hash context by skb, but parse sock */
-			probe_parse_pkt_sk(info->sk, pkt, NULL);
-		} else {
-			if (!skb) {
-				pr_bpf_debug("no skb available, func=%d", info->func);
-				goto err;
-			}
-			probe_parse_skb(skb, pkt, NULL);
+		if (!skb) {
+			pr_bpf_debug("no skb available, func=%d", info->func);
+			goto err;
 		}
+		probe_parse_skb(skb, info->sk, pkt, NULL);
 		goto no_filter;
 	}
 
-	if (info->func_status & FUNC_STATUS_SKB_INVAL) {
-		if (!skb || !info->sk)
-			goto err;
-		/* in this case, hash context by skb, but parse sock */
-		err = probe_parse_pkt_sk(info->sk, pkt, pkt_args);
-	} else if (info->func_status & FUNC_STATUS_SK) {
+	if (info->func_status & FUNC_STATUS_SK) {
 		if (!info->sk) {
 			pr_bpf_debug("no sock available, func=%d", info->func);
 			goto err;
@@ -376,7 +363,7 @@ static int auto_inline handle_entry(context_info_t *info)
 			pr_bpf_debug("no skb available, func=%d", info->func);
 			goto err;
 		}
-		err = probe_parse_skb(skb, pkt, pkt_args);
+		err = probe_parse_skb(skb, info->sk, pkt, pkt_args);
 	}
 
 	if (err)

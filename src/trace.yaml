@@ -274,7 +274,7 @@ children:
     visual: true
     children:
     - name: __ip_queue_xmit:1/0
-      skbinvalid: true
+    - __ip_local_out:2/1
     - ip_output:2
     - ip_finish_output:2
     - ip_finish_output_gso:2
@@ -387,16 +387,14 @@ children:
     children:
     - tcp_sendmsg_locked/0
     - name: tcp_skb_entail/0:1
-      skbinvalid: true
+    - name: skb_entail/0:1
     - __tcp_push_pending_frames/0
     - name: __tcp_transmit_skb:1/0
-      skbinvalid: true
       rules:
       - exp: ne 0
         level: warn
         msg: failed to xmit skb to ip layer
     - name: __tcp_retransmit_skb/0:1
-      skbinvalid: true
 - name: udp
   desc: udp protocol layer (L4) of the network stack
   children:

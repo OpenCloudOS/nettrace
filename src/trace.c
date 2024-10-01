@@ -609,9 +609,6 @@ static void trace_prepare_status()
 			if (trace->sk)
 				trace_set_status(trace->index, FUNC_STATUS_SK);
 		}
-
-		if (trace->skbinvalid && mode & TRACE_MODE_BPF_CTX_MASK)
-			trace_set_status(trace->index, FUNC_STATUS_SKB_INVAL);
 	}
 }
 

@@ -68,7 +68,6 @@ typedef struct trace {
 	u8	sk;
 	/* the same as skb_offset */
 	u8	skoffset;
-	bool	skbinvalid;
 	/* traces in a global list */
 	struct list_head all;
 	/* traces in the same group */

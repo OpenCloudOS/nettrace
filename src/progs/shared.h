@@ -97,7 +97,6 @@ enum {
 
 #define FUNC_STATUS_FREE	(1 << 0)
 #define FUNC_STATUS_SK		(1 << 1)
-#define FUNC_STATUS_SKB_INVAL	(1 << 2)
 #define FUNC_STATUS_MATCHER	(1 << 3)
 #define FUNC_STATUS_STACK	(1 << 4)
 #define FUNC_STATUS_RET		(1 << 5)

@@ -16,6 +16,7 @@
 #include <net/sch_generic.h>
 #include <net/sock.h>
 #include <net/inet_connection_sock.h>
+#include <net/tcp.h>
 
 #if defined(CONFIG_NF_TABLES) || defined(CONFIG_NF_TABLES_MODULE)
 #include <net/netfilter/nf_tables.h>
