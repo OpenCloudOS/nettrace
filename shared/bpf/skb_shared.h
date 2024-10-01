@@ -48,6 +48,9 @@
 #define ICMPV6_EXT_ECHO_REPLY		161
 #endif
 
+#define be16 u16
+#define be32 u32
+
 typedef struct {
 	u16	sport;
 	u16	dport;
@@ -69,15 +72,15 @@ typedef struct {
 	} l3;
 	union {
 		struct {
-			u16	sport;
-			u16	dport;
+			be16	sport;
+			be16	dport;
 			u32	seq;
 			u32	ack;
 			u8	flags;
 		} tcp;
 		struct {
-			u16	sport;
-			u16	dport;
+			be16	sport;
+			be16	dport;
 		} udp;
 		l4_min_t min;
 		struct {
@@ -117,15 +120,15 @@ typedef struct {
 	} l3;
 	union {
 		struct {
-			u16	sport;
-			u16	dport;
+			be16	sport;
+			be16	dport;
 			u32	packets_out;
 			u32	retrans_out;
 			u32	snd_una;
 		} tcp;
 		struct {
-			u16	sport;
-			u16	dport;
+			be16	sport;
+			be16	dport;
 		} udp;
 		l4_min_t min;
 	} l4;

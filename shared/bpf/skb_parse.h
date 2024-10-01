@@ -302,8 +302,8 @@ static inline int probe_parse_ip(void *ip, parse_ctx_t *ctx)
 		pkt->l4.tcp.sport = sport;
 		pkt->l4.tcp.dport = dport;
 		pkt->l4.tcp.flags = flags;
-		pkt->l4.tcp.seq = _(tcp->seq);
-		pkt->l4.tcp.ack = _(tcp->ack_seq);
+		pkt->l4.tcp.seq = bpf_ntohl(_(tcp->seq));
+		pkt->l4.tcp.ack = bpf_ntohl(_(tcp->ack_seq));
 		break;
 	}
 	case IPPROTO_UDP: {

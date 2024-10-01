@@ -13,13 +13,10 @@ LIBELF_ZSTD_FLAGS = -lzstd
 endif
 
 HOST_CFLAGS	= \
-		-lbpf -lelf -lz $(LIBELF_ZSTD_FLAGS) -O2 -static $(CFLAGS) -Wall		\
+		-lbpf -lelf -lz $(LIBELF_ZSTD_FLAGS) -O2 -static $(CFLAGS) -Wall \
 		-Wno-deprecated-declarations -DVERSION=$(VERSION)	\
 		-DRELEASE=$(RELEASE)					\
 		-I$(ROOT)/shared/ -I$(ROOT)/component
-
-REMOTE_ROOT	:= https://raw.githubusercontent.com/xmmgithub/nettrace-eBPF/master/
-export REMOTE_ROOT
 
 CC		:= $(CROSS_COMPILE)gcc
 

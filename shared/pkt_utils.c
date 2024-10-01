@@ -108,8 +108,8 @@ print_ip:
 		flags = pkt->l4.tcp.flags;
 #define CONVERT_FLAG(mask, name) ((flags & mask) ? name : "")
 		BUF_FMT(" seq:%u, ack:%u, flags:%s%s%s%s%s",
-			ntohl(pkt->l4.tcp.seq),
-			ntohl(pkt->l4.tcp.ack),
+			pkt->l4.tcp.seq,
+			pkt->l4.tcp.ack,
 			CONVERT_FLAG(TCP_FLAGS_SYN, "S"),
 			CONVERT_FLAG(TCP_FLAGS_ACK, "A"),
 			CONVERT_FLAG(TCP_FLAGS_RST, "R"),
