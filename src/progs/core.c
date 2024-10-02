@@ -150,10 +150,10 @@ static inline void free_map_ctx(bpf_args_t *args, void *key)
 	bpf_map_delete_elem(&m_matched, key);
 }
 
-static inline void init_ctx_match(void *skb, u16 func)
+static inline void init_ctx_match(void *skb, u16 func, bool ts)
 {
 	match_val_t matched = {
-		.ts1 = bpf_ktime_get_ns() / 1000,
+		.ts1 = ts ? bpf_ktime_get_ns() / 1000 : 0,
 		.func1 = func,
 	};
 
@@ -205,6 +205,12 @@ static inline int pre_handle_latency(context_info_t *info,
 			match_val->ts2 = bpf_ktime_get_ns() / 1000;
 			match_val->func2 = info->func;
 		}
+
+		/* reentry the matcher, or the free of skb is not traced. */
+		if (info->func_status & FUNC_STATUS_MATCHER &&
+		    match_val->func1 == info->func)
+			match_val->ts1 = bpf_ktime_get_ns() / 1000;
+
 		if (func_is_free(info->func_status)) {
 			delta = match_val->ts2 - match_val->ts1;
 			/* skip a single match function */
@@ -227,7 +233,7 @@ static inline int pre_handle_latency(context_info_t *info,
 			return 1;
 		/* if there isn't any filter, skip handle_entry() */
 		if (!args->has_filter) {
-			init_ctx_match(info->skb, info->func);
+			init_ctx_match(info->skb, info->func, true);
 			return 1;
 		}
 	}
@@ -312,7 +318,8 @@ static inline void handle_entry_finish(context_info_t *info, int err)
 			if (info->matched)
 				consume_map_ctx(info->args, &info->skb);
 		} else if (!info->matched) {
-			init_ctx_match(info->skb, info->func);
+			init_ctx_match(info->skb, info->func,
+				       trace_mode_latency(info->args));
 		}
 	} else {
 		info->args->event_count++;
