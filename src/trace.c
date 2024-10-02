@@ -282,7 +282,6 @@ static int trace_prepare_mode(trace_args_t *args)
 			/* enable skb clone trace */
 			trace_set_ret(&trace_skb_clone);
 		}
-		trace_ctx.skip_last = !args->latency_free;
 		break;
 	case TRACE_MODE_LATENCY:
 		trace_set_invalid_reason(&trace_skb_clone, "latency");
@@ -554,6 +553,7 @@ static int trace_prepare_args()
 	bpf_args->trace_mode = 1 << trace_ctx.mode;
 	trace_ctx.detail = bpf_args->detail;
 	bpf_args->max_event = args->count;
+	trace_ctx.skip_last = !bpf_args->latency_free;
 
 	if (args->pkt_len) {
 		u32 len_1, len_2;

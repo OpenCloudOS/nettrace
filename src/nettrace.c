@@ -178,7 +178,7 @@ static void do_parse_args(int argc, char *argv[])
 			.desc = "show latency between kernel functions",
 		},
 		{
-			.lname = "latency-free", .dest = &trace_args->latency_free,
+			.lname = "latency-free", .dest = &bpf_args->latency_free,
 			.type = OPTION_BOOL,
 			.desc = "account the latency of skb free",
 		},

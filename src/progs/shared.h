@@ -23,6 +23,7 @@ typedef struct {
 	bool latency_summary;
 	bool func_stats;
 	bool match_mode;
+	bool latency_free;
 	u32  first_rtt;
 	u32  last_rtt;
 	u32  rate_limit;

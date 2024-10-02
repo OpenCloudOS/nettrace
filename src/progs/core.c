@@ -200,7 +200,8 @@ static inline int pre_handle_latency(context_info_t *info,
 	u32 delta;
 
 	if (match_val) {
-		if (func_is_cfree(info->func_status) || !func_is_free(info->func_status)) {
+		if (args->latency_free || !func_is_free(info->func_status) ||
+		    func_is_cfree(info->func_status)) {
 			match_val->ts2 = bpf_ktime_get_ns() / 1000;
 			match_val->func2 = info->func;
 		}
