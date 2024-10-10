@@ -604,7 +604,7 @@ DEFINE_KPROBE_SKB(nf_hook_slow, 0, 4)
 		return 0;
 	}
 
-#if __KERN_MAJOR != 3
+#ifndef __F_NO_NF_HOOK_ENTRIES
 	DECLARE_EVENT(nf_hooks_event_t, hooks_event)
 	struct nf_hook_entries *entries;
 	int num, i;

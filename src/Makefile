@@ -55,6 +55,10 @@ ifeq ($(call str_count,include/net/sock.h,__sk_flags_offset),0)
 	BPF_CFLAGS += -D__F_NO_SK_FLAGS_OFFSET
 endif
 
+ifeq ($(call str_count,include/linux/netfilter.h,nf_hook_entries),0)
+	BPF_CFLAGS += -D__F_NO_NF_HOOK_ENTRIES
+endif
+
 ifeq ($(call struct_field,include/net/netfilter/nf_tables.h,nft_chain,\*name),)
 	CFLAGS += -D__F_NFT_NAME_ARRAY
 endif
