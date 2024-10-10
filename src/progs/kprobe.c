@@ -39,7 +39,8 @@
 			.args = (void *)CONFIG(),		\
 			info_init				\
 		};						\
-		if (pre_handle_entry(&info)) return 0;		\
+		if (pre_handle_entry(&info, INDEX_##name))	\
+			return 0;				\
 		handle_entry_finish(&info,			\
 				    fake__##name(&info));	\
 		return 0;					\
@@ -71,7 +72,8 @@
 			.args = (void *)CONFIG(),		\
 			info_init				\
 		};						\
-		if (pre_handle_entry(&info)) return 0;		\
+		if (pre_handle_entry(&info, INDEX_##name))	\
+			return 0;				\
 		handle_entry_finish(&info,			\
 				    fake__##name(&info));	\
 		return 0;					\

@@ -251,7 +251,7 @@ static inline bool trace_mode_latency(bpf_args_t *args)
  *    0: valid and continue
  *    1: valid and return
  */
-static inline int pre_handle_entry(context_info_t *info)
+static inline int pre_handle_entry(context_info_t *info, u16 func)
 {
 	bpf_args_t *args = (void *)info->args;
 	int ret = 0;
@@ -262,7 +262,7 @@ static inline int pre_handle_entry(context_info_t *info)
 	if (args->max_event && args->event_count >= args->max_event)
 		return -1;
 
-	info->func_status = get_func_status(info->args, info->func);
+	info->func_status = get_func_status(info->args, func);
 	if (mode_has_context(args)) {
 		match_val_t *match_val = bpf_map_lookup_elem(&m_matched,
 							     &info->skb);
@@ -290,9 +290,9 @@ static inline int pre_handle_entry(context_info_t *info)
 
 	if (args->func_stats) {
 		if (ret) {
-			update_stats_key(info->func);
+			update_stats_key(func);
 		} else if (!args->has_filter) {
-			update_stats_key(info->func);
+			update_stats_key(func);
 			args->event_count++;
 			ret = 1;
 		} else {
@@ -604,7 +604,7 @@ DEFINE_KPROBE_SKB(nf_hook_slow, 0, 4)
 		return 0;
 	}
 
-#if __KERN_MAJOR != 3
+#ifndef __F_NO_NF_HOOK_ENTRIES
 	DECLARE_EVENT(nf_hooks_event_t, hooks_event)
 	struct nf_hook_entries *entries;
 	int num, i;

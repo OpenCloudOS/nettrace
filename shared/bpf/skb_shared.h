@@ -172,6 +172,7 @@ typedef struct {
 	u32	addr;
 	u32	pkt_len_1;
 	u32	pkt_len_2;
+	u32	pad0;
 	u32	saddr_v6[4];
 	u32	daddr_v6[4];
 	u32	addr_v6[4];
