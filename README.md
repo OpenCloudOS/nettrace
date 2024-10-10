@@ -218,6 +218,7 @@ Usage:
     --trace-matcher  traces that can match packet(default all)
     --trace-exclude  traces that should be disabled
     --trace-noclone  don't trace skb clone
+    --trace-free     custom the free functions
     --func-stats     only do the statistics for function call
     --rate-limit     limit the output to N/s, not valid in diag/default mode
     --btf-path       custom the path of BTF info of vmlinux
@@ -827,18 +828,40 @@ total latency: 0.071ms
 
 可以使用`--min-latency`来根据协议栈处理耗时对报文进行过滤，单位是us，例如：`nettrace -p icmp --min-latency 1000`，可过滤处理耗时超过1ms的报文。指定该参数的时候，会默认显示延迟信息。
 
-上面的这种方式可以显示协议栈各个处理环节的详细延迟信息，但是效率是比较低的，特别是在网络流量很大的时候。这时因为上面的模式下，是将每个匹配到的报文事件上送到用户态，在用户态程序中进行的延迟过滤。为了提升性能，可以使用延迟跟踪模式。这种模式产生的性能开销比较小，缺点是只能跟踪报文开始（第一次匹配到）到截止（释放前的函数）的耗时，不能查看各个环节的耗时。如下面的例子是用来跟踪从网卡驱动收到报文到报文被放到TCP收报队列过程中的延迟超过0.01ms的报文：
+上面的这种方式可以显示协议栈各个处理环节的详细延迟信息，但是效率是比较低的，特别是在网络流量很大的时候。这时因为上面的模式下，是将每个匹配到的报文事件上送到用户态，在用户态程序中进行的延迟过滤。为了提升性能，可以使用延迟跟踪模式。这种模式产生的性能开销比较小，缺点是只能跟踪报文开始（第一次匹配到）到截止（释放前的函数）的耗时，不能查看各个环节的耗时。
+
+**收包阶段**
+
+跟踪报文被放到收包队列 -> 用户将报文从收包队列中取走的延迟。这部分延迟主要是由于用户态程序收包不及时导致的：
 
 ```shell
-./nettrace --latency -t __netif_receive_skb_core,tcp_queue_rcv -p tcp --min-latency 10
-[6818.364134] [__kfree_skb         ][__netif_receive_skb_core -> tcp_queue_rcv] TCP: 192.168.122.1:43880 -> 192.168.122.20:22 seq:4194587762, ack:397286758, flags:AP latency: 0.013ms
-[6818.367748] [__kfree_skb         ][__netif_receive_skb_core -> tcp_queue_rcv] TCP: 192.168.122.1:43880 -> 192.168.122.20:22 seq:4194588110, ack:397286802, flags:AP latency: 0.006ms
-[6819.092093] [__kfree_skb         ][__netif_receive_skb_core -> tcp_queue_rcv] TCP: 192.168.122.1:43880 -> 192.168.122.20:22 seq:4194589206, ack:397287394, flags:AP latency: 0.026ms
-[6819.300052] [__kfree_skb         ][__netif_receive_skb_core -> tcp_queue_rcv] TCP: 192.168.122.1:43880 -> 192.168.122.20:22 seq:4194589242, ack:397287430, flags:AP latency: 0.025ms
-[6819.575742] [__kfree_skb         ][__netif_receive_skb_core -> tcp_queue_rcv] TCP: 192.168.122.1:43880 -> 192.168.122.20:22 seq:4194589278, ack:397287466, flags:AP latency: 0.025ms
-[6819.959797] [__kfree_skb         ][__netif_receive_skb_core -> tcp_queue_rcv] TCP: 192.168.122.1:43880 -> 192.168.122.20:22 seq:4194589314, ack:397287502, flags:AP latency: 0.026ms
-[6820.123652] [__kfree_skb         ][__netif_receive_skb_core -> tcp_queue_rcv] TCP: 192.168.122.1:43880 -> 192.168.122.20:22 seq:4194589350, ack:397287546, flags:AP latency: 0.027ms
-[6820.292053] [__kfree_skb         ][__netif_receive_skb_core -> tcp_queue_rcv] TCP: 192.168.122.1:43880 -> 192.168.122.20:22 seq:4194589386, ack:397287590, flags:AP latency: 0.025ms
+nettrace -p tcp --latency -t tcp_queue_rcv,tcp_data_queue_ofo --trace-matcher tcp_queue_rcv,tcp_data_queue_ofo --latency-free --min-latency 1000
+```
+
+跟踪网卡驱动收包报文 -> 放到套接口收包队列的延迟。这部分如果存在延迟，那说明是CPU处理的延迟：
+
+```shell
+nettrace -p tcp --latency -t __netif_receive_skb_core,tcp_queue_rcv,tcp_data_queue_ofo --trace-matcher __netif_receive_skb_core --trace-free tcp_queue_rcv,tcp_data_queue_ofo --min-latency 1000
+```
+
+**发包阶段**
+
+跟踪报文放到发包队列 -> 报文开始发送，一般由nagle算法引发的报文聚合延迟。下面的命令会输出该阶段延迟超过1ms的报文：
+
+```shell
+nettrace -p tcp --latency -t skb_entail,tcp_skb_entail,__tcp_transmit_skb,__tcp_retransmit_skb --trace-matcher skb_entail,tcp_skb_entail --trace-free __tcp_transmit_skb,__tcp_retransmit_skb --min-latency 1000
+```
+
+跟踪报文从传输层（TCP层）到网卡驱动层的延迟。这个中间有个qdisc，因此如果有延迟的话，可能是这块导致的：
+
+```shell
+nettrace -p tcp --latency -t __ip_queue_xmit,dev_hard_start_xmit --trace-matcher __ip_queue_xmit --trace-free dev_hard_start_xmit --min-latency 1000
+```
+
+跟踪报文从放到发送队列到收到ack之间的延迟，这个延迟会受到nagle和延迟ACK的双重影响：
+
+```shell
+nettrace -p tcp --latency -t skb_entail,tcp_skb_entail,tcp_rate_skb_delivered --trace-matcher skb_entail,tcp_skb_entail --trace-free tcp_rate_skb_delivered --min-latency 1000
 ```
 
 默认情况下，是不会将报文被释放的延迟当作协议栈处理耗时的，可以通过加上`--latency-free`来将报文释放的耗时也考虑进去。这对于收报过程中的网络延迟分析比较有用，比如我们可以通过报文被释放的延迟来分析出来收包队列中的数据被用户态取走而释放的延迟。
@@ -846,7 +869,7 @@ total latency: 0.071ms
 除此之外，还可以通过指定`--latency-summary`来进行协议栈处理延迟的统计，如下所示：
 
 ```shell
-./nettrace --latency -t __netif_receive_skb_core,tcp_queue_rcv -p tcp --latency-summary
+./nettrace --latency -p tcp --latency -t skb_entail,tcp_skb_entail,__tcp_transmit_skb,__tcp_retransmit_skb --trace-matcher skb_entail,tcp_skb_entail --trace-free __tcp_transmit_skb,__tcp_retransmit_skb --latency-summary
 latency distribution:             21
                      0 -     1us: 0        0.0000
                      2 -     3us: 1        0.0476
