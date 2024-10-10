@@ -57,6 +57,10 @@
 #define bpf_core_field_offset(type, field) offsetof(type, field)
 #endif
 
+#ifdef __F_NO_PROBE_READ_STR
+#define bpf_probe_read_str bpf_probe_read
+#endif
+
 #define likely(x)		__builtin_expect(!!(x), 1)
 #define unlikely(x)		__builtin_expect(!!(x), 0)
 
