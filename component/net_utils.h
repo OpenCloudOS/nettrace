@@ -5,14 +5,9 @@
 
 #include <unistd.h>
 #include <getopt.h>
-#include <signal.h>
 #include <stdbool.h>
-#include <stdio.h>
-#include <string.h>
 #include <sys/types.h>
 #include <asm-generic/int-ll64.h>
-#include <stdlib.h>
-#include <errno.h>
 #include <bpf/libbpf.h>
 #include <linux/if_ether.h>
 

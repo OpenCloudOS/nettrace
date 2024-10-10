@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MulanPSL-2.0
 
+#include <errno.h>
 #include <arpa/inet.h>
+#include <signal.h>
 
 #include <arg_parse.h>
 

@@ -4,8 +4,6 @@
 #define _H_ARG_PARSE
 #include <stdbool.h>
 
-#include "sys_utils.h"
-
 enum option_type {
 	OPTION_STRING,
 	OPTION_BOOL,

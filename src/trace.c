@@ -2,10 +2,10 @@
 
 #include <stdio.h>
 #include <list.h>
+#include <errno.h>
 
 #include <parse_sym.h>
 
-#include "nettrace.h"
 #include "trace.h"
 #include "analysis.h"
 #include "dropreason.h"
