@@ -505,14 +505,8 @@ static int ctx_handle_ret(data_list_t *dlist, analy_ctx_t **analy_ctx)
 	analyzer = trace_ctx.ops->analyzer;
 	t = get_trace_from_analy_exit(&analy_exit);
 	if (analyzer->analy_exit) {
-		switch (analyzer->analy_exit(t, &analy_exit)) {
-		case RESULT_CONSUME:
+		if (analyzer->analy_exit(t, &analy_exit))
 			return 1;
-		case RESULT_CONT:
-			break;
-		default:
-			break;
-		}
 	}
 	entry = analy_exit.entry;
 	if (!entry) {
@@ -540,7 +534,6 @@ static void ctx_poll_cb(data_list_t *dlist)
 	analyzer_t *analyzer;
 	event_t *e;
 
-	analyzer = trace_ctx.ops->analyzer;
 	if (func_get_type(dlist->data) == FUNC_TYPE_RET) {
 		if (ctx_handle_ret(dlist, &analy_ctx))
 			return;
@@ -573,24 +566,21 @@ static void ctx_poll_cb(data_list_t *dlist)
 
 	entry->ctx = analy_ctx;
 	entry->fake_ctx = fake;
+
 	/* run the global analyzer */
-	switch (try_run_entry(trace, analyzer, entry)) {
-	case RESULT_CONSUME:
+	analyzer = trace_ctx.ops->analyzer;
+	if (try_run_entry(trace, analyzer, entry))
 		goto check_pending;
-	case RESULT_CONT:
-		break;
-	default:
-		break;
-	}
 
 	/* run the trace analyzer */
-	switch (try_run_entry(trace, trace->analyzer, entry)) {
-	case RESULT_CONSUME:
+	analyzer = trace->analyzer;
+	if (try_run_entry(trace, analyzer, entry))
 		goto check_pending;
-	case RESULT_CONT:
-		break;
-	default:
-		break;
+
+	if (trace->status & TRACE_CFREE) {
+		pr_debug("custom free hit %s\n", trace ? trace->name : "");
+		put_fake_analy_ctx(fake);
+		hlist_del(&fake->hash);
 	}
 
 	list_add_tail(&entry->list, &analy_ctx->entries);

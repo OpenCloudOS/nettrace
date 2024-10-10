@@ -26,6 +26,7 @@ struct analyzer;
 #define TRACE_STACK		(1 << 4)
 #define TRACE_ATTACH_MANUAL	(1 << 5)
 #define TRACE_RET_ONLY		(1 << 6)
+#define TRACE_CFREE		(1 << 7)
 
 #define trace_for_each(pos)		\
 	list_for_each_entry(pos, &trace_list, all)
@@ -68,7 +69,6 @@ typedef struct trace {
 	u8	sk;
 	/* the same as skb_offset */
 	u8	skoffset;
-	bool	skbinvalid;
 	/* traces in a global list */
 	struct list_head all;
 	/* traces in the same group */
@@ -112,7 +112,6 @@ typedef struct trace_args {
 	bool netns_current;
 	bool force;
 	bool latency_show;
-	bool latency_free;
 	bool rtt;
 	bool rtt_detail;
 	bool latency;
@@ -122,6 +121,7 @@ typedef struct trace_args {
 	char *traces_stack;
 	char *trace_matcher;
 	char *trace_exclude;
+	char *trace_free;
 	char *pkt_len;
 	char *tcp_flags;
 	u32  count;

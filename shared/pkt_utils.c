@@ -45,10 +45,20 @@ int ts_print_ts(char *buf, u64 ts, bool date_format)
 	}
 }
 
-int ts_print_packet(char *buf, packet_t *pkt, char *minfo,
-		    bool date_format)
+static void ntomac(u8 mac[], char *dst)
+{
+	for (int i = 0; i < 6; i++) {
+		sprintf(dst + (i * 3), "%02X", mac[i]);  
+		if (i < 5)
+			dst[(i * 3) + 2] = ':';
+	}
+}
+
+void ts_print_packet(char *buf, packet_t *pkt, char *minfo,
+		     bool date_format)
 {
 	static char saddr[MAX_ADDR_LENGTH], daddr[MAX_ADDR_LENGTH];
+	char *l4_desc;
 	u8 flags, l4;
 	int pos;
 
@@ -58,35 +68,51 @@ int ts_print_packet(char *buf, packet_t *pkt, char *minfo,
 
 	if (!pkt->proto_l3) {
 		BUF_FMT("unknow");
-		goto out;
+		return;
 	}
 
 	switch (pkt->proto_l3) {
+	case ETH_P_ARP:
 	case ETH_P_IP:
 		inet_ntop(AF_INET, (void *)&pkt->l3.ipv4.saddr, saddr,
 			  sizeof(saddr));
 		inet_ntop(AF_INET, (void *)&pkt->l3.ipv4.daddr, daddr,
 			  sizeof(daddr));
-		goto print_ip;
+
+		if (pkt->proto_l3 == ETH_P_IP)
+			break;
+
+		if (pkt->l4.arp_ext.op == ARPOP_REPLY) {
+			static char mac[MAX_ADDR_LENGTH];
+
+			ntomac(pkt->l4.arp_ext.source, mac);
+			BUF_FMT("ARP: %s is at %s", saddr, mac);
+		} else {
+			BUF_FMT("ARP: who has %s, tell %s", daddr, saddr);
+		}
+		return;
 #ifndef NT_DISABLE_IPV6
 	case ETH_P_IPV6:
 		inet_ntop(AF_INET6, (void *)pkt->l3.ipv6.saddr, saddr,
 			  sizeof(saddr));
 		inet_ntop(AF_INET6, (void *)pkt->l3.ipv6.daddr, daddr,
 			  sizeof(daddr));
-		goto print_ip;
+		break;
 #endif
 	default:
-		break;
+		BUF_FMT("ether protocol: 0x%04x", pkt->proto_l3);
+		return;
 	}
 
-	BUF_FMT("ether protocol: 0x%04x", pkt->proto_l3);
-	goto out;
-
-print_ip:
 	l4 = pkt->proto_l4;
-	BUF_FMT("%s: ", i2l4(l4));
+	l4_desc = i2l4(l4);
+	if (l4_desc)
+		BUF_FMT("%s: ", l4_desc);
+	else
+		BUF_FMT("%d: ", l4);
+
 	switch (l4) {
+	case IPPROTO_IP:
 	case IPPROTO_TCP:
 	case IPPROTO_UDP:
 		BUF_FMT("%s:%d -> %s:%d",
@@ -100,16 +126,17 @@ print_ip:
 		break;
 	default:
 		BUF_FMT("%s -> %s", saddr, daddr);
-		goto out;
+		return;
 	}
 
 	switch (l4) {
+	case IPPROTO_IP:
 	case IPPROTO_TCP:
 		flags = pkt->l4.tcp.flags;
 #define CONVERT_FLAG(mask, name) ((flags & mask) ? name : "")
 		BUF_FMT(" seq:%u, ack:%u, flags:%s%s%s%s%s",
-			ntohl(pkt->l4.tcp.seq),
-			ntohl(pkt->l4.tcp.ack),
+			pkt->l4.tcp.seq,
+			pkt->l4.tcp.ack,
 			CONVERT_FLAG(TCP_FLAGS_SYN, "S"),
 			CONVERT_FLAG(TCP_FLAGS_ACK, "A"),
 			CONVERT_FLAG(TCP_FLAGS_RST, "R"),
@@ -148,8 +175,6 @@ print_ip:
 	default:
 		break;
 	}
-out:
-	return 0;
 }
 
 static const char *timer_name[] = {
@@ -190,7 +215,7 @@ typedef struct {
 
 } tcp_ca_data_t;
 
-int ts_print_sock(char *buf, sock_t *ske, char *minfo, bool date_format)
+void ts_print_sock(char *buf, sock_t *ske, char *minfo, bool date_format)
 {
 	static char saddr[MAX_ADDR_LENGTH], daddr[MAX_ADDR_LENGTH];
 	u64 ts = ske->ts;
@@ -213,7 +238,7 @@ int ts_print_sock(char *buf, sock_t *ske, char *minfo, bool date_format)
 
 	if (!ske->proto_l3) {
 		BUF_FMT("unknow");
-		goto out;
+		return;
 	}
 
 	switch (ske->proto_l3) {
@@ -233,11 +258,11 @@ int ts_print_sock(char *buf, sock_t *ske, char *minfo, bool date_format)
 			  sizeof(saddr));
 		inet_ntop(AF_INET6, (void *)ske->l3.ipv6.daddr, daddr,
 			  sizeof(daddr));
-		goto print_ip;
+		goto print_l4;
 #endif
 	default:
 		BUF_FMT("ether protocol: %u", ske->proto_l3);
-		goto out;
+		return;
 	}
 
 	l4 = ske->proto_l4;
@@ -251,7 +276,7 @@ int ts_print_sock(char *buf, sock_t *ske, char *minfo, bool date_format)
 		break;
 	default:
 		BUF_FMT("%s -> %s", saddr, daddr);
-		goto out;
+		return;
 	}
 
 	switch (l4) {
@@ -276,11 +301,4 @@ int ts_print_sock(char *buf, sock_t *ske, char *minfo, bool date_format)
 	default:
 		break;
 	}
-out:
-	return 0;
-}
-
-int base_print_packet(char *buf, packet_t *pkt)
-{
-	return ts_print_packet(buf, pkt, NULL, false);
 }

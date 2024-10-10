@@ -47,6 +47,8 @@ const volatile bool bpf_func_exist[BPF_LOCAL_FUNC_MAX] = {0};
 #define bpf_core_helper_exist(name) false
 #endif
 
+#define skb_cb(__skb) ((void *)(__skb) + bpf_core_field_offset(typeof(*__skb), cb))
+
 #define CONFIG() ({						\
 	int _key = 0;						\
 	void * _v = bpf_map_lookup_elem(&m_config, &_key);	\
@@ -104,18 +106,8 @@ typedef struct {
 
 typedef struct {
 	void *data;
-	pkt_args_t *args;
-	union {
-		struct sk_buff *skb;
-		struct sock *sk;
-	};
-	union {
-		packet_t *pkt;
-		sock_t *ske;
-	};
 	u16 mac_header;
 	u16 network_header;
-	u16 trans_header;
 } parse_ctx_t;
 
 #define TCP_H_LEN	(sizeof(struct tcphdr))
@@ -153,23 +145,9 @@ static inline u8 get_ip_header_len(u8 h)
 	return len > IP_H_LEN ? len: IP_H_LEN;
 }
 
-static inline
-void *load_l4_hdr(struct __sk_buff *skb, struct iphdr *ip, void *dst,
-		  __u32 len)
+static inline bool skb_l4_was_set(u16 transport_header)
 {
-	__u32 offset, iplen;
-	void *l4;
-
-	iplen = get_ip_header_len(((u8 *)ip)[0]);
-	offset = ETH_TOTAL_H_LEN + (iplen > IP_H_LEN ? iplen: IP_H_LEN);
-	l4 = SKB_DATA(skb) + offset;
-
-	if (l4 + len > SKB_END(skb)) {
-		if (bpf_skb_load_bytes(skb, offset, dst, len))
-			return NULL;
-		return dst;
-	}
-	return l4;
+	return transport_header != (typeof(transport_header))~0U;
 }
 
 /* check if the skb contains L2 head (mac head) */
@@ -180,7 +158,7 @@ static inline bool skb_l2_check(u16 header)
 
 static inline bool skb_l4_check(u16 l4, u16 l3)
 {
-	return l4 == 0xFFFF || l4 <= l3;
+	return !skb_l4_was_set(l4) || l4 <= l3;
 }
 
 /* used to do basic filter */
@@ -230,61 +208,43 @@ static inline int filter_port(pkt_args_t *args, u32 sport, u32 dport)
 	       (args->port && args->port != dport && args->port != sport);
 }
 
-static inline int probe_parse_ip(void *ip, parse_ctx_t *ctx)
+struct arphdr_all {
+	__be16		ar_hrd;
+	__be16		ar_pro;
+	unsigned char	ar_hln;
+	unsigned char	ar_pln;
+	__be16		ar_op;
+
+	unsigned char	ar_sha[ETH_ALEN];	/* sender hardware address	*/
+	unsigned char	ar_sip[4];		/* sender IP address		*/
+	unsigned char	ar_tha[ETH_ALEN];	/* target hardware address	*/
+	unsigned char	ar_tip[4];		/* target IP address		*/
+};
+
+static inline int probe_parse_arp(void *l3, packet_t *pkt, pkt_args_t *args)
 {
-	pkt_args_t *args = ctx->args;
-	packet_t *pkt = ctx->pkt;
-	void *l4 = NULL;
+	struct arphdr_all *arp = l3;
 
-	if (!skb_l4_check(ctx->trans_header, ctx->network_header))
-		l4 = ctx->data + ctx->trans_header;
+	pkt->l4.arp_ext.op = bpf_ntohs(_(arp->ar_op));
+	if (pkt->l4.arp_ext.op != ARPOP_REQUEST && pkt->l4.arp_ext.op != ARPOP_REPLY)
+		return 0;
 
-	if (pkt->proto_l3 == ETH_P_IPV6) {
-		struct ipv6hdr *ipv6 = ip;
+	bpf_probe_read_kernel(&pkt->l3.ipv4.saddr, 4, arp->ar_sip);
+	bpf_probe_read_kernel(&pkt->l3.ipv4.daddr, 4, arp->ar_tip);
 
-		/* ipv4 address is set, skip ipv6 */
-		if (filter_any_enabled(args, addr))
-			goto err;
+	if (filter_ipv4_check(args, pkt->l3.ipv4.saddr, pkt->l3.ipv4.daddr))
+		return -1;
 
-#ifndef NT_DISABLE_IPV6
-		bpf_probe_read_kernel(pkt->l3.ipv6.saddr, 16, &ipv6->saddr);
-		bpf_probe_read_kernel(pkt->l3.ipv6.daddr, 16, &ipv6->daddr);
-		if (filter_ipv6_check(args, pkt->l3.ipv6.saddr,
-				      pkt->l3.ipv6.daddr))
-			goto err;
-#endif
-		pkt->proto_l4 = _(ipv6->nexthdr);
-		l4 = l4 ?: ip + sizeof(*ipv6);
-	} else {
-		struct iphdr *ipv4 = ip;
-		u32 saddr, daddr, len;
+	bpf_probe_read_kernel(pkt->l4.arp_ext.source, ETH_ALEN, arp->ar_sha);
+	bpf_probe_read_kernel(pkt->l4.arp_ext.dest, ETH_ALEN, arp->ar_tha);
 
-		len = bpf_ntohs(_C(ipv4, tot_len));
-		if (args && (args->pkt_len_1 || args->pkt_len_2)) {
-			if (len < args->pkt_len_1 || len > args->pkt_len_2)
-				goto err;
-		}
+	return 0;
+}
 
-		/* skip ipv4 if ipv6 is set */
-		if (filter_any_enabled(args, addr_v6[0]))
-			goto err;
-
-		l4 = l4 ?: ip + get_ip_header_len(_(((u8 *)ip)[0]));
-		saddr = _(ipv4->saddr);
-		daddr = _(ipv4->daddr);
-
-		if (filter_ipv4_check(args, saddr, daddr))
-			goto err;
-
-		pkt->proto_l4 = _(ipv4->protocol);
-		pkt->l3.ipv4.saddr = saddr;
-		pkt->l3.ipv4.daddr = daddr;
-	}
-
-	if (filter_check(args, l4_proto, pkt->proto_l4))
-		goto err;
-
+static inline int probe_parse_l4(void *l4, packet_t *pkt, pkt_args_t *args)
+{
 	switch (pkt->proto_l4) {
+	case IPPROTO_IP:
 	case IPPROTO_TCP: {
 		struct tcphdr *tcp = l4;
 		u16 sport = _(tcp->source);
@@ -292,18 +252,18 @@ static inline int probe_parse_ip(void *ip, parse_ctx_t *ctx)
 		u8 flags;
 
 		if (filter_port(args, sport, dport))
-			goto err;
+			return -1;
 
 		flags = _(((u8 *)tcp)[13]);
 		if (filter_enabled(args, tcp_flags) &&
 		    !(flags & args->tcp_flags))
-			goto err;
+			return -1;
 
 		pkt->l4.tcp.sport = sport;
 		pkt->l4.tcp.dport = dport;
 		pkt->l4.tcp.flags = flags;
-		pkt->l4.tcp.seq = _(tcp->seq);
-		pkt->l4.tcp.ack = _(tcp->ack_seq);
+		pkt->l4.tcp.seq = bpf_ntohl(_(tcp->seq));
+		pkt->l4.tcp.ack = bpf_ntohl(_(tcp->ack_seq));
 		break;
 	}
 	case IPPROTO_UDP: {
@@ -312,7 +272,7 @@ static inline int probe_parse_ip(void *ip, parse_ctx_t *ctx)
 		u16 dport = _(udp->dest);
 	
 		if (filter_port(args, sport, dport))
-			goto err;
+			return -1;
 
 		pkt->l4.udp.sport = sport;
 		pkt->l4.udp.dport = dport;
@@ -323,7 +283,7 @@ static inline int probe_parse_ip(void *ip, parse_ctx_t *ctx)
 		struct icmphdr *icmp = l4;
 
 		if (filter_any_enabled(args, port))
-			goto err;
+			return -1;
 		pkt->l4.icmp.code = _(icmp->code);
 		pkt->l4.icmp.type = _(icmp->type);
 		pkt->l4.icmp.seq = _(icmp->un.echo.sequence);
@@ -333,18 +293,75 @@ static inline int probe_parse_ip(void *ip, parse_ctx_t *ctx)
 	case IPPROTO_ESP: {
 		struct ip_esp_hdr *esp_hdr = l4;
 		if (filter_any_enabled(args, port))
-			goto err;
+			return -1;
 		pkt->l4.espheader.seq = _(esp_hdr->seq_no);
 		pkt->l4.espheader.spi = _(esp_hdr->spi);
 		break;
 	}
 	default:
 		if (filter_any_enabled(args, port))
-			goto err;
+			return -1;
 	}
 	return 0;
-err:
-	return -1;
+}
+
+static inline int probe_parse_l3(struct sk_buff *skb, pkt_args_t *args,
+				 packet_t *pkt, void *l3,
+				 parse_ctx_t *ctx)
+{
+	u16 trans_header;
+	void *l4 = NULL;
+
+	trans_header = _C(skb, transport_header);
+	if (!skb_l4_check(trans_header, ctx->network_header))
+		l4 = ctx->data + trans_header;
+
+	if (pkt->proto_l3 == ETH_P_IPV6) {
+		struct ipv6hdr *ipv6 = l3;
+
+		/* ipv4 address is set, skip ipv6 */
+		if (filter_any_enabled(args, addr))
+			return -1;
+
+#ifndef NT_DISABLE_IPV6
+		bpf_probe_read_kernel(pkt->l3.ipv6.saddr, 16, &ipv6->saddr);
+		bpf_probe_read_kernel(pkt->l3.ipv6.daddr, 16, &ipv6->daddr);
+		if (filter_ipv6_check(args, pkt->l3.ipv6.saddr,
+				      pkt->l3.ipv6.daddr))
+			return -1;
+#endif
+		pkt->proto_l4 = _(ipv6->nexthdr);
+		l4 = l4 ?: l3 + sizeof(*ipv6);
+	} else {
+		struct iphdr *ipv4 = l3;
+		u32 saddr, daddr, len;
+
+		len = bpf_ntohs(_C(ipv4, tot_len));
+		if (args && (args->pkt_len_1 || args->pkt_len_2)) {
+			if (len < args->pkt_len_1 || len > args->pkt_len_2)
+				return -1;
+		}
+
+		/* skip ipv4 if ipv6 is set */
+		if (filter_any_enabled(args, addr_v6[0]))
+			return -1;
+
+		l4 = l4 ?: l3 + get_ip_header_len(_(((u8 *)l3)[0]));
+		saddr = _(ipv4->saddr);
+		daddr = _(ipv4->daddr);
+
+		if (filter_ipv4_check(args, saddr, daddr))
+			return -1;
+
+		pkt->proto_l4 = _(ipv4->protocol);
+		pkt->l3.ipv4.saddr = saddr;
+		pkt->l3.ipv4.daddr = daddr;
+	}
+
+	if (filter_check(args, l4_proto, pkt->proto_l4))
+		return -1;
+
+	return probe_parse_l4(l4, pkt, args);
 }
 
 #ifndef __F_DISABLE_SOCK
@@ -470,11 +487,15 @@ err:
 	return -1;
 }
 
-static inline int probe_parse_pkt_sk(struct sock *sk, packet_t *pkt,
-				     pkt_args_t *args)
+/* Parse the IP from socket, and parse TCP/UDP from the header data if
+ * transport header was set. Or, parse TCP/UDP from the skb_cb.
+ */
+static inline int probe_parse_skb_sk(struct sock *sk, struct sk_buff *skb,
+				     packet_t *pkt, pkt_args_t *args,
+				     parse_ctx_t *ctx)
 {
+	u16 l3_proto, trans_header;
 	struct sock_common *skc;
-	u16 l3_proto;
 	u8 l4_proto;
 
 	skc = (struct sock_common *)sk;
@@ -485,7 +506,7 @@ static inline int probe_parse_pkt_sk(struct sock *sk, packet_t *pkt,
 		pkt->l3.ipv4.daddr = _C(skc, skc_daddr);
 		if (filter_ipv4_check(args, pkt->l3.ipv4.saddr,
 				      pkt->l3.ipv4.daddr))
-			goto err;
+			return -1;
 		break;
 	case AF_INET6:
 #ifndef NT_DISABLE_IPV6
@@ -493,7 +514,7 @@ static inline int probe_parse_pkt_sk(struct sock *sk, packet_t *pkt,
 		bpf_probe_read_kernel(pkt->l3.ipv6.daddr, 16, &skc->skc_v6_daddr);
 		if (filter_ipv6_check(args, pkt->l3.ipv6.saddr,
 				      pkt->l3.ipv6.daddr))
-			goto err;
+			return -1;
 #endif
 		l3_proto = ETH_P_IPV6;
 		break;
@@ -501,10 +522,10 @@ static inline int probe_parse_pkt_sk(struct sock *sk, packet_t *pkt,
 		/* shouldn't happen, as we only use sk for IP and 
 		 * IPv6
 		 */
-		goto err;
+		return -1;
 	}
 	if (filter_check(args, l3_proto, l3_proto))
-		goto err;
+		return -1;
 
 #ifdef NO_BTF
 #ifdef __F_SK_PRPTOCOL_LEGACY
@@ -523,19 +544,31 @@ static inline int probe_parse_pkt_sk(struct sock *sk, packet_t *pkt,
 		l4_proto = IPPROTO_TCP;
 
 	if (filter_check(args, l4_proto, l4_proto))
-		goto err;
+		return -1;
 
+	pkt->proto_l3 = l3_proto;
+	pkt->proto_l4 = l4_proto;
+
+	/* The TCP header is set, and we can parse it from the skb */
+	trans_header = _C(skb, transport_header);
+	if (skb_l4_was_set(trans_header)) {
+		return probe_parse_l4(_C(skb, head) + trans_header,
+				      pkt, args);
+	}
+
+	/* parse L4 information from the socket */
 	switch (l4_proto) {
 	case IPPROTO_TCP: {
 		struct tcp_sock *tp = (void *)sk;
+		struct tcp_skb_cb *cb;
 
-		if (bpf_core_type_exists(struct tcp_sock)) {
-			pkt->l4.tcp.seq = bpf_htonl(_C(tp, snd_una));
-			pkt->l4.tcp.ack = bpf_htonl(_C(tp, rcv_nxt));
-		} else {
-			pkt->l4.tcp.seq = bpf_htonl(_(tp->snd_una));
-			pkt->l4.tcp.ack = bpf_htonl(_(tp->rcv_nxt));
-		}
+		cb = skb_cb(skb);
+		pkt->l4.tcp.seq = _C(cb, seq);
+		pkt->l4.tcp.flags = _C(cb, tcp_flags);
+		if (bpf_core_type_exists(struct tcp_sock))
+			pkt->l4.tcp.ack = _C(tp, rcv_nxt);
+		else
+			pkt->l4.tcp.ack = _(tp->rcv_nxt);
 	}
 	case IPPROTO_UDP:
 		pkt->l4.min.sport = bpf_htons(_C(skc, skc_num));
@@ -545,15 +578,7 @@ static inline int probe_parse_pkt_sk(struct sock *sk, packet_t *pkt,
 		break;
 	}
 
-	if (filter_port(args, pkt->l4.tcp.sport, pkt->l4.tcp.dport))
-		goto err;
-
-	pkt->proto_l3 = l3_proto;
-	pkt->proto_l4 = l4_proto;
-
-	return 0;
-err:
-	return -1;
+	return filter_port(args, pkt->l4.tcp.sport, pkt->l4.tcp.dport);
 }
 
 #else
@@ -563,18 +588,18 @@ static inline int probe_parse_sk(struct sock *sk, sock_t *ske, void *args)
 	return -1;
 }
 
-static inline int probe_parse_pkt_sk(struct sock *sk, packet_t *pkt,
-				     pkt_args_t *args)
+static inline int probe_parse_skb_sk(struct sock *sk, struct sk_buff *skb,
+				     packet_t *pkt, pkt_args_t *args,
+				     parse_ctx_t *ctx)
 {
 	return -1;
 }
 #endif
 
-static inline int __probe_parse_skb(parse_ctx_t *ctx)
+static __always_inline int probe_parse_skb(struct sk_buff *skb, struct sock *sk,
+					   packet_t *pkt, pkt_args_t *args)
 {
-	struct sk_buff *skb = ctx->skb;
-	pkt_args_t *args = ctx->args;
-	packet_t *pkt = ctx->pkt;
+	parse_ctx_t __ctx, *ctx = &__ctx;
 	u16 l3_proto;
 	void *l3;
 
@@ -584,21 +609,43 @@ static inline int __probe_parse_skb(parse_ctx_t *ctx)
 
 	pr_debug_skb("begin to parse, nh=%d mh=%d", ctx->network_header,
 		     ctx->mac_header);
-	pr_debug_skb("th=%d", _C(skb, transport_header));
-
 	if (skb_l2_check(ctx->mac_header)) {
-		/*
+		int family;
+
+		sk = sk ?: _C(skb, sk);
+		/**
 		 * try to parse skb for send path, which means that
 		 * ether header doesn't exist in skb.
+		 *
+		 * 1. check the existing of network header. If any, parse
+		 *    the header normally. Or, goto 2.
+		 * 2. check the existing of transport If any, parse TCP
+		 *    with data, and parse IP with the socket. Or, goto 3.
+		 * 3. parse it with tcp_cb() and the socket.
 		 */
+
+		if (!ctx->network_header) {
+			if (!sk)
+				return -1;
+			return probe_parse_skb_sk(sk, skb, pkt, args, ctx);
+		}
+
 		l3_proto = bpf_ntohs(_C(skb, protocol));
-		if (!l3_proto)
-			goto err;
-		if (!ctx->network_header)
-			goto err;
+		if (!l3_proto) {
+			/* try to parse l3 protocol from the socket */
+			if (!sk)
+				return -1;
+			family = _C((struct sock_common *)sk, skc_family);
+			if (family == AF_INET)
+				l3_proto = ETH_P_IP;
+			else if (family == AF_INET6)
+				l3_proto = ETH_P_IPV6;
+			else
+				return -1;
+		}
 		l3 = ctx->data + ctx->network_header;
 	} else if (ctx->network_header && ctx->mac_header >= ctx->network_header) {
-		/* to tun device, mac header is the same to network header.
+		/* For tun device, mac header is the same to network header.
 		 * For this case, we assume that this is a IP packet.
 		 *
 		 * For vxlan device, mac header may be inner mac, and the
@@ -614,39 +661,26 @@ static inline int __probe_parse_skb(parse_ctx_t *ctx)
 		l3_proto = bpf_ntohs(_(eth->h_proto));
 	}
 
-	if (filter_check(args, l3_proto, l3_proto))
-		goto err;
+	if (filter_enabled(args, l4_proto) && !args->l3_proto &&
+	    l3_proto != ETH_P_IP && l3_proto != ETH_P_IPV6)
+		return -1;
 
-	ctx->trans_header = _C(skb, transport_header);
 	pkt->proto_l3 = l3_proto;
 	pr_debug_skb("l3=%d", l3_proto);
 
 	switch (l3_proto) {
 	case ETH_P_IPV6:
 	case ETH_P_IP:
-		return probe_parse_ip(l3, ctx);
+		return probe_parse_l3(skb, args, pkt, l3, ctx);
+	case ETH_P_ARP:
+		return probe_parse_arp(l3, pkt, args);
 	default:
-		if (filter_enabled(args, l4_proto))
-			goto err;
-		return 0;
+		return filter_enabled(args, l4_proto) ? -1 : 0;
 	}
-err:
-	return -1;
-}
-
-static __always_inline int probe_parse_skb(struct sk_buff *skb, packet_t *pkt,
-					   void *filter_args)
-{
-	parse_ctx_t ctx = {
-		.args = filter_args,
-		.skb = skb,
-		.pkt = pkt,
-	};
-	return __probe_parse_skb(&ctx);
 }
 
 static inline int direct_parse_skb(struct __sk_buff *skb, packet_t *pkt,
-				       pkt_args_t *bpf_args)
+				   pkt_args_t *bpf_args)
 {
 	struct ethhdr *eth = SKB_DATA(skb);
 	struct iphdr *ip = (void *)(eth + 1);
@@ -679,8 +713,8 @@ static inline int direct_parse_skb(struct __sk_buff *skb, packet_t *pkt,
 			goto err;
 
 		pkt->l4.tcp.flags = ((u8 *)tcp)[13];
-		pkt->l4.tcp.ack = tcp->ack_seq;
-		pkt->l4.tcp.seq = tcp->seq;
+		pkt->l4.tcp.ack = bpf_ntohl(tcp->ack_seq);
+		pkt->l4.tcp.seq = bpf_ntohl(tcp->seq);
 fill_port:
 		pkt->l4.min = *l4_p;
 		break;

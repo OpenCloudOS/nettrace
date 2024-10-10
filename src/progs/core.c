@@ -131,7 +131,12 @@ static __always_inline u8 get_func_status(bpf_args_t *args, u16 func)
 
 static inline bool func_is_free(u8 status)
 {
-	return status & FUNC_STATUS_FREE;
+	return status & (FUNC_STATUS_FREE | FUNC_STATUS_CFREE);
+}
+
+static inline bool func_is_cfree(u8 status)
+{
+	return status & FUNC_STATUS_CFREE;
 }
 
 static inline void consume_map_ctx(bpf_args_t *args, void *key)
@@ -145,10 +150,10 @@ static inline void free_map_ctx(bpf_args_t *args, void *key)
 	bpf_map_delete_elem(&m_matched, key);
 }
 
-static inline void init_ctx_match(void *skb, u16 func)
+static inline void init_ctx_match(void *skb, u16 func, bool ts)
 {
 	match_val_t matched = {
-		.ts1 = bpf_ktime_get_ns() / 1000,
+		.ts1 = ts ? bpf_ktime_get_ns() / 1000 : 0,
 		.func1 = func,
 	};
 
@@ -195,6 +200,17 @@ static inline int pre_handle_latency(context_info_t *info,
 	u32 delta;
 
 	if (match_val) {
+		if (args->latency_free || !func_is_free(info->func_status) ||
+		    func_is_cfree(info->func_status)) {
+			match_val->ts2 = bpf_ktime_get_ns() / 1000;
+			match_val->func2 = info->func;
+		}
+
+		/* reentry the matcher, or the free of skb is not traced. */
+		if (info->func_status & FUNC_STATUS_MATCHER &&
+		    match_val->func1 == info->func)
+			match_val->ts1 = bpf_ktime_get_ns() / 1000;
+
 		if (func_is_free(info->func_status)) {
 			delta = match_val->ts2 - match_val->ts1;
 			/* skip a single match function */
@@ -210,9 +226,6 @@ static inline int pre_handle_latency(context_info_t *info,
 			info->match_val = *match_val;
 			return 0;
 		}
-
-		match_val->ts2 = bpf_ktime_get_ns() / 1000;
-		match_val->func2 = info->func;
 		return 1;
 	} else {
 		/* skip single free function for latency total mode */
@@ -220,7 +233,7 @@ static inline int pre_handle_latency(context_info_t *info,
 			return 1;
 		/* if there isn't any filter, skip handle_entry() */
 		if (!args->has_filter) {
-			init_ctx_match(info->skb, info->func);
+			init_ctx_match(info->skb, info->func, true);
 			return 1;
 		}
 	}
@@ -254,6 +267,18 @@ static inline int pre_handle_entry(context_info_t *info)
 		match_val_t *match_val = bpf_map_lookup_elem(&m_matched,
 							     &info->skb);
 
+		if (!match_val) {
+			/* skip no-matcher function in match mode if it is not
+			 * matched.
+			 */
+			if (args->match_mode &&
+			    !(info->func_status & FUNC_STATUS_MATCHER))
+				return -1;
+			/* If the first function is a free, just ignore it. */
+			if (func_is_free(info->func_status))
+				return -1;
+		}
+
 		/* skip handle_entry() for tiny case */
 		if (match_val && args->tiny_output)
 			ret = pre_tiny_output(info);
@@ -261,15 +286,12 @@ static inline int pre_handle_entry(context_info_t *info)
 			ret = pre_handle_latency(info, match_val);
 		else if (match_val)
 			info->match_val = *match_val;
-		else if (args->match_mode &&
-			 !(info->func_status & FUNC_STATUS_MATCHER))
-			ret = -1;
 	}
 
 	if (args->func_stats) {
-		if (ret > 0) {
+		if (ret) {
 			update_stats_key(info->func);
-		} else if (!ret && !args->has_filter) {
+		} else if (!args->has_filter) {
 			update_stats_key(info->func);
 			args->event_count++;
 			ret = 1;
@@ -296,7 +318,8 @@ static inline void handle_entry_finish(context_info_t *info, int err)
 			if (info->matched)
 				consume_map_ctx(info->args, &info->skb);
 		} else if (!info->matched) {
-			init_ctx_match(info->skb, info->func);
+			init_ctx_match(info->skb, info->func,
+				       trace_mode_latency(info->args));
 		}
 	} else {
 		info->args->event_count++;
@@ -317,6 +340,11 @@ static inline void try_set_latency(bpf_args_t *args, event_t *e,
 	e->latency_func2 = val->func2;
 }
 
+/* return value:
+ *   -1: invalid
+ *    0: valid
+ *    1: valid and no output
+ */
 static int auto_inline handle_entry(context_info_t *info)
 {
 	bpf_args_t *args = (void *)info->args;
@@ -340,32 +368,19 @@ static int auto_inline handle_entry(context_info_t *info)
 	if (filter && args_check(args, pid, pid))
 		goto err;
 
-	/* why we call probe_parse_skb/probe_parse_pkt_sk double times?
-	 * because in the inline mode, 4.15 kernel will be confused
-	 * with pkt_args.
+	/* why we call probe_parse_skb double times? because in the inline
+	 * mode, 4.15 kernel will be confused with pkt_args.
 	 */
 	if (!filter) {
-		if (info->func_status & FUNC_STATUS_SKB_INVAL) {
-			if (!skb || !info->sk)
-				goto err;
-			/* in this case, hash context by skb, but parse sock */
-			probe_parse_pkt_sk(info->sk, pkt, NULL);
-		} else {
-			if (!skb) {
-				pr_bpf_debug("no skb available, func=%d", info->func);
-				goto err;
-			}
-			probe_parse_skb(skb, pkt, NULL);
+		if (!skb) {
+			pr_bpf_debug("no skb available, func=%d", info->func);
+			goto err;
 		}
+		probe_parse_skb(skb, info->sk, pkt, NULL);
 		goto no_filter;
 	}
 
-	if (info->func_status & FUNC_STATUS_SKB_INVAL) {
-		if (!skb || !info->sk)
-			goto err;
-		/* in this case, hash context by skb, but parse sock */
-		err = probe_parse_pkt_sk(info->sk, pkt, pkt_args);
-	} else if (info->func_status & FUNC_STATUS_SK) {
+	if (info->func_status & FUNC_STATUS_SK) {
 		if (!info->sk) {
 			pr_bpf_debug("no sock available, func=%d", info->func);
 			goto err;
@@ -376,7 +391,7 @@ static int auto_inline handle_entry(context_info_t *info)
 			pr_bpf_debug("no skb available, func=%d", info->func);
 			goto err;
 		}
-		err = probe_parse_skb(skb, pkt, pkt_args);
+		err = probe_parse_skb(skb, info->sk, pkt, pkt_args);
 	}
 
 	if (err)

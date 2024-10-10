@@ -157,6 +157,10 @@ static int trace_set_target(trace_t *t, int target)
 	case 4:
 		trace_set_invalid_reason(t, "exclude");
 		break;
+	case 5:
+		trace_set_status(t->index, FUNC_STATUS_CFREE);
+		t->status |= TRACE_CFREE;
+		break;
 	}
 
 	return err;
@@ -278,7 +282,6 @@ static int trace_prepare_mode(trace_args_t *args)
 			/* enable skb clone trace */
 			trace_set_ret(&trace_skb_clone);
 		}
-		trace_ctx.skip_last = !args->latency_free;
 		break;
 	case TRACE_MODE_LATENCY:
 		trace_set_invalid_reason(&trace_skb_clone, "latency");
@@ -510,6 +513,14 @@ static int trace_prepare_args()
 		bpf_args->match_mode = true;
 	}
 
+	if (args->trace_free) {
+		if (!(trace_ctx.mode_mask & TRACE_MODE_BPF_CTX_MASK)) {
+			pr_err("--trace_free not supported in this mode\n");
+			goto err;
+		}
+		trace_parse_traces(args->trace_free, 5);
+	}
+
 	if (args->latency_show && !mode_has_context()) {
 		pr_err("--latency-show not supported in this mode\n");
 		goto err;
@@ -542,6 +553,7 @@ static int trace_prepare_args()
 	bpf_args->trace_mode = 1 << trace_ctx.mode;
 	trace_ctx.detail = bpf_args->detail;
 	bpf_args->max_event = args->count;
+	trace_ctx.skip_last = !bpf_args->latency_free;
 
 	if (args->pkt_len) {
 		u32 len_1, len_2;
@@ -609,9 +621,6 @@ static void trace_prepare_status()
 			if (trace->sk)
 				trace_set_status(trace->index, FUNC_STATUS_SK);
 		}
-
-		if (trace->skbinvalid && mode & TRACE_MODE_BPF_CTX_MASK)
-			trace_set_status(trace->index, FUNC_STATUS_SKB_INVAL);
 	}
 }
 

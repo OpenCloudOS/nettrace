@@ -143,7 +143,7 @@ static inline int handle_exit(struct pt_regs *ctx, int func)
 	};
 
 	if (func == INDEX_skb_clone)
-		init_ctx_match((void *)event.val, func);
+		init_ctx_match((void *)event.val, func, false);
 
 	EVENT_OUTPUT(ctx, event);
 	return 0;

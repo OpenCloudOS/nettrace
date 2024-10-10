@@ -153,10 +153,17 @@ children:
     - vxlan_xmit_one:0
   - name: vlan
     visual: true
-    desc: vlan model
+    desc: vlan module
     children:
     - vlan_do_receive:0
     - vlan_dev_hard_start_xmit:0
+  - name: ovs
+    visual: true
+    desc: openvswitch module
+    children:
+    - netdev_port_receive:0
+    - ovs_vport_receive:1
+    - ovs_dp_process_packet:0
 - name: packet
   desc: the process of skb of type PF_PACKET
   children:
@@ -274,7 +281,7 @@ children:
     visual: true
     children:
     - name: __ip_queue_xmit:1/0
-      skbinvalid: true
+    - __ip_local_out:2/1
     - ip_output:2
     - ip_finish_output:2
     - ip_finish_output_gso:2
@@ -349,6 +356,7 @@ children:
         level: info
         msg: TCP socket state has changed
     - tcp_queue_rcv:1/0
+    - tcp_data_queue_ofo:1/0
     - tcp_ack_probe/0
     - tcp_ack:1/0
     - tcp_probe_timer/0
@@ -387,16 +395,15 @@ children:
     children:
     - tcp_sendmsg_locked/0
     - name: tcp_skb_entail/0:1
-      skbinvalid: true
+    - name: skb_entail/0:1
     - __tcp_push_pending_frames/0
     - name: __tcp_transmit_skb:1/0
-      skbinvalid: true
       rules:
       - exp: ne 0
         level: warn
         msg: failed to xmit skb to ip layer
     - name: __tcp_retransmit_skb/0:1
-      skbinvalid: true
+    - tcp_rate_skb_delivered/0:1
 - name: udp
   desc: udp protocol layer (L4) of the network stack
   children:
@@ -512,11 +519,6 @@ children:
   desc: skb clone and free
   visual: true
   children:
-  - name: __kfree_skb
-    skb: 0
-    analyzer: free
-  - name: kfree_skb_partial:0
-    analyzer: free
   - name: skb_clone
     skb: 0
     analyzer: clone
@@ -542,3 +544,7 @@ children:
     - exp: any
       level: error
       msg: packet is dropped by kernel
+  - name: __kfree_skb:0
+    analyzer: free
+  - name: kfree_skb_partial:0
+    analyzer: free

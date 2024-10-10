@@ -271,7 +271,6 @@ def gen_trace(trace, group, p_name):
     fields_str += append_trace_field('skoffset', trace, 'raw')
     fields_str += append_trace_field('custom', trace, 'bool')
     fields_str += append_trace_field('tp', trace)
-    fields_str += append_trace_field('skbinvalid', trace, 'bool')
 
     default = True
     if 'default' in trace:

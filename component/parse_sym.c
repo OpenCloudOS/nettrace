@@ -89,19 +89,18 @@ static struct sym_result *sym_lookup_cache(__u64 pc, bool exact)
 
 static struct sym_result *sym_lookup_proc(__u64 pc, bool exact)
 {
-	char _cname[MAX_SYM_LENGTH], _pname[MAX_SYM_LENGTH],
-	     *pname = _pname, *cname = _cname;
+	char _cname[1024], _pname[1024], *pname = _pname, *cname = _cname;
 	struct sym_result *result;
 	__u64 cpc, ppc = 0;
 	FILE *f;
 
 	f = fopen("/proc/kallsyms", "r");
 	if (!f)
-		goto err;
+		return NULL;
 
 	result = malloc(sizeof(*result));
 	if (!result)
-		goto err;
+		goto err_out;
 
 	while (true) {
 		if (fscanf(f, "%llx %*s %s [ %*[^]] ]", &cpc, cname) < 0)
@@ -128,16 +127,13 @@ static struct sym_result *sym_lookup_proc(__u64 pc, bool exact)
 		sprintf(result->desc, "%s+0x%llx", result->name,
 			pc - result->start);
 		sym_add_cache(result);
-		goto ok;
+		fclose(f);
+		return result;
 	}
-	fclose(f);
 	free(result);
-err:
-	return NULL;
-
-ok:
+err_out:
 	fclose(f);
-	return result;
+	return NULL;
 }
 
 struct sym_result *sym_parse(__u64 pc)
