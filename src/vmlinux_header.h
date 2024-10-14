@@ -16,7 +16,12 @@
 #include <net/sch_generic.h>
 #include <net/sock.h>
 #include <net/inet_connection_sock.h>
+
+#define bpf_tail_call dummy____bpf_tail_call
+#define bpf_get_stackid dummy____bpf_get_stackid
 #include <net/tcp.h>
+#undef bpf_tail_call
+#undef bpf_get_stackid
 
 #if defined(CONFIG_NF_TABLES) || defined(CONFIG_NF_TABLES_MODULE)
 #include <net/netfilter/nf_tables.h>
