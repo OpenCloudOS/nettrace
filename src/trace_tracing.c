@@ -3,8 +3,6 @@
 
 #include "trace.h"
 #include "analysis.h"
-#include "nettrace.h"
-#include "analysis.h"
 
 /* check whether trampoline is supported by current arch */
 static bool tracing_arch_supported()

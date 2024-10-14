@@ -5,12 +5,14 @@
 #include <string.h>
 #include <stdlib.h>
 #include <inttypes.h>
+#include <errno.h>
 #define _LINUX_IN_H
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
 #include "arg_parse.h"
 #include "net_utils.h"
+#include "sys_utils.h"
 
 #define KEY_START	1000
 

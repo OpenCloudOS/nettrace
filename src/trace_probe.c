@@ -4,8 +4,6 @@
 #include "trace.h"
 #include "progs/kprobe.skel.h"
 #include "analysis.h"
-#include "nettrace.h"
-#include "analysis.h"
 
 #define MAX_CPU_COUNT 1024
 

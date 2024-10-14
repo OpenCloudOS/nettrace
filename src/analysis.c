@@ -8,6 +8,7 @@
 #undef __USE_MISC
 #include <net/if.h>
 #include <pthread.h>
+#include <errno.h>
 
 #include <pkt_utils.h>
 #include <stdlib.h>
