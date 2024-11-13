@@ -123,6 +123,13 @@ make all
 
   上面三种的联合。对于版本较低的内核，可以直接使用这个参数来使能上面的三个参数。
 
+- **OUTPUT_WHOLE**:
+
+  采用全量的方式输出事件（更多的开销）。当加载的时候出现以下报错，可以尝试添加这个编译参数来解决：
+  ```
+  R5 min value is negative, either use unsigned or 'var &= const'
+  ```
+
 - **KERNEL**：手动指定要使用的内核源码（内核头文件）：
 
   ```shell
@@ -958,3 +965,12 @@ unknown func bpf_jiffies64#118
 ```
 make NO_GLOBAL_DATA=1 all
 ```
+
+### 4.3 event长度存储到了栈里
+
+启动程序报错：
+```
+R5 min value is negative, either use unsigned or 'var &= const'
+```
+
+为了提升效率，nettrace在输出事件的时候尽量只输出部分需要的数据，在低版本内核上，clang有的时候编译出来的会有问题。编译的时候加上`COMPAT=1 OUTPUT_WHOLE=1`参数可解决该问题。
