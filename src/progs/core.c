@@ -534,13 +534,6 @@ DEFINE_TP(kfree_skb, skb, kfree_skb, 0, 8)
 	return handle_entry_output(info, e);
 }
 
-DEFINE_KPROBE_INIT(__netif_receive_skb_core_pskb,
-		   __netif_receive_skb_core, 3,
-		   .skb = _(*(void **)(ctx_get_arg(ctx, 0))))
-{
-	return default_handle_entry(info);
-}
-
 static inline int bpf_ipt_do_table(context_info_t *info, struct xt_table *table,
 				   u32 hook)
 {
