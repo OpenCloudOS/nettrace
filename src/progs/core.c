@@ -619,11 +619,8 @@ DEFINE_KPROBE_SKB(nf_hook_slow, 0, 4)
 	num = _(entries->num_hook_entries);
 
 #pragma clang loop unroll_count(6)
-	for (i = 0; i < 6; i++) {
-		if (i >= num)
-			break;
-		hooks_event->hooks[i] = (u64)_(entries->hooks[i].hook);
-	}
+	for (i = 0; i < 6 && i < num; i++)
+		_L(hooks_event->hooks + i, &entries->hooks[i].hook);
 	handle_event_output(info, hooks_event);
 #endif
 	return 0;
