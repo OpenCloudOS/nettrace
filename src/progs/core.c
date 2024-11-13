@@ -534,13 +534,6 @@ DEFINE_TP(kfree_skb, skb, kfree_skb, 0, 8)
 	return handle_entry_output(info, e);
 }
 
-DEFINE_KPROBE_INIT(__netif_receive_skb_core_pskb,
-		   __netif_receive_skb_core, 3,
-		   .skb = _(*(void **)(ctx_get_arg(ctx, 0))))
-{
-	return default_handle_entry(info);
-}
-
 static inline int bpf_ipt_do_table(context_info_t *info, struct xt_table *table,
 				   u32 hook)
 {
@@ -619,11 +612,8 @@ DEFINE_KPROBE_SKB(nf_hook_slow, 0, 4)
 	num = _(entries->num_hook_entries);
 
 #pragma clang loop unroll_count(6)
-	for (i = 0; i < 6; i++) {
-		if (i >= num)
-			break;
-		hooks_event->hooks[i] = (u64)_(entries->hooks[i].hook);
-	}
+	for (i = 0; i < 6 && i < num; i++)
+		_L(hooks_event->hooks + i, &entries->hooks[i].hook);
 	handle_event_output(info, hooks_event);
 #endif
 	return 0;

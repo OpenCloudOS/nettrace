@@ -60,15 +60,9 @@ children:
       - <<: *rule_ret_err
         msg: XDP failed to redirect skb
         adv: check if the target ifindex exist
-    - names:
-      - &__netif_receive_skb_core
-        name: __netif_receive_skb_core:0
-      - name: __netif_receive_skb_core_pskb
-        custom: 1
-        cond: '[ ! $(verlte "$(uname -r)" "5.4") -eq -1 ]' # valid when kernel >= 5.4
-        backup: *__netif_receive_skb_core
-      target: __netif_receive_skb_core
-      skb: 0
+    - name: __netif_receive_skb_core:0
+      tp: net/netif_receive_skb
+      skboffset: 8
   - name: link-out
     desc: link layer (L2) of packet out
     visual: true

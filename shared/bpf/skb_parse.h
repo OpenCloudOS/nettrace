@@ -7,9 +7,7 @@
 #ifndef _H_BPF_SKB_UTILS
 #define _H_BPF_SKB_UTILS
 
-#ifndef NO_BTF
 #include <bpf/bpf_core_read.h>
-#endif
 
 #include "skb_macro.h"
 #include "skb_shared.h"
@@ -63,18 +61,21 @@ const volatile bool bpf_func_exist[BPF_LOCAL_FUNC_MAX] = {0};
 #define EVENT_OUTPUT(ctx, data)					\
 	EVENT_OUTPUT_PTR(ctx, &data, sizeof(data))
 
+#define _L(dst, src) bpf_probe_read_kernel(dst, sizeof(*src), src)
 #define _(src)							\
 ({								\
-	typeof(src) tmp;					\
-	bpf_probe_read_kernel(&tmp, sizeof(src), &(src));	\
-	tmp;							\
+	typeof(src) ____tmp;					\
+	_L(&____tmp, &src);					\
+	____tmp;						\
 })
 
 #undef _C
 #ifdef NO_BTF
-#define _C(src, a)	_((src)->a)
+#define _C(src, f, ...)		BPF_PROBE_READ(src, f, ##__VA_ARGS__)
+#define _LC(dst, src, f, ...)	BPF_PROBE_READ_INTO(dst, src, f, ##__VA_ARGS__)
 #else
-#define _C(src, a, ...)		BPF_CORE_READ(src, a, ##__VA_ARGS__)
+#define _C(src, f, ...)		BPF_CORE_READ(src, f, ##__VA_ARGS__)
+#define _LC(dst, src, f, ...)	BPF_CORE_READ_INTO(dst, src, f, ##__VA_ARGS__)
 #endif
 
 #ifdef INLINE_MODE
