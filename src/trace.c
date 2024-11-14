@@ -926,17 +926,17 @@ static inline void poll_handler_wrap(void *ctx, int cpu, void *data,
 	trace_ctx.ops->trace_poll(ctx, cpu, data, size);
 }
 
-u64 get_event_count()
+static u8 bpf_args_buf[CONFIG_MAP_SIZE];
+bpf_args_t *get_bpf_args()
 {
-	static u8 buf[CONFIG_MAP_SIZE];
-	bpf_args_t *args = (void *)buf;
+	bpf_args_t *args = (void *)bpf_args_buf;
 	int map_fd, key = 0;
 	struct bpf_map *map;
 
 	map = bpf_object__find_map_by_name(trace_ctx.obj, "m_config");
 	map_fd = bpf_map__fd(map);
-	bpf_map_lookup_elem(map_fd, &key, buf);
-	return args->event_count;
+	bpf_map_lookup_elem(map_fd, &key, bpf_args_buf);
+	return args;
 }
 
 static int poll_timeout(int err)
@@ -945,7 +945,7 @@ static int poll_timeout(int err)
 		return 1;
 
 	if (err == 0 && trace_ctx.args.count) {
-		if (trace_ctx.args.count <= get_event_count()) {
+		if (trace_ctx.args.count <= get_bpf_args()->event_count) {
 			usleep(200000);
 			return 1;
 		}
