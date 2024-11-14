@@ -307,6 +307,6 @@ int trace_bpf_load_and_attach();
 int trace_poll();
 bool trace_analyzer_enabled(struct analyzer *analyzer);
 int trace_pre_load();
-u64 get_event_count();
+bpf_args_t *get_bpf_args();
 
 #endif

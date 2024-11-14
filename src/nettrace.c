@@ -366,13 +366,15 @@ err:
 static void do_exit(int code)
 {
 	static bool is_exited = false;
+	bpf_args_t *bpf_args;
 	u64 event_count;
 
 	if (is_exited)
 		return;
 
 	is_exited = true;
-	event_count = get_event_count();
+	bpf_args = get_bpf_args();
+	event_count = bpf_args->event_count;
 
 	pr_info("end trace...\n");
 	pr_debug("begin destory BPF skel...\n");

@@ -542,3 +542,5 @@ children:
     analyzer: free
   - name: kfree_skb_partial:0
     analyzer: free
+  - name: skb_attempt_defer_free:0
+    analyzer: free
