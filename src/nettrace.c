@@ -350,6 +350,8 @@ static void do_parse_args(int argc, char *argv[])
 	default:
 		break;
 	}
+
+	/* set L3 protocol if addr is offered */
 	FILL_ADDR(saddr, pkt_args)
 	FILL_ADDR(daddr, pkt_args)
 	FILL_ADDR(addr, pkt_args)

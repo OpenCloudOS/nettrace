@@ -662,9 +662,16 @@ static __always_inline int probe_parse_skb(struct sk_buff *skb, struct sock *sk,
 		l3_proto = bpf_ntohs(_(eth->h_proto));
 	}
 
-	if (filter_enabled(args, l4_proto) && !args->l3_proto &&
-	    l3_proto != ETH_P_IP && l3_proto != ETH_P_IPV6)
-		return -1;
+	if (args) {
+		if (args->l3_proto) {
+			if (args->l3_proto != l3_proto)
+				return -1;
+		} else if (args->l4_proto) {
+			/* Only IPv4 and IPv6 support L4 protocol filter */
+			if (l3_proto != ETH_P_IP && l3_proto != ETH_P_IPV6)
+				return -1;
+		}
+	}
 
 	pkt->proto_l3 = l3_proto;
 	pr_debug_skb("l3=%d", l3_proto);
@@ -676,7 +683,7 @@ static __always_inline int probe_parse_skb(struct sk_buff *skb, struct sock *sk,
 	case ETH_P_ARP:
 		return probe_parse_arp(l3, pkt, args);
 	default:
-		return filter_enabled(args, l4_proto) ? -1 : 0;
+		return 0;
 	}
 }
 
