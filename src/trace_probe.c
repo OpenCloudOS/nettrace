@@ -55,21 +55,31 @@ again:
 
 static int probe_trace_attach()
 {
+	bool auto_attach = false;
 	char kret_name[128];
 	trace_t *trace;
 
+again:
 	trace_for_each(trace) {
-		if (!(trace->status & TRACE_ATTACH_MANUAL))
-			continue;
+		if ((auto_attach && !(trace->status & TRACE_ATTACH_MANUAL)) ||
+		    (!auto_attach && (trace->status & TRACE_ATTACH_MANUAL))) {
+			probe_trace_attach_manual(trace->prog, trace->name, false);
+			if (!trace_is_ret(trace))
+				continue;
 
-		probe_trace_attach_manual(trace->prog, trace->name, false);
-		if (!trace_is_ret(trace))
-			continue;
-
-		sprintf(kret_name, "ret%s", trace->prog);
-		probe_trace_attach_manual(kret_name, trace->name, true);
+			sprintf(kret_name, "ret%s", trace->prog);
+			probe_trace_attach_manual(kret_name, trace->name, true);
+		}
 	}
-	return kprobe__attach(skel);
+
+	if (!auto_attach && kprobe__attach(skel)) {
+		/* failed to auto attach, attach manually */
+		auto_attach = true;
+		pr_warn("failed to auto attach kprobe, trying manual attach...\n");
+		goto again;
+	}
+
+	return 0;
 }
 
 /* In kprobe, we only enable the monitor for the traces with "any" rule */
