@@ -9,6 +9,7 @@
 #include "trace.h"
 #include "analysis.h"
 #include "dropreason.h"
+#include "rstreason.h"
 
 const char *cond_pre = "verlte() { [ \"$1\" = \"$2\" ] && echo 0 && return; "
 		       "[ \"$1\" = \"$(/bin/echo -e \"$1\\n$2\" | sort -V | head -n1)\" ] "
@@ -494,6 +495,11 @@ static int trace_prepare_args()
 		bpf_args->drop_reason = true;
 		trace_ctx.drop_reason = true;
 		get_drop_reason(1);
+	}
+
+	if (reset_reason_support()) {
+		trace_ctx.reset_reason = true;
+		get_reset_reason(1);
 	}
 
 	if (bpf_args->rate_limit && (trace_ctx.mode_mask & TRACE_MODE_BPF_CTX_MASK)) {

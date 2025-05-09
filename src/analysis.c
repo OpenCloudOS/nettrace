@@ -17,6 +17,8 @@
 #include "trace.h"
 #include "analysis.h"
 #include "dropreason.h"
+#include "rstreason.h"
+#include "sys_utils.h"
 
 #define CTX_HASH_LENGTH 1024
 static struct hlist_head ctx_hash[CTX_HASH_LENGTH] = {};
@@ -849,6 +851,52 @@ DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_ALL_MASK | TRACE_MODE_TINY_MASK)
 	sprintf(info, PFMT_EMPH_STR("    location")":\n\t%s", sym_str);
 	if (trace_ctx.drop_reason) {
 		sprintf_end(info, PFMT_EMPH_STR("\n    drop reason")":\n\t%s",
+			    reason_str);
+	}
+	entry_set_extinfo(e, info);
+out:
+	return RESULT_CONT;
+}
+
+DEFINE_ANALYZER_ENTRY(reset, TRACE_MODE_ALL_MASK | TRACE_MODE_TINY_MASK)
+{
+	define_pure_event(reset_event_t, event, e->event);
+	char *reason_str, *info, __reason[32];
+	const char *state_str;
+	unsigned char state = event->state;
+	u32 reason = event->reason;
+
+	if (mode_has_context()) {
+		put_fake_analy_ctx(e->fake_ctx);
+		hlist_del(&e->fake_ctx->hash);
+	}
+
+	if (e->event->meta == FUNC_TYPE_TINY)
+		goto out;
+
+	reason_str = get_reset_reason(reason);
+	if (!reason_str) {
+		sprintf(__reason, "%d", reason);
+		reason_str = __reason;
+	}
+
+	info = malloc(1024);
+	state_str = get_tcp_state_str(state);
+	if (trace_ctx.reset_reason)
+		sprintf(info, PFMT_EMPH_STR(" *reason: %s, state: %s*"), reason_str, state_str);
+	else
+		sprintf(info, PFMT_EMPH_STR(" *state: %s*"), state_str);
+	entry_set_msg(e, info);
+
+	rule_run_any(e, trace);
+	if (!trace_mode_diag())
+		goto out;
+
+	/* generate the information in the analysis result part */
+	info = malloc(1024);
+	sprintf(info, PFMT_EMPH_STR("    state")":\n\t%s", state_str);
+	if (trace_ctx.drop_reason) {
+		sprintf_end(info, PFMT_EMPH_STR("\n    reset reason")":\n\t%s",
 			    reason_str);
 	}
 	entry_set_extinfo(e, info);

@@ -125,6 +125,11 @@ DEFINE_EVENT(drop_event_t,
 	event_field(u32, reason)
 )
 
+DEFINE_EVENT(reset_event_t,
+	event_field(unsigned char, state)
+	event_field(u32, reason)
+)
+
 DEFINE_EVENT(nf_event_t,
 	event_field(char, table[8])
 	event_field(char, chain[8])
