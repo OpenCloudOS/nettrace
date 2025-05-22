@@ -4,7 +4,7 @@ progs		:= nettrace
 prog-nettrace-origin = \
 		trace.c $(COMMON_SHARED) trace_probe.c trace_tracing.c \
 		analysis.c $(COMPONENT)/parse_sym.c trace_group.c \
-		dropreason.c
+		dropreason.c rstreason.c
 prog-nettrace	= $(prog-nettrace-origin) nettrace.c
 
 ifdef COMPAT

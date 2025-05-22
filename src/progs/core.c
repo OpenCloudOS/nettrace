@@ -716,6 +716,46 @@ DEFINE_KPROBE_INIT(nft_do_chain, nft_do_chain, 2,
 }
 #endif
 
+DEFINE_KPROBE_INIT(tcp_v4_send_reset, tcp_v4_send_reset, 3,
+		   	.sk = ctx_get_arg(ctx, 0),
+			.skb = ctx_get_arg(ctx, 1))
+{
+	struct sock *sk = info_get_arg(info, 0);
+	struct sock_common skc_common = _C(sk, __sk_common);
+	DECLARE_EVENT(reset_event_t, e)
+
+	e->state = skc_common.skc_state;
+	e->reason = (u64)info_get_arg(info, 2);
+
+	return handle_entry_output(info, e);
+}
+
+DEFINE_KPROBE_INIT(tcp_v6_send_reset, tcp_v6_send_reset, 3,
+			.sk = ctx_get_arg(ctx, 0),
+ 			.skb = ctx_get_arg(ctx, 1))
+{
+	struct sock *sk = info_get_arg(info, 0);
+	struct sock_common skc_common = _C(sk, __sk_common);
+	DECLARE_EVENT(reset_event_t, e)
+
+	e->state = skc_common.skc_state;
+	e->reason = (u64)info_get_arg(info, 2);
+
+	return handle_entry_output(info, e);
+}
+
+DEFINE_KPROBE_INIT(tcp_send_active_reset, tcp_send_active_reset, 3,
+			.sk = ctx_get_arg(ctx, 0))
+{
+	struct sock *sk = info_get_arg(info, 0);
+	struct sock_common skc_common = _C(sk, __sk_common);
+	DECLARE_EVENT(reset_event_t, e)
+
+	e->state = skc_common.skc_state;
+	e->reason = (u64)info_get_arg(info, 2);
+
+	return handle_entry_output(info, e);
+}
 
 /*******************************************************************
  * 

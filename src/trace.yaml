@@ -338,8 +338,20 @@ children:
     - tcp_v6_rcv:0
     - tcp_filter:1
     - tcp_child_process:2
-    - tcp_v4_send_reset:1
-    - tcp_v6_send_reset:1
+    - name: tcp_v4_send_reset:1/0
+      custom: 1
+      analyzer: reset
+      rules:
+      - exp: any
+        level: error
+        msg: connection reset initiated by transport layer (TCP stack, skb)
+    - name: tcp_v6_send_reset:1/0
+      custom: 1
+      analyzer: reset
+      rules:
+      - exp: any
+        level: error
+        msg: connection reset initiated by transport layer (TCP stack, skb)
     - tcp_v4_do_rcv:1
     - tcp_v6_do_rcv:1
     - tcp_rcv_established:1/0
@@ -454,7 +466,13 @@ children:
         level: info
         msg: TCP socket is closed
     - *tcp_rcv_state_process
-    - tcp_send_active_reset/0
+    - name: tcp_send_active_reset/0
+      custom: 1
+      analyzer: reset
+      rules:
+      - exp: any
+        level: error
+        msg: connection reset initiated by application (active close, sk)
     - name: tcp_ack_update_rtt/0
       custom: 1
       analyzer: rtt

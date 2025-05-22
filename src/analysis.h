@@ -136,6 +136,7 @@ DECLARE_ANALYZER(iptable);
 DECLARE_ANALYZER(nf);
 DECLARE_ANALYZER(qdisc);
 DECLARE_ANALYZER(rtt);
+DECLARE_ANALYZER(reset);
 DECLARE_ANALYZER(default);
 
 #define define_pure_event(type, name, data)			\

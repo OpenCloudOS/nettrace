@@ -159,6 +159,8 @@ typedef struct {
 	bool		skip_last;
 	bool		trace_clone;
 	struct bpf_object *obj;
+	/* if reset reason feature is supported */
+	bool 		reset_reason;
 } trace_context_t;
 
 #define TRACE_HAS_ANALYZER(trace, name) IS_ANALYZER(trace->analyzer, name)
