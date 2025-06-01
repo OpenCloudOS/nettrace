@@ -866,11 +866,6 @@ DEFINE_ANALYZER_ENTRY(reset, TRACE_MODE_ALL_MASK | TRACE_MODE_TINY_MASK)
 	unsigned char state = event->state;
 	u32 reason = event->reason;
 
-	if (mode_has_context()) {
-		put_fake_analy_ctx(e->fake_ctx);
-		hlist_del(&e->fake_ctx->hash);
-	}
-
 	if (e->event->meta == FUNC_TYPE_TINY)
 		goto out;
 
