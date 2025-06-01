@@ -3,7 +3,7 @@
 
 #define MAX_FUNC_STACK 16
 
-#include <skb_shared.h>
+#include "skb_shared.h"
 
 #include "kprobe_trace.h"
 

@@ -10,10 +10,10 @@
 #include <pthread.h>
 #include <errno.h>
 
-#include <pkt_utils.h>
 #include <stdlib.h>
 #include <parse_sym.h>
 
+#include "output.h"
 #include "trace.h"
 #include "analysis.h"
 #include "dropreason.h"

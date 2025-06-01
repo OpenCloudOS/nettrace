@@ -1,8 +1,3 @@
-COMPONENT	:= $(ROOT)/component
-COMMON_SHARED	:= $(ROOT)/shared/pkt_utils.c $(COMPONENT)/net_utils.c	\
-		   $(COMPONENT)/arg_parse.c $(COMPONENT)/sys_utils.c	\
-		   $(ROOT)/shared/bpf_utils.c
-
 CFLAGS		+= -I./ -I$(ROOT)/shared/bpf/ -g
 BPF_CFLAGS	= $(CFLAGS) -Wno-unused-function			\
 		  -Wno-compare-distinct-pointer-types -Wuninitialized	\
@@ -16,7 +11,7 @@ HOST_CFLAGS	= \
 		-lbpf -lelf -lz $(LIBELF_ZSTD_FLAGS) -O2 -static $(CFLAGS) -Wall \
 		-Wno-deprecated-declarations -DVERSION=$(VERSION)	\
 		-DRELEASE=$(RELEASE)					\
-		-I$(ROOT)/shared/ -I$(ROOT)/component
+		-I$(ROOT)/shared/ -I$(ROOT)/utils
 
 CC		:= $(CROSS_COMPILE)gcc
 
@@ -67,7 +62,7 @@ endif
 	CFLAGS		+= -DNO_BTF
 	BPF_CFLAGS	+= $(KERNEL_CFLAGS)
 else
-	kheaders_cmd	:= ln -s ../shared/bpf/vmlinux.h kheaders.h
+	kheaders_cmd	:= ln -s ./progs/vmlinux.h kheaders.h
 	BPF_CFLAGS	+= -target bpf
 endif
 
@@ -108,7 +103,7 @@ kheaders.h:
 	$(call kheaders_cmd)
 
 progs/%.o: progs/%.c $(BPF_EXTRA_DEP)
-	clang -O2 -c -S -Wall -fno-asynchronous-unwind-tables		\
+	clang -O2 -S -Wall -fno-asynchronous-unwind-tables		\
 	-Wno-incompatible-pointer-types-discards-qualifiers		\
 	$< -emit-llvm -Wno-unknown-attributes $(BPF_CFLAGS) -Xclang	\
 	-disable-llvm-passes -o - | 					\

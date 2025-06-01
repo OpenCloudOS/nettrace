@@ -4,8 +4,6 @@
 #include <bpf/bpf.h>
 #include <net_utils.h>
 
-#include "bpf/skb_shared.h"
-
 #define BPF_PROG_FD(name)	(bpf_program__fd(obj->progs.name))
 #define BPF_MAP_FD(name)	(bpf_map__fd(obj->maps.name))
 
