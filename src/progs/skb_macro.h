@@ -55,6 +55,9 @@
 
 #undef bpf_core_field_offset
 #define bpf_core_field_offset(type, field) offsetof(type, field)
+
+#undef bpf_core_read_str
+#define bpf_core_read_str bpf_probe_read_kernel_str
 #endif
 
 #ifdef __F_NO_PROBE_READ_STR

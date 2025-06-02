@@ -413,8 +413,8 @@ no_filter:
 
 	bpf_get_current_comm(detail->task, sizeof(detail->task));
 	if (dev) {
-		bpf_probe_read_str(detail->ifname, sizeof(detail->ifname) - 1,
-				   dev->name);
+		bpf_core_read_str(detail->ifname, sizeof(detail->ifname) - 1,
+				  &dev->name);
 		detail->ifindex = _C(dev, ifindex);
 	} else {
 		detail->ifindex = _C(skb, skb_iif);
