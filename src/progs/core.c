@@ -412,7 +412,6 @@ no_filter:
 	detail = (void *)e;
 
 	bpf_get_current_comm(detail->task, sizeof(detail->task));
-	detail->pid = pid;
 	if (dev) {
 		bpf_probe_read_str(detail->ifname, sizeof(detail->ifname) - 1,
 				   dev->name);
@@ -432,6 +431,7 @@ out:
 	e->key = (u64)(void *)skb;
 #endif
 	e->func = info->func;
+	e->pid = pid;
 
 	try_set_latency(args, e, &info->match_val);
 

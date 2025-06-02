@@ -111,11 +111,11 @@ static inline void analy_entry_free(analy_entry_t *entry)
 	if (entry->status & ANALY_ENTRY_MSG)
 		free(entry->msg);
 
-	if (entry->status & ANALY_ENTRY_ONCPU) {
+	if (entry->status & ANALY_ENTRY_ONLIST) {
 		trace_t *t = get_trace_from_analy_entry(entry);
-		list_del(&entry->cpu_list);
-		pr_err("entry %s is still on cpu %d\n", t->name,
-		       entry->cpu);
+		list_del(&entry->ret_list);
+		pr_err("entry %s is still on hash pid=%d\n", t->name,
+		       entry->event->pid);
 	}
 
 	if (entry->status & ANALY_ENTRY_DLIST)
@@ -175,9 +175,9 @@ static void analy_entry_output(analy_entry_t *entry, analy_entry_t *prev)
 			ifname = ifname ?: "";
 		}
 
-		sprintf(tinfo, "[%x][%-20s]%s[cpu:%-3u][%-5s][pid:%-7u][%-12s][ns:%u] ",
+		sprintf(tinfo, "[%x][%-20s]%s[cpu:%-3u][%-5s][%s-%u][ns:%u] ",
 			detail->key, t->name, func_range, entry->cpu, ifname,
-			detail->pid, detail->task, detail->netns);
+			detail->task, e->pid, detail->netns);
 	} else if (trace_ctx.mode != TRACE_MODE_DROP) {
 		sprintf(tinfo, "[%-20s]%s ", t->name, func_range);
 	}
@@ -482,10 +482,10 @@ void do_async_poll(int cpu, void *data, u32 size, async_cb cb)
 	}
 	memcpy(dlist->data, data, size);
 	INIT_LIST_HEAD(&dlist->list);
-	dlist->size = size;
 	dlist->cpu = cpu;
 
 	pthread_mutex_lock(&mutex);
+	/* insert the dlist to async_list in time order */
 	analy_dlist_add(&async_list, dlist);
 	pthread_mutex_unlock(&mutex);
 
@@ -528,7 +528,7 @@ static int ctx_handle_ret(data_list_t *dlist, analy_ctx_t **analy_ctx)
 	return 0;
 }
 
-static void ctx_poll_cb(data_list_t *dlist)
+static void ctx_async_poll_cb(data_list_t *dlist)
 {
 	fake_analy_ctx_t *fake;
 	analy_ctx_t *analy_ctx;
@@ -549,8 +549,7 @@ static void ctx_poll_cb(data_list_t *dlist)
 		return;
 	}
 	e = entry->event;
-	pr_debug("create entry: %llx, %x, size: %u\n", PTR2X(entry),
-		 e->key, dlist->size);
+	pr_debug("create entry: %llx, %x\n", PTR2X(entry), e->key);
 
 	fake = analy_fake_ctx_fetch(e->key);
 	if (!fake) {
@@ -597,31 +596,13 @@ check_pending:
 
 void ctx_poll_handler(void *raw_ctx, int cpu, void *data, u32 size)
 {
-	do_async_poll(cpu, data, size, ctx_poll_cb);
+	do_async_poll(cpu, data, size, ctx_async_poll_cb);
 }
 
 static inline bool trace_analyse_ret(trace_t *trace)
 {
 	return trace_ctx.mode == TRACE_MODE_MONITOR && trace_is_func(trace) &&
 	       trace->monitor == TRACE_MONITOR_EXIT;
-}
-
-static inline void init_entry_from_data(analy_entry_t *entry,
-					data_list_t *dlist)
-{
-	entry->event = (void *)dlist->data;
-	entry->cpu = dlist->cpu;
-}
-
-static inline analy_entry_t *alloc_entry_from_data(data_list_t *dlist)
-{
-	analy_entry_t *entry = calloc(1, sizeof(*entry));
-
-	if (!entry)
-		return NULL;
-
-	init_entry_from_data(entry, dlist);
-	return entry;
 }
 
 static inline void entry_basic_poll(analy_entry_t *entry)
@@ -644,11 +625,13 @@ static inline void entry_basic_poll(analy_entry_t *entry)
 	analy_entry_output(entry, NULL);
 }
 
-static void dlist_poll_cb(data_list_t *dlist)
+static void basic_async_poll_cb(data_list_t *dlist)
 {
-	analy_entry_t entry = {};
+	analy_entry_t entry = {
+		.event = (void *)dlist->data,
+		.cpu = dlist->cpu,
+	};
 
-	init_entry_from_data(&entry, dlist);
 	entry_basic_poll(&entry);
 	free(dlist);
 }
@@ -664,7 +647,7 @@ void basic_poll_handler(void *ctx, int cpu, void *data, u32 size)
 
 void async_poll_handler(void *ctx, int cpu, void *data, u32 size)
 {
-	do_async_poll(cpu, data, size, dlist_poll_cb);
+	do_async_poll(cpu, data, size, basic_async_poll_cb);
 }
 
 int stats_poll_handler()
