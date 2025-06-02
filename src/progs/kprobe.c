@@ -5,7 +5,6 @@
 #include <bpf/bpf_tracing.h>
 
 #include "shared.h"
-#include <skb_parse.h>
 #include "core.h"
 
 #include "kprobe_trace.h"
@@ -142,6 +141,7 @@ static inline int handle_exit(struct pt_regs *ctx, int func)
 		.func = func,
 		.meta = FUNC_TYPE_RET,
 		.val = PT_REGS_RC(ctx),
+		.pid = (u32)bpf_get_current_pid_tgid(),
 	};
 
 	if (func == INDEX_skb_clone)

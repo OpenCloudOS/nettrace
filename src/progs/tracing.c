@@ -7,7 +7,6 @@
 #include <bpf/bpf_tracing.h>
 
 #include "shared.h"
-#include <skb_parse.h>
 
 #include "kprobe_trace.h"
 #include "core.h"

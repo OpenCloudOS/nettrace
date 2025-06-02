@@ -1,9 +1,13 @@
 ROOT		?= $(abspath ../)
 bpf_progs	:= progs/kprobe
 progs		:= nettrace
+utils		:= $(ROOT)/utils
 prog-nettrace-origin = \
-		trace.c $(COMMON_SHARED) trace_probe.c trace_tracing.c \
-		analysis.c $(COMPONENT)/parse_sym.c trace_group.c \
+		$(utils)/parse_sym.c $(utils)/net_utils.c \
+		$(utils)/arg_parse.c $(utils)/sys_utils.c \
+		$(utils)/bpf_utils.c \
+		trace.c trace_probe.c output.c trace_tracing.c \
+		analysis.c trace_group.c \
 		dropreason.c rstreason.c
 prog-nettrace	= $(prog-nettrace-origin) nettrace.c
 

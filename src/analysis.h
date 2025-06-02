@@ -62,7 +62,7 @@ typedef struct {
 	u32 status;
 	u16 cpu;
 	/* this list is used for kretprobe based program */
-	struct list_head cpu_list;
+	struct list_head ret_list;
 } analy_entry_t;
 
 typedef struct {
@@ -74,7 +74,6 @@ typedef struct {
 
 typedef struct {
 	struct list_head list;
-	u16 size;
 	u16 cpu;
 	u8 data[0];
 } data_list_t;
@@ -94,7 +93,7 @@ typedef struct analyzer {
 #define ANALY_ENTRY_RETURNED	(1 << 0)
 #define ANALY_ENTRY_EXTINFO	(1 << 1)
 #define ANALY_ENTRY_MSG		(1 << 2)
-#define ANALY_ENTRY_ONCPU	(1 << 3)
+#define ANALY_ENTRY_ONLIST	(1 << 3)
 #define ANALY_ENTRY_DLIST	(1 << 4)
 
 #define ANALYZER(name) analyzer_##name

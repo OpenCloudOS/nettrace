@@ -3,7 +3,7 @@
 #ifndef _H_NETTRACE
 #define _H_NETTRACE
 
-#include <pkt_utils.h>
+#include "output.h"
 
 #define pr_version()							\
 	pr_info("version: " macro_to_str(VERSION) macro_to_str(RELEASE)	\

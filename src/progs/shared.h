@@ -3,7 +3,7 @@
 
 #define MAX_FUNC_STACK 16
 
-#include <skb_shared.h>
+#include "skb_shared.h"
 
 #include "kprobe_trace.h"
 
@@ -54,6 +54,7 @@ typedef struct {
 #ifdef __F_STACK_TRACE
 	u32		stack_id;
 #endif
+	u32		pid;
 	int		__event_filed[0];
 } event_t;
 
@@ -77,6 +78,9 @@ typedef struct {
 	u32		stack_id;
 #endif
 	u32		pid;
+	/* fields above are exactly the same as event_t's, and the below
+	 * fields are what we need to add for detail event.
+	 */
 	char		task[16];
 	char		ifname[16];
 	u32		ifindex;
@@ -162,7 +166,7 @@ DEFINE_EVENT(rtt_event_t,
 typedef struct __attribute__((__packed__)) {
 	u16 meta;
 	u16 func;
-	u32 pad;
+	u32 pid;
 	u64 ts;
 	u64 val;
 } retevent_t;

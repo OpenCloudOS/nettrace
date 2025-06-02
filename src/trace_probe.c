@@ -179,47 +179,55 @@ void probe_trace_close()
 	skel = NULL;
 }
 
+static struct list_head *entry_head(u32 key)
+{
+	/* simple hash function to avoid collision */
+	return &cpus[key % MAX_CPU_COUNT];
+}
+
 static analyzer_result_t probe_analy_exit(trace_t *trace, analy_exit_t *e)
 {
+	struct list_head *head;
+	u32 key = e->event.pid;
 	analy_entry_t *pos;
-	int cpu = e->cpu;
 
-	if (cpu > MAX_CPU_COUNT) {
-		pr_err("cpu count is too big\n");
+	head = entry_head(key);
+	if (list_empty(head)) {
+		pr_debug("no entry found for exit: %s pid=%d (list empty)\n",
+			 trace->name, key);
 		goto out;
 	}
 
-	if (list_empty(&cpus[cpu])) {
-		pr_debug("no entry found for exit: %s on cpu %d (list empty)\n",
-			 trace->name, cpu);
-		goto out;
-	}
-
-	list_for_each_entry(pos, &cpus[cpu], cpu_list) {
-		if (pos->event->func == e->event.func)
+	/* the entry is added to the head, so the lastest added entry will be
+	 * matched first.
+	 */
+	list_for_each_entry(pos, head, ret_list) {
+		if (pos->event->func == e->event.func &&
+		    pos->event->pid == key)
 			goto found;
 	}
-	pr_debug("no entry found for exit: %s on cpu %d; func: %d, "
-		 "last_func: %d\n", trace->name, cpu, e->event.func,
-		 pos->event->func);
+	pr_debug("no entry found for exit: %s pid: %d; func: %d, "
+		 "last_func: %d\n", trace->name, key,
+		 e->event.func, pos->event->func);
 	goto out;
 found:
 	pos->status |= ANALY_ENTRY_RETURNED;
 	pos->priv = e->event.val;
-	list_del(&pos->cpu_list);
+	list_del(&pos->ret_list);
 	put_fake_analy_ctx(pos->fake_ctx);
 	e->entry = pos;
-	pos->status &= ~ANALY_ENTRY_ONCPU;
-	pr_debug("found exit for entry: %s(%x) on cpu %d with return "
-		 "value %llx, ctx:%llx:%u\n", trace->name, pos->event->key, cpu,
-		 e->event.val, PTR2X(pos->ctx), pos->ctx->refs);
+	pos->status &= ~ANALY_ENTRY_ONLIST;
+	pr_debug("found exit for entry: %s(%x) pid=%d with return "
+		 "value %llx, ctx:%llx:%u\n", trace->name, pos->event->key,
+		 key, e->event.val, PTR2X(pos->ctx),
+		 pos->ctx->refs);
 out:
 	return RESULT_CONT;
 }
 
 static analyzer_result_t probe_analy_entry(trace_t *trace, analy_entry_t *e)
 {
-	struct list_head *list;
+	struct list_head *head;
 
 	if (!trace_is_ret(trace)) {
 		pr_debug("entry found for %s(%llx), ctx:%llx:%d\n", trace->name,
@@ -227,13 +235,13 @@ static analyzer_result_t probe_analy_entry(trace_t *trace, analy_entry_t *e)
 			 e->ctx->refs);
 		goto out;
 	}
-	list = &cpus[e->cpu];
-	list_add(&e->cpu_list, list);
+	head = entry_head(e->event->pid);
+	list_add(&e->ret_list, head);
 	get_fake_analy_ctx(e->fake_ctx);
-	pr_debug("mounted entry %s(%llx) on cpu %d, ctx:%llx:%d\n", trace->name,
-		 (u64)e->event->key, e->cpu, PTR2X(e->ctx),
+	pr_debug("mounted entry %s(%llx) pid %d, ctx:%llx:%d\n", trace->name,
+		 (u64)e->event->key, e->event->pid, PTR2X(e->ctx),
 		 e->ctx->refs);
-	e->status |= ANALY_ENTRY_ONCPU;
+	e->status |= ANALY_ENTRY_ONLIST;
 
 out:
 	return RESULT_CONT;
