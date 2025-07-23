@@ -13,6 +13,10 @@ HOST_CFLAGS	= \
 		-DRELEASE=$(RELEASE)					\
 		-I$(ROOT)/shared/ -I$(ROOT)/utils
 
+ifdef STATIC
+HOST_CFLAGS	+= -static
+endif
+
 CC		:= $(CROSS_COMPILE)gcc
 
 include $(ROOT)/script/arch.mk
