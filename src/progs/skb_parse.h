@@ -70,7 +70,7 @@ const volatile bool bpf_func_exist[BPF_LOCAL_FUNC_MAX] = {0};
 #define _(src)							\
 ({								\
 	typeof(src) ____tmp;					\
-	_L(&____tmp, &src);					\
+	_L(&____tmp, &(src));					\
 	____tmp;						\
 })
 

@@ -64,8 +64,10 @@
 #define bpf_probe_read_str bpf_probe_read
 #endif
 
+#ifndef likely
 #define likely(x)		__builtin_expect(!!(x), 1)
 #define unlikely(x)		__builtin_expect(!!(x), 0)
+#endif
 
 #ifndef READ_ONCE
 #define READ_ONCE(x)		(*(volatile typeof(x) *)&x)
