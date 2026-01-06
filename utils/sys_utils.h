@@ -76,6 +76,22 @@ do {						\
 	sprintf(strlen(buf) + buf, fmt, ##args)
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 
+#define color_enable() (isatty(STDOUT_FILENO))
+#define pr_info_color(fmt, ...) \
+	pr_info((color_enable() ? (PFMT_EMPH fmt PFMT_END) : fmt), ##__VA_ARGS__)
+#define pr_warn_color(fmt, ...) \
+	pr_warn((color_enable() ? (PFMT_WARN fmt PFMT_END) : fmt), ##__VA_ARGS__)
+#define pr_error_color(fmt, ...) \
+	pr_error((color_enable() ? (PFMT_ERROR fmt PFMT_END) : fmt), ##__VA_ARGS__)
+#define sprintf_color(buf, fmt, ...) \
+	sprintf(buf, (color_enable() ? (PFMT_EMPH fmt PFMT_END) : fmt), ##__VA_ARGS__)
+#define sprintf_end_color(buf, fmt, ...) \
+	sprintf_end(buf, (color_enable() ? (PFMT_EMPH fmt PFMT_END) : fmt), ##__VA_ARGS__)
+#define sprintf_warn_color(buf, fmt, ...) \
+	sprintf_end(buf, (color_enable() ? (PFMT_WARN fmt PFMT_END) : fmt), ##__VA_ARGS__)
+#define sprintf_error_color(buf, fmt, ...) \
+	sprintf_end(buf, (color_enable() ? (PFMT_ERROR fmt PFMT_END) : fmt), ##__VA_ARGS__)
+
 #define MIN(a, b) (a > b ? b : a)
 #define MAX(a, b) (a > b ? a : b)
 

@@ -23,9 +23,9 @@
 #define CTX_HASH_LENGTH 1024
 static struct hlist_head ctx_hash[CTX_HASH_LENGTH] = {};
 const char *level_mark[] = {
-	[RULE_INFO]  = PFMT_EMPH"NOTICE"PFMT_END,
-	[RULE_WARN]  = PFMT_WARN"WARNING"PFMT_END,
-	[RULE_ERROR] = PFMT_ERROR"ERROR"PFMT_END,
+	[RULE_INFO]  = "NOTICE",
+	[RULE_WARN]  = "WARNING",
+	[RULE_ERROR] = "ERROR",
 };
 u32 ctx_count = 0;
 
@@ -188,8 +188,7 @@ static void analy_entry_output(analy_entry_t *entry, analy_entry_t *prev)
 		ts_print_packet(buf, &e->pkt, tinfo, trace_ctx.args.date);
 
 	if ((entry->status & ANALY_ENTRY_RETURNED) && trace_ctx.args.ret)
-		sprintf_end(buf, PFMT_EMPH_STR(" *return: %d*"),
-			    (int)entry->priv);
+		sprintf_end_color(buf, " *return: %d*", (int)entry->priv);
 
 do_latency:
 	if (prev && trace_ctx.args.latency_show) {
@@ -209,13 +208,13 @@ do_latency:
 	rule = entry->rule;
 	switch (rule->level) {
 	case RULE_INFO:
-		sprintf_end(buf, PFMT_EMPH_STR(" *%s*"), rule->msg);
+		sprintf_end_color(buf, " *%s*", rule->msg);
 		break;
 	case RULE_WARN:
-		sprintf_end(buf, PFMT_WARN_STR(" *%s*"), rule->msg);
+		sprintf_warn_color(buf, " *%s*", rule->msg);
 		break;
 	case RULE_ERROR:
-		sprintf_end(buf, PFMT_ERROR_STR(" *%s*"), rule->msg);
+		sprintf_error_color(buf, " *%s*", rule->msg);
 		break;
 	default:
 		break;
@@ -255,9 +254,7 @@ static void analy_diag_handle(analy_ctx_t *ctx)
 	trace_t *trace;
 	int i = 0;
 
-	pr_info("---------------- "PFMT_EMPH_STR("ANALYSIS RESULT")
-		" ---------------------\n");
-
+	pr_info_color("---------------- ANALYSIS RESULT ---------------------\n");
 	list_for_each_entry(entry, &ctx->entries, list) {
 		if (!entry->rule || entry->rule->level == RULE_INFO)
 			continue;
@@ -273,14 +270,15 @@ static void analy_diag_handle(analy_ctx_t *ctx)
 		if (entry->extinfo)
 			pr_info("%s\n", entry->extinfo);
 
-		if (rule->adv)
-			pr_info("    "PFMT_EMPH"fix advice"PFMT_END":\n\t%s\n",
-				rule->adv);
+		if (rule->adv) {
+			pr_info_color("    fix advice:\n\t");
+			pr_info("%s\n", rule->adv);
+		}
 		pr_info("\n");
 	}
 
 	if ((ctx->status & ANALY_CTX_ERROR) && !trace_ctx.args.intel_keep) {
-		pr_info(PFMT_EMPH"analysis finished!"PFMT_END"\n");
+		pr_info_color("analysis finished!");
 		trace_stop();
 	} else if (!rule) {
 		pr_info("this is a good packet!\n");
@@ -310,8 +308,7 @@ void analy_ctx_output(analy_ctx_t *ctx)
 		sprintf_end(keys, ",%08x", fake->key);
 
 	keys[0] = ' ';
-	pr_info("*****************"PFMT_EMPH"%s "PFMT_END"***************\n",
-		keys);
+	pr_info_color("*****************%s ***************\n", keys);
 	head = &ctx->entries;
 	list_for_each_entry(entry, head, list) {
 		analy_entry_output(entry, prev);
@@ -826,10 +823,9 @@ DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_ALL_MASK | TRACE_MODE_TINY_MASK)
 
 	info = malloc(1024);
 	if (trace_ctx.drop_reason)
-		sprintf(info, PFMT_EMPH_STR(" *reason: %s, %s*"), reason_str,
-			sym_str);
+		sprintf_color(info, " *reason: %s, %s*", reason_str, sym_str);
 	else
-		sprintf(info, PFMT_EMPH_STR(" *%s*"), sym_str);
+		sprintf_color(info, " *%s*", sym_str);
 	entry_set_msg(e, info);
 
 	rule_run_any(e, trace);
@@ -838,10 +834,11 @@ DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_ALL_MASK | TRACE_MODE_TINY_MASK)
 
 	/* generate the information in the analysis result part */
 	info = malloc(1024);
-	sprintf(info, PFMT_EMPH_STR("    location")":\n\t%s", sym_str);
+	sprintf_color(info, "    location");
+	sprintf_end(info, ":\n\t%s", sym_str);
 	if (trace_ctx.drop_reason) {
-		sprintf_end(info, PFMT_EMPH_STR("\n    drop reason")":\n\t%s",
-			    reason_str);
+		sprintf_end_color(info, "\n    drop reason");
+		sprintf_end(info, ":\n\t%s", reason_str);
 	}
 	entry_set_extinfo(e, info);
 out:
@@ -868,9 +865,9 @@ DEFINE_ANALYZER_ENTRY(reset, TRACE_MODE_ALL_MASK | TRACE_MODE_TINY_MASK)
 	info = malloc(1024);
 	state_str = get_tcp_state_str(state);
 	if (trace_ctx.reset_reason)
-		sprintf(info, PFMT_EMPH_STR(" *reason: %s, state: %s*"), reason_str, state_str);
+		sprintf_color(info, " *reason: %s, state: %s*", reason_str, state_str);
 	else
-		sprintf(info, PFMT_EMPH_STR(" *state: %s*"), state_str);
+		sprintf_color(info, " *state: %s*", state_str);
 	entry_set_msg(e, info);
 
 	rule_run_any(e, trace);
@@ -879,10 +876,11 @@ DEFINE_ANALYZER_ENTRY(reset, TRACE_MODE_ALL_MASK | TRACE_MODE_TINY_MASK)
 
 	/* generate the information in the analysis result part */
 	info = malloc(1024);
-	sprintf(info, PFMT_EMPH_STR("    state")":\n\t%s", state_str);
+	sprintf_color(info, "    state");
+	sprintf_end(info, ":\n\t%s", state_str);
 	if (trace_ctx.drop_reason) {
-		sprintf_end(info, PFMT_EMPH_STR("\n    reset reason")":\n\t%s",
-			    reason_str);
+		sprintf_end_color(info, "\n    reset reason");
+		sprintf_end(info, ":\n\t%s", reason_str);
 	}
 	entry_set_extinfo(e, info);
 out:
@@ -978,9 +976,8 @@ DEFINE_ANALYZER_ENTRY(nf, TRACE_MODE_ALL_MASK)
 		pr_err("invalid pf=%d and hook=%d received in netfilter\n",
 		       (int)event->pf, (int)event->hook);
 	} else {
-		sprintf(msg, PFMT_EMPH_STR(" *%s in chain: %s*"),
-			pf_names[event->pf],
-			hook_names[event->pf][event->hook]);
+	sprintf_color(msg, " *%s in chain: %s*", pf_names[event->pf],
+		      hook_names[event->pf][event->hook]);
 	}
 	entry_set_msg(e, msg);
 
@@ -1018,8 +1015,8 @@ DEFINE_ANALYZER_ENTRY(iptable, TRACE_MODE_ALL_MASK)
 		chain = event->chain;
 	else
 		chain = inet_hook_names[event->hook];
-	sprintf(msg, PFMT_EMPH_STR(" *iptables table:%s, chain:%s*"),
-		event->table, chain);
+	sprintf_color(msg, " *iptables table:%s, chain:%s*",
+		      event->table, chain);
 	entry_set_msg(e, msg);
 
 	return RESULT_CONT;
@@ -1035,10 +1032,10 @@ DEFINE_ANALYZER_ENTRY(qdisc, TRACE_MODE_ALL_MASK)
 	msg[0] = '\0';
 	hz = kernel_hz();
 	hz = hz > 0 ? hz : 1;
-	sprintf(msg, PFMT_EMPH_STR(" *qdisc state: %x, flags: %x, "
-		"last-update: %llums, len: %u*"), event->state,
-		event->flags, (1000 * event->last_update) / hz,
-		event->qlen);
+	sprintf_color(msg, " *qdisc state: %x, flags: %x, "
+		      "last-update: %llums, len: %u*", event->state,
+		      event->flags, (1000 * event->last_update) / hz,
+		      event->qlen);
 	entry_set_msg(e, msg);
 
 	return RESULT_CONT;
@@ -1051,9 +1048,9 @@ DEFINE_ANALYZER_ENTRY(rtt, TRACE_MODE_ALL_MASK)
 	char *msg = malloc(1024);
 
 	msg[0] = '\0';
-	sprintf(msg, PFMT_EMPH_STR(" *rtt:%u.%03ums, rtt_min:%u.%03ums*"),
-		event->first_rtt / 1000, event->first_rtt % 1000,
-		event->last_rtt / 1000, event->last_rtt % 1000);
+	sprintf_color(msg, " *rtt:%u.%03ums, rtt_min:%u.%03ums*",
+		      event->first_rtt / 1000, event->first_rtt % 1000,
+		      event->last_rtt / 1000, event->last_rtt % 1000);
 	entry_set_msg(e, msg);
 
 	return RESULT_CONT;

@@ -134,11 +134,11 @@ def gen_rules(rules, name):
         if 'adv' in rule:
             rule_adv = rule["adv"].replace('\n', '\\n')
             rule_tmp += f'\t.adv = "{rule_adv}",\n'
-        msg = f'PFMT_EMPH"{rule["msg"]}"PFMT_END'
+        msg = f'"{rule["msg"]}"'
         if level == 'warn':
-            msg = f'PFMT_WARN"{rule["msg"]}"PFMT_END'
+            msg = f'"{rule["msg"]}"'
         elif level == 'error':
-            msg = f'PFMT_ERROR"{rule["msg"]}"PFMT_END'
+            msg = f'"{rule["msg"]}"'
         rule_tmp += f'\t.msg = {msg},\n'
         rule_name = f'rule_{name}_{index}'
         rule_str += f'rule_t {rule_name} = {{{rule_tmp}}};\n'
