@@ -15,6 +15,7 @@
 
 #include "skb_macro.h"
 #include "skb_shared.h"
+#include "shared.h"
 
 
 #define MAX_ENTRIES 256
