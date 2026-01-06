@@ -539,16 +539,14 @@ DEFINE_TP(kfree_skb, skb, kfree_skb, 0, 8)
 static inline int bpf_ipt_do_table(context_info_t *info, struct xt_table *table,
 				   u32 hook)
 {
-	char *table_name;
 	DECLARE_EVENT(nf_event_t, e)
 
 	e->hook = hook;
 	if (bpf_core_type_exists(struct xt_table))
-		table_name = _C(table, name);
+		_LC(&e->table, table, name);
 	else
-		table_name = _(table->name);
+		_L(&e->table, table->name);
 
-	bpf_probe_read(e->table, sizeof(e->table) - 1, table_name);
 	return handle_entry_output(info, e);
 }
 
