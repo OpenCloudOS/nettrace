@@ -1,7 +1,6 @@
 #define KBUILD_MODNAME ""
 
 #include "skb_parse.h"
-#include "shared.h"
 #include "core.h"
 
 #define pt_regs_param_0 PT_REGS_PARM1

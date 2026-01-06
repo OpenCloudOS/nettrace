@@ -15,6 +15,7 @@
 
 #include "skb_macro.h"
 #include "skb_shared.h"
+#include "shared.h"
 
 
 #define MAX_ENTRIES 256
@@ -66,11 +67,11 @@ const volatile bool bpf_func_exist[BPF_LOCAL_FUNC_MAX] = {0};
 #define EVENT_OUTPUT(ctx, data)					\
 	EVENT_OUTPUT_PTR(ctx, &data, sizeof(data))
 
-#define _L(dst, src) bpf_probe_read_kernel(dst, sizeof(*src), src)
+#define _L(dst, src) bpf_probe_read_kernel(dst, sizeof(*dst), src)
 #define _(src)							\
 ({								\
 	typeof(src) ____tmp;					\
-	_L(&____tmp, &src);					\
+	_L(&____tmp, &(src));					\
 	____tmp;						\
 })
 
