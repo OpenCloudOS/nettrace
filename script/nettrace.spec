@@ -4,7 +4,7 @@ Name: nettrace
 
 Version: %{VERSION}
 
-Release: 1%{?dist}
+Release: %{?dist}
 
 License: MulanPSL-2.0
 
