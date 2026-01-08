@@ -1,6 +1,6 @@
 
-export VERSION	= 1.2.11
-RELEASE		?= .tl3
+export VERSION	?= 1.2.11
+RELEASE		?= 1.tl3
 export RELEASE
 
 man-target 	:= script/zh_CN/nettrace.8
@@ -16,7 +16,7 @@ SCRIPT		= $(ROOT)/script
 export SCRIPT
 ARCH		?= $(shell uname -m)
 SOURCE_DIR	:= ~/rpmbuild/SOURCES/nettrace-${VERSION}
-PACK_TARGET 	:= nettrace-$(VERSION)-1$(RELEASE).$(ARCH)
+PACK_TARGET 	:= nettrace-$(VERSION)-$(RELEASE).$(ARCH)
 PACK_PATH	:= $(abspath $(PREFIX)/$(PACK_TARGET))
 PACK_NAME	:= $(PACK_TARGET).tar.bz2
 
@@ -57,7 +57,7 @@ pack:
 rpm:
 	@make clean
 	@rm -rf ${SOURCE_DIR} && mkdir -p ${SOURCE_DIR}
-	@cp -r * ${SOURCE_DIR}/
+	@cp -r docs src utils script Makefile common.mk README.md LICENSE ${SOURCE_DIR}/
 	@sed -i 's/%{VERSION}/$(VERSION)/' ${SOURCE_DIR}/script/nettrace.spec
 	@cd ~/rpmbuild/SOURCES/ && tar -czf nettrace-${VERSION}.tar.gz	\
 		nettrace-${VERSION}
