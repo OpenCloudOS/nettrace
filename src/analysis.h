@@ -135,6 +135,9 @@ DECLARE_ANALYZER(rtt);
 DECLARE_ANALYZER(reset);
 DECLARE_ANALYZER(default);
 
+#define pr_debug_ctx(fmt, key, ctx, args...)	\
+	pr_debug("key=%x, ctx=%llx, ctx-ref=%d, " fmt, key, PTR2X(ctx), ((ctx) ? (ctx)->refs : 0), ##args)
+
 void ctx_poll_handler(void *raw_ctx, void *data, u32 size);
 void basic_poll_handler(void *ctx, void *data, u32 size);
 void async_poll_handler(void *ctx, void *data, u32 size);
@@ -206,8 +209,12 @@ static inline void put_fake_analy_ctx(fake_analy_ctx_t *fctx)
 	fctx->refs--;
 	if (fctx->refs <= 0) {
 		put_analy_ctx(fctx->ctx);
-		/* remove from the global hash table */
+		/* remove from the global hash table, it is still in the ctx
+		 * hash table
+		 */
 		hlist_del(&fctx->hash);
+		pr_debug_ctx("fctx=%llx, fake ctx done\n", fctx->key, fctx->ctx,
+			     PTR2X(fctx));
 	}
 }
 

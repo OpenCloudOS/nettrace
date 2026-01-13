@@ -70,7 +70,8 @@ static inline fake_analy_ctx_t
 	analy_fake_ctx_add(fake);
 
 	get_fake_analy_ctx(fake);
-	pr_debug("fake ctx alloc: %llx, %x\n", PTR2X(fake), key);
+	pr_debug_ctx("fctx=%llx, fake ctx alloc\n", key, ctx, PTR2X(fake));
+
 	return fake;
 }
 
@@ -130,7 +131,10 @@ static void analy_entry_output(analy_entry_t *entry, analy_entry_t *prev)
 	trace_t *t;
 
 	t = get_trace_from_analy_entry(entry);
-	pr_debug("output entry(%llx)\n", PTR2X(entry));
+	pr_debug_ctx("fctx=%llx, entry=%llx entry output\n", entry->event->key,
+		      entry->fake_ctx ? entry->fake_ctx->ctx : NULL,
+		      PTR2X(entry->fake_ctx), PTR2X(entry));
+
 	if (e->meta == FUNC_TYPE_TINY) {
 		ts_print_ts(buf, ((tiny_event_t *)(void *)e)->ts, date);
 		sprintf_end(buf, "[%-20s]", t->name);
@@ -457,7 +461,8 @@ void ctx_poll_handler(void *raw_ctx, void *data, u32 size)
 		return;
 	}
 	e = entry->event;
-	pr_debug("create entry: %llx, %x\n", PTR2X(entry), e->key);
+	pr_debug_ctx("fctx=%llx, entry=%llx entry create\n",
+		     e->key, ctx, PTR2X(entry->fake_ctx), PTR2X(entry));
 
 	trace = get_trace_from_analy_entry(entry);
 	if (!trace) {
@@ -479,15 +484,17 @@ void ctx_poll_handler(void *raw_ctx, void *data, u32 size)
 		goto check_pending;
 
 	if (trace->status & TRACE_CFREE) {
-		pr_debug("custom free hit %s\n", trace ? trace->name : "");
+	pr_debug_ctx("fctx=%llx, custom free: %s\n",
+		      entry->event->key, entry->fake_ctx->ctx,
+		      PTR2X(entry->fake_ctx),
+		      trace ? trace->name : "");
 		put_fake_analy_ctx(fctx);
 	}
 
 	list_add_tail(&entry->list, &ctx->entries);
 check_pending:
 	if (ctx->refs <= 0) {
-		pr_debug("ctx(%llx) finished with %s\n", PTR2X(ctx),
-			 trace ? trace->name : "");
+		pr_debug_ctx("ctx finish with %s\n", e->key, ctx, trace ? trace->name : "");
 		analy_ctx_output(ctx);
 	}
 }
@@ -780,7 +787,10 @@ DEFINE_ANALYZER_EXIT(clone, TRACE_MODE_CTX_MASK | TRACE_MODE_TINY_MASK)
 		goto out;
 	}
 
-	pr_debug("clone analyzer triggered on: %llx\n", e->event->val);
+	pr_debug_ctx("fctx=%llx, new cloned key=%llx\n",
+		      e->event->key, entry->fake_ctx->ctx,
+		      PTR2X(entry->fake_ctx), e->event->val);
+
 	analy_fake_ctx_alloc((u32)e->event->val, entry->ctx);
 	if (trace_mode_diag())
 		rule_run_ret(entry, trace, 0);

@@ -192,17 +192,15 @@ tracing_analy_exit(trace_t *trace, retevent_t *event, fake_analy_ctx_t *fctx)
 		    (pos->status & ANALY_ENTRY_TO_RETURN))
 			goto found;
 	}
-	pr_debug("no entry found for exit: %s pid: %d; func: %d, ",
-		 trace->name, key, event->func);
+	pr_debug_ctx("func=%s, func-index=%d, no entry found for exit\n",
+		     key, pos->ctx, trace->name, event->func);
 	return NULL;
 found:
 	pos->priv = event->val;
 	put_fake_analy_ctx(pos->fake_ctx);
 	pos->status &= ~ANALY_ENTRY_TO_RETURN;
-	pr_debug("found exit for entry: %s(%x) pid=%d with return "
-		 "value %llx, ctx:%llx:%u\n", trace->name, pos->event->key,
-		 key, event->val, PTR2X(pos->ctx),
-		 pos->ctx->refs);
+	pr_debug_ctx("func=%s, func-index=%d, entry found for exit\n",
+		     key, pos->ctx, trace->name, event->func);
 	return pos;
 }
 
@@ -210,17 +208,15 @@ int
 tracing_analy_entry(trace_t *trace, analy_entry_t *e)
 {
 	if (!trace_is_ret(trace)) {
-		pr_debug("entry found for %s(%llx), ctx:%llx:%d\n", trace->name,
-			 (u64)e->event->key, PTR2X(e->ctx),
-			 e->ctx->refs);
+		pr_debug_ctx("func=%s, entry without return\n",
+			     e->event->key, e->ctx, trace->name);
 		return RESULT_CONT;
 	}
 
 	get_fake_analy_ctx(e->fake_ctx);
-	pr_debug("mounted entry %s(%llx) pid %d, ctx:%llx:%d\n", trace->name,
-		 (u64)e->event->key, e->event->pid, PTR2X(e->ctx),
-		 e->ctx->refs);
 	e->status |= ANALY_ENTRY_TO_RETURN;
+	pr_debug_ctx("func=%s, mount entry\n",
+		     e->event->key, e->ctx, trace->name);
 
 	return RESULT_CONT;
 }
