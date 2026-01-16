@@ -40,7 +40,9 @@ typedef struct {
 
 typedef struct fake_analy_ctx {
 	analy_ctx_t *ctx;
+	/* all fctx is added to global hash table */
 	struct hlist_node hash;
+	/* fctx is added to the corresponding ctx's list */
 	struct list_head list;
 	u32 key;
 	u16 refs;
@@ -49,8 +51,8 @@ typedef struct fake_analy_ctx {
 typedef struct {
 	/* packet that belongs to the same context */
 	struct list_head list;
-	analy_ctx_t *ctx;
 	fake_analy_ctx_t *fake_ctx;
+	analy_ctx_t *ctx;
 	event_t *event;
 	/* the first rule matched */
 	rule_t *rule;
@@ -61,15 +63,11 @@ typedef struct {
 	u64 priv;
 	u32 status;
 	u16 cpu;
-	/* this list is used for kretprobe based program */
-	struct list_head ret_list;
 } analy_entry_t;
 
 typedef struct {
-	retevent_t event;
 	analy_entry_t *entry;
-	u64	key;
-	u16	cpu;
+	retevent_t *event;
 } analy_exit_t;
 
 typedef struct {
@@ -90,11 +88,10 @@ typedef struct analyzer {
 	u32 mode;
 } analyzer_t;
 
-#define ANALY_ENTRY_RETURNED	(1 << 0)
+#define ANALY_ENTRY_TO_RETURN	(1 << 0)
 #define ANALY_ENTRY_EXTINFO	(1 << 1)
 #define ANALY_ENTRY_MSG		(1 << 2)
-#define ANALY_ENTRY_ONLIST	(1 << 3)
-#define ANALY_ENTRY_DLIST	(1 << 4)
+#define ANALY_ENTRY_MSG_CONST	(1 << 3)
 
 #define ANALYZER(name) analyzer_##name
 #define DEFINE_ANALYZER_PART(name, type, mode_mask)			\
@@ -120,7 +117,7 @@ typedef struct analyzer {
 #define DEFINE_ANALYZER_EXIT_FUNC_DEFAULT(name)				\
 DEFINE_ANALYZER_EXIT_FUNC(name)						\
 {									\
-	rule_run_ret(e->entry, trace, e->event.val);			\
+	rule_run_ret(e->entry, trace, e->event->val);			\
 	return RESULT_CONT;						\
 }
 
@@ -138,17 +135,14 @@ DECLARE_ANALYZER(rtt);
 DECLARE_ANALYZER(reset);
 DECLARE_ANALYZER(default);
 
-#define define_pure_event(type, name, data)			\
-	pure_##type *name =					\
-		(!trace_ctx.detail ? (void *)(data) +		\
-			offsetof(type, __event_filed) :		\
-			(void *)(data) +			\
-			offsetof(detail_##type, __event_filed))
+void ctx_poll_handler(void *raw_ctx, void *data, u32 size);
+void basic_poll_handler(void *ctx, void *data, u32 size);
+void async_poll_handler(void *ctx, void *data, u32 size);
+void latency_poll_handler(void *ctx, void *data, u32 size);
 
-void ctx_poll_handler(void *raw_ctx, int cpu, void *data, u32 size);
-void basic_poll_handler(void *ctx, int cpu, void *data, u32 size);
-void async_poll_handler(void *ctx, int cpu, void *data, u32 size);
-void latency_poll_handler(void *ctx, int cpu, void *data, u32 size);
+analy_entry_t *
+tracing_analy_exit(trace_t *trace, retevent_t *event, fake_analy_ctx_t *fctx);
+int tracing_analy_entry(trace_t *trace, analy_entry_t *e);
 
 int stats_poll_handler();
 int func_stats_poll_handler();
@@ -156,11 +150,6 @@ int func_stats_poll_handler();
 static inline trace_t *get_trace_from_analy_entry(analy_entry_t *e)
 {
 	return get_trace(e->event->func);
-}
-
-static inline trace_t *get_trace_from_analy_exit(analy_exit_t *e)
-{
-	return get_trace(e->event.func);
 }
 
 static inline void get_analy_ctx(analy_ctx_t *ctx)
@@ -204,19 +193,22 @@ static inline u32 get_lifetime_ms(analy_ctx_t *ctx, bool skip_last)
 	return get_lifetime_us(ctx, skip_last) / 1000;
 }
 
-static inline void get_fake_analy_ctx(fake_analy_ctx_t *ctx)
+static inline void get_fake_analy_ctx(fake_analy_ctx_t *fctx)
 {
 	/* the case of new created fake_ctx */
-	if (!ctx->refs)
-		get_analy_ctx(ctx->ctx);
-	ctx->refs++;
+	if (!fctx->refs)
+		get_analy_ctx(fctx->ctx);
+	fctx->refs++;
 }
 
-static inline void put_fake_analy_ctx(fake_analy_ctx_t *ctx)
+static inline void put_fake_analy_ctx(fake_analy_ctx_t *fctx)
 {
-	ctx->refs--;
-	if (ctx->refs <= 0)
-		put_analy_ctx(ctx->ctx);
+	fctx->refs--;
+	if (fctx->refs <= 0) {
+		put_analy_ctx(fctx->ctx);
+		/* remove from the global hash table */
+		hlist_del(&fctx->hash);
+	}
 }
 
 static inline void entry_set_extinfo(analy_entry_t *e, char *info)
@@ -229,6 +221,12 @@ static inline void entry_set_msg(analy_entry_t *e, char *info)
 {
 	e->msg = info;
 	e->status |= ANALY_ENTRY_MSG;
+}
+
+static inline void entry_set_msg_const(analy_entry_t *e, char *info)
+{
+	e->msg = info;
+	e->status |= ANALY_ENTRY_MSG_CONST;
 }
 
 static inline analy_entry_t *analy_entry_alloc(void *data, u32 size)

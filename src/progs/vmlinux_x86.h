@@ -144672,14 +144672,14 @@ enum reg_type {
 	REG_TYPE_BASE = 2,
 };
 
-#ifndef BPF_NO_PRESERVE_ACCESS_INDEX
-#pragma clang attribute pop
-#endif
-
 struct ip_esp_hdr {
 	__be32 spi;
 	__be32 seq_no;		/* Sequence number */
 	__u8  enc_data[0];	/* Variable len but >=8. Mind the 64 bit alignment! */
 };
+
+#ifndef BPF_NO_PRESERVE_ACCESS_INDEX
+#pragma clang attribute pop
+#endif
 
 #endif /* __VMLINUX_H__ */

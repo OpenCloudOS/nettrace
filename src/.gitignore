@@ -1,3 +1,4 @@
 trace_group.c
 kprobe_trace.h
 nettrace
+progs/trace_funcs.h

@@ -32,7 +32,7 @@
 
   - dropreason.c：用于支持内核特性`skb drop reason`的用户态代码
 
-  - gen_trace.py：根据`trace.yaml`里定义的内核函数和tracepoint来生成`trace_group.c`和`kprobe_trace.h`
+  - gen_trace.py：根据`trace.yaml`里定义的内核函数和tracepoint来生成`trace_group.c`和`trace_funcs.h`
 
   - nettrace.c：nettrace主程序的入口函数，定义了命令行参数等
 
@@ -60,7 +60,7 @@
                           ╱                                     |
 trace.yaml -- gen_trace.py                                      |
                           ╲                                     |
-                            kprobe_trace.h                      |
+                            trace_funcs.h                       |
                                           ╲                     |
                                             kprobe.o → kprobe.skel.h
                                           ╱
@@ -121,14 +121,14 @@ trace.yaml -- gen_trace.py                                      |
 
 **BPF代码编写**
 
-在`progs/kprobe.c`中使用`DEFINE_KPROBE_SKB`来定义一个用来跟踪内核函数的trace，这里我们假设要跟踪的内核函数为`sch_direct_xmit`：
+在`progs/kprobe.c`中使用`DEFINE_TRACE_SKB`来定义一个用来跟踪内核函数的trace，这里我们假设要跟踪的内核函数为`sch_direct_xmit`：
 
 ```c
 
-DEFINE_KPROBE_SKB(sch_direct_xmit, 1) {
+DEFINE_TRACE_SKB(sch_direct_xmit, 1) {
 	struct Qdisc *q = info_get_arg(info, 2);
   struct netdev_queue *txq;
-  DECLARE_EVENT(qdisc_event_t, e)
+  qdisc_event_t *e = event_define(qdisc_event_t);
 
   txq = _C(q, dev_queue);
   e->state = _C(txq, state);
@@ -136,7 +136,7 @@ DEFINE_KPROBE_SKB(sch_direct_xmit, 1) {
 	return handle_entry(info, e_size);
 ```
 
-`DEFINE_KPROBE_SKB`第一个参数是内核函数名称，第二个是skb的索引。*注意*：这里的索引是从1开始的，和yaml里的不一样。`info_get_arg`用于获取内核函数的参数，第一个参数是固定的，第二个参数代表要获取内核函数参数的索引，也是从1开始的。在这个函数里面，我们就可以编写自己的BPF代码来获取数据。
+`DEFINE_TRACE_SKB`第一个参数是内核函数名称，第二个是skb的索引。*注意*：这里的索引是从1开始的，和yaml里的不一样。`info_get_arg`用于获取内核函数的参数，第一个参数是固定的，第二个参数代表要获取内核函数参数的索引，也是从1开始的。在这个函数里面，我们就可以编写自己的BPF代码来获取数据。
 
 如果当前已经定义好的事件的结构体没有能满足要求的，那还需要定义自己的用于传递给用户态的结构体。其定义在`progs/shared.h`中，定义的方式可参考其中的`qdisc_event_t`：
 
@@ -198,5 +198,4 @@ DECLARE_ANALYZER(qdisc);
     - name: sch_direct_xmit
       analyzer: qdisc
 ```
-
 

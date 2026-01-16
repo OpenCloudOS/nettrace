@@ -4,8 +4,9 @@
 #define MAX_FUNC_STACK 16
 
 #include "skb_shared.h"
-#include "kprobe_trace.h"
+#include "trace_funcs.h"
 
+/* The read only fields for BPF prog */
 typedef struct {
 	pkt_args_t pkt;
 	u32  trace_mode;
@@ -15,7 +16,6 @@ typedef struct {
 	bool drop_reason;
 	bool detail;
 	bool hooks;
-	bool ready;
 	bool stack;
 	bool tiny_output;
 	bool has_filter;
@@ -27,11 +27,15 @@ typedef struct {
 	u32  last_rtt;
 	u32  rate_limit;
 	u32  latency_min;
+	u8   trace_status[TRACE_MAX];
+} bpf_args_t;
+
+typedef struct {
 	int  __rate_limit;
 	u64  __last_update;
-	u8   trace_status[TRACE_MAX];
 	u64  event_count;
-} bpf_args_t;
+	bool ready;
+} bpf_data_t;
 
 typedef struct {
 	u16		meta;
@@ -50,11 +54,14 @@ typedef struct {
 			u32 latency;
 		};
 	};
-#ifdef __F_STACK_TRACE
 	u32		stack_id;
-#endif
 	u32		pid;
-	int		__event_filed[0];
+	/* detail fields */
+	char		task[16];
+	char		ifname[16];
+	u16		ifindex;
+	u16		cpu;
+	u32		netns;
 } event_t;
 
 typedef struct {
@@ -63,32 +70,6 @@ typedef struct {
 	u32 key;
 	u64 ts;
 } tiny_event_t;
-
-typedef struct {
-	u16		meta;
-	u16		func;
-	u32		key;
-	union {
-		packet_t	pkt;
-		sock_t		ske;
-	};
-	u64		retval;
-#ifdef __F_STACK_TRACE
-	u32		stack_id;
-#endif
-	u32		pid;
-	/* fields above are exactly the same as event_t's, and the below
-	 * fields are what we need to add for detail event.
-	 */
-	char		task[16];
-	char		ifname[16];
-	u32		ifindex;
-	u32		netns;
-	int		__event_filed[0];
-} detail_event_t;
-
-typedef struct {
-} pure_event_t;
 
 enum {
 	FUNC_TYPE_FUNC,
@@ -106,66 +87,56 @@ enum {
 #define FUNC_STATUS_RET		(1 << 5)
 #define FUNC_STATUS_CFREE	(1 << 6) /* custom skb free function */
 
-#undef DEFINE_EVENT
-#define DEFINE_EVENT(name, fields...)		\
-typedef struct {				\
-	event_t event;				\
-	int __event_filed[0];			\
-	fields					\
-} name;						\
-typedef struct {				\
-	detail_event_t event;			\
-	int __event_filed[0];			\
-	fields					\
-} detail_##name;				\
-typedef struct {				\
-	fields					\
-} pure_##name;
-#define event_field(type, name) type name;
+typedef struct {
+	event_t event;
+	u64 location;
+	u32 reason;
+} drop_event_t;
 
-DEFINE_EVENT(drop_event_t,
-	event_field(u64, location)
-	event_field(u32, reason)
-)
+typedef struct {
+	event_t event;
+	unsigned char state;
+	u32 reason;
+} reset_event_t;
 
-DEFINE_EVENT(reset_event_t,
-	event_field(unsigned char, state)
-	event_field(u32, reason)
-)
+typedef struct {
+	event_t event;
+	char table[8];
+	char chain[8];
+	u8 hook;
+	u8 pf;
+} nf_event_t;
 
-DEFINE_EVENT(nf_event_t,
-	event_field(char, table[8])
-	event_field(char, chain[8])
-	event_field(u8, hook)
-	event_field(u8, pf)
-)
+typedef struct {
+	event_t event;
+	char table[8];
+	char chain[8];
+	u8 hook;
+	u8 pf;
+	u64 hooks[6];
+} nf_hooks_event_t;
 
-DEFINE_EVENT(nf_hooks_event_t,
-	event_field(char, table[8])
-	event_field(char, chain[8])
-	event_field(u8, hook)
-	event_field(u8, pf)
-	event_field(u64, hooks[6])
-)
+typedef struct {
+	event_t event;
+	u64 last_update;
+	u32 state;
+	u32 qlen;
+	u32 flags;
+} qdisc_event_t;
 
-DEFINE_EVENT(qdisc_event_t,
-	event_field(u64, last_update)
-	event_field(u32, state)
-	event_field(u32, qlen)
-	event_field(u32, flags)
-)
+typedef struct {
+	event_t event;
+	u32 first_rtt;
+	u32 last_rtt;
+} rtt_event_t;
 
-DEFINE_EVENT(rtt_event_t,
-	event_field(u32, first_rtt)
-	event_field(u32, last_rtt)
-)
+#define MAX_EVENT_SIZE sizeof(nf_hooks_event_t)
 
-#define MAX_EVENT_SIZE sizeof(detail_nf_hooks_event_t)
-
-typedef struct __attribute__((__packed__)) {
+typedef struct {
 	u16 meta;
 	u16 func;
-	u32 pid;
+	/* for now, the low 4-bytes of skb is the key */
+	u32 key;
 	u64 ts;
 	u64 val;
 } retevent_t;
@@ -235,18 +206,14 @@ typedef struct {
 #define __MACRO_CONCAT(a, b)	a##b
 #define MACRO_CONCAT(a, b)	__MACRO_CONCAT(a, b)
 
-#define TRACE_PREFIX		__trace_
-#define TRACE_RET_PREFIX	ret__trace_
+#define TRACE_PREFIX		nt__
+#define TRACE_RET_PREFIX	nt_ret__
 #define TRACE_PREFIX_LEN	MACRO_SIZE(TRACE_PREFIX)
 #define TRACE_NAME(name)	MACRO_CONCAT(TRACE_PREFIX, name)
 #define TRACE_RET_NAME(name)	MACRO_CONCAT(TRACE_RET_PREFIX, name)
 
 #if defined(__F_NO_SK_FLAGS_OFFSET) && defined(__F_SK_PRPTOCOL_LEGACY)
 #define __F_DISABLE_SOCK
-#endif
-
-#ifdef INLINE_MODE
-#define __F_INIT_EVENT
 #endif
 
 #endif

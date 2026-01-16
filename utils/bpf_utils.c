@@ -37,19 +37,19 @@ int compat_bpf_attach_kprobe(int fd, char *name, bool ret)
 		i++;
 	}
 
-	sprintf(buf, "/sys/kernel/debug/tracing/events/kprobes/%s/id",
+	sprintf(buf, "/sys/kernel/tracing/events/kprobes/%s/id",
 		target);
 
 	if (file_exist(buf))
 		goto exist;
 
-	sprintf(buf, "(echo '%c:%s %s' >> /sys/kernel/debug/tracing/kprobe_events) 2>&1",
+	sprintf(buf, "(echo '%c:%s %s' >> /sys/kernel/tracing/kprobe_events) 2>&1",
 		ret ? 'r' : 'p', target, name);
 	if (simple_exec(buf)) {
 		pr_warn("failed to create kprobe: %s\n", target);
 		return -1;
 	}
-	sprintf(buf, "/sys/kernel/debug/tracing/events/kprobes/%s/id",
+	sprintf(buf, "/sys/kernel/tracing/events/kprobes/%s/id",
 		target);
 exist:;
 	int efd = open(buf, O_RDONLY, 0);
@@ -88,7 +88,7 @@ const struct btf_type *btf_get_type(char *name)
 	int id;
 
 	if (!local_btf)
-		local_btf= btf__load_vmlinux_btf();
+		local_btf = btf__load_vmlinux_btf();
 
 	id = btf__find_by_name(local_btf, name);
 	if (id < 0)

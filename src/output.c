@@ -91,14 +91,12 @@ void ts_print_packet(char *buf, packet_t *pkt, char *minfo,
 			BUF_FMT("ARP: who has %s, tell %s", daddr, saddr);
 		}
 		return;
-#ifndef NT_DISABLE_IPV6
 	case ETH_P_IPV6:
 		inet_ntop(AF_INET6, (void *)pkt->l3.ipv6.saddr, saddr,
 			  sizeof(saddr));
 		inet_ntop(AF_INET6, (void *)pkt->l3.ipv6.daddr, daddr,
 			  sizeof(daddr));
 		break;
-#endif
 	default:
 		BUF_FMT("ether protocol: 0x%04x", pkt->proto_l3);
 		return;

@@ -1,180 +1,751 @@
 #define KBUILD_MODNAME ""
-#define __PROG_TYPE_TRACING 1
+#include "vmlinux.h"
 
-#include <kheaders.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
 #include <bpf/bpf_tracing.h>
 
+#include "skb_parse.h"
 #include "shared.h"
+#include "tracing.h"
+#include "trace_define.h"
 
-#include "kprobe_trace.h"
-#include "core.h"
+#ifdef KERN_VER
+__u32 kern_ver SEC("version") = KERN_VER;
+#endif
 
-#define ctx_get_arg(ctx, index) (void *)((unsigned long long *)ctx)[index]
-#define info_get_arg(info, index) ctx_get_arg(info->ctx, index)
+struct {
+	__uint(type, BPF_MAP_TYPE_LRU_HASH);
+	__uint(key_size, sizeof(u64));
+	__uint(value_size, sizeof(int));
+	__uint(max_entries, 1024);
+} m_ret SEC(".maps");
 
-#define DECLARE_FAKE_FUNC(name)					\
-	static __always_inline int name(context_info_t *info)
+struct {
+	__uint(type, BPF_MAP_TYPE_STACK_TRACE);
+	__uint(max_entries, 16384);
+	__uint(key_size, sizeof(__u32));
+	__uint(value_size, sizeof(stack_trace_t));
+} m_stack SEC(".maps");
 
-/* one trace may have more than one implement */
-#define __DEFINE_KPROBE_INIT(name, target, acount, info_init...) \
-	DECLARE_FAKE_FUNC(fake__##name);			\
-	SEC("fexit/"#target)					\
-	int TRACE_RET_NAME(name)(void **ctx)			\
-	{							\
-		context_info_t info;				\
-		u64 __retval = 0;				\
-		if (pre_handle_exit(ctx, INDEX_##name, &__retval, acount)) \
-			return 0;				\
-		info = (context_info_t) {0};			\
-		/* initialize info only after the check pass */	\
-		info = (context_info_t) {			\
-			.func = INDEX_##name,			\
-			.ctx = ctx,				\
-			.args = (void *)CONFIG(),		\
-			.retval = __retval,			\
-			info_init				\
-		};						\
-		if (pre_handle_entry(&info, INDEX_##name))	\
-			return 0;				\
-		handle_entry_finish(&info, fake__##name(&info));\
-		return 0;					\
-	}							\
-	SEC("fentry/"#target)					\
-	int TRACE_NAME(name)(void **ctx)			\
-	{							\
-		context_info_t info = {				\
-			.func = INDEX_##name,			\
-			.ctx = ctx,				\
-			.args = (void *)CONFIG(),		\
-			info_init				\
-		};						\
-		if (pre_handle_entry(&info, INDEX_##name))	\
-			return 0;				\
-		handle_entry_finish(&info, fake__##name(&info));\
-		return 0;					\
-	}							\
-	DECLARE_FAKE_FUNC(fake__##name)
+struct {
+	__uint(type, BPF_MAP_TYPE_LRU_HASH);
+	__uint(max_entries, 102400);
+	__uint(key_size, sizeof(u64));
+	__uint(value_size, sizeof(match_val_t));
+} m_matched SEC(".maps");
 
-/* expand name and target sufficiently */
-#define DEFINE_KPROBE_INIT(name, target, acount, info_init...)	\
-	__DEFINE_KPROBE_INIT(name, target, acount, info_init)
-
-#define __KPROBE_DEFAULT(name, skb_index, sk_index, acount)	\
-	DEFINE_KPROBE_INIT(name, name, acount,			\
-		.skb = nt_ternary_take(skb_index,		\
-				       ctx_get_arg(ctx, skb_index),\
-				       NULL),			\
-		.sk = nt_ternary_take(sk_index,			\
-				      ctx_get_arg(ctx, sk_index),\
-				      NULL))			\
-	{							\
-		return default_handle_entry(info);		\
-	}
-#define KPROBE_DUMMY(name, skb_index, sk_index, acount)
-
-/* for now, only generate BPF program for monitor case */
-#define KPROBE_DEFAULT(name, skb_index, sk_index, acount)	\
-	nt_ternary_take(acount, __KPROBE_DEFAULT,		\
-		KPROBE_DUMMY)(name, skb_index, sk_index, acount)
-
-#define DEFINE_TP_INIT(name, cata, tp, info_init...)		\
-	DECLARE_FAKE_FUNC(fake__##name);			\
-	SEC("tp_btf/"#tp)					\
-	int TRACE_NAME(name)(void **ctx) {			\
-		context_info_t info = {				\
-			.func = INDEX_##name,			\
-			.ctx = ctx,				\
-			.args = (void *)CONFIG(),		\
-			info_init				\
-		};						\
-		if (pre_handle_entry(&info, INDEX_##name))	\
-			return 0;				\
-		handle_entry_finish(&info, fake__##name(&info));\
-		return 0;					\
-	}							\
-	DECLARE_FAKE_FUNC(fake__##name)
-#define DEFINE_TP(name, cata, tp, skb_index, offset)		\
-	DEFINE_TP_INIT(name, cata, tp,				\
-		       .skb = ctx_get_arg(ctx, skb_index))
-#define TP_DEFAULT(name, cata, tp, skb_index, offset)		\
-	DEFINE_TP(name, cata, tp, skb_index, offset)		\
-	{							\
-		return default_handle_entry(info);		\
-	}
-#define FNC(name)
-
-static __always_inline int pre_handle_exit(void *ctx, int func_index,
-					   u64 *retval,
-					   int arg_count);
-static inline int default_handle_entry(context_info_t *info);
-/* we don't need to get/put kernel function to pair the entry and exit in
- * TRACING program.
- */
-#define get_ret(func)
-
-#include "core.c"
+struct {
+	__uint(type, BPF_MAP_TYPE_RINGBUF);
+	__uint(max_entries, 1 << 12);
+} m_ringbuf SEC(".maps");
 
 rules_ret_t rules_all[TRACE_MAX];
+__u64 m_stats[512];
 
-static __always_inline int pre_handle_exit(void *ctx, int func_index,
-					   u64 *retval,
-					   int arg_count)
+/* allocate event data */
+#define event_define(type) ({						\
+	type *___tmp = bpf_ringbuf_reserve(&m_ringbuf, sizeof(type), 0);\
+	if (!___tmp) return -1;						\
+	___tmp;								\
+})
+#define event_output(e) bpf_ringbuf_submit(e, 0)
+#define event_discard(e) bpf_ringbuf_discard(e, 0)
+
+static inline void try_trace_stack(context_info_t *info, u32 *stack_id)
 {
-	int i, expected, ret;
-	rules_ret_t *rules;
-	bool hit = false;
-	void *ret_ptr;
+	if (m_config.stack && (info->func_status & FUNC_STATUS_STACK))
+		*stack_id = bpf_get_stackid(info->ctx, &m_stack, 0);
+}
 
-	/* this can't happen */
-	if (func_index >= TRACE_MAX)
-		goto no_match;
+static __always_inline int check_rate_limit()
+{
+	u64 last_ts = m_data.__last_update, ts = 0;
+	int budget = m_data.__rate_limit;
+	int limit = m_config.rate_limit;
 
-	rules = &rules_all[func_index];
-	if (!rules)
-		goto no_match;
+	if (!limit)
+		return 0;
 
-	*retval = 0;
-	if (bpf_core_helper_exist(get_func_ret)) {
-		bpf_get_func_ret(ctx, retval);
-	} else {
-		if (!arg_count)
-			goto no_match;
-		ret_ptr = ctx + arg_count * 8;
-		bpf_probe_read_kernel(retval, sizeof(u64), ret_ptr);
+	if (!last_ts) {
+		last_ts = bpf_ktime_get_ns();
+		m_data.__last_update = last_ts;
 	}
 
-	ret = (int)*retval;
-	pr_bpf_debug("func=%d retval=%d\n", func_index, ret);
-	for (i = 0; i < MAX_RULE_COUNT; i++) {
-		expected = rules->expected[i];
-		switch (rules->op[i]) {
-		case RULE_RETURN_ANY:
-			hit = true;
-			break;
-		case RULE_RETURN_EQ:
-			hit = expected == ret;
-			break;
-		case RULE_RETURN_LT:
-			hit = expected < ret;
-			break;
-		case RULE_RETURN_GT:
-			hit = expected > ret;
-			break;
-		case RULE_RETURN_NE:
-			hit = expected != ret;
-			break;
-		default:
-			goto no_match;
-		}
-		if (hit)
-			break;
+	if (budget <= 0) {
+		ts = bpf_ktime_get_ns();
+		budget = (((ts - last_ts) / 1000000) * limit) / 1000;
+		budget = budget < limit ? budget : limit;
+		if (budget <= 0)
+			return -1;
+		m_data.__last_update = ts;
 	}
 
-	if (!hit)
-		goto no_match;
+	budget--;
+	m_data.__rate_limit = budget;
+
 	return 0;
-no_match:
+}
+
+static inline void handle_tiny_output(context_info_t *info)
+{
+	tiny_event_t *e = bpf_ringbuf_reserve(&m_ringbuf, sizeof(tiny_event_t), 0);
+	
+	*e = (tiny_event_t) {
+		.func = info->func,
+		.meta = FUNC_TYPE_TINY,
+		.key = (u32)(u64)_P(info->skb),
+		.ts = bpf_ktime_get_ns(),
+	};
+	event_output(e);
+}
+
+static inline bool mode_has_context(void)
+{
+	return m_config.trace_mode & TRACE_MODE_BPF_CTX_MASK;
+}
+
+static __always_inline u8 get_func_status(u16 func)
+{
+	if (func >= TRACE_MAX)
+		return 0;
+
+	return m_config.trace_status[func];
+}
+
+static inline bool func_is_free(u8 status)
+{
+	return status & (FUNC_STATUS_FREE | FUNC_STATUS_CFREE);
+}
+
+static inline bool func_is_cfree(u8 status)
+{
+	return status & FUNC_STATUS_CFREE;
+}
+
+static inline void consume_map_ctx(u64 *key)
+{
+	bpf_map_delete_elem(&m_matched, key);
+	m_data.event_count++;
+}
+
+static inline void free_map_ctx(u64 *key)
+{
+	bpf_printk("free_map_ctx: skb=%lx\n", *key);
+	bpf_map_delete_elem(&m_matched, key);
+}
+
+static inline void init_ctx_match(u64 *key, u16 func, bool ts)
+{
+	match_val_t matched = {
+		.ts1 = ts ? bpf_ktime_get_ns() / 1000 : 0,
+		.func1 = func,
+	};
+
+	bpf_printk("init_ctx_match: skb=%lx\n", *key);
+	bpf_map_update_elem(&m_matched, key, &matched, 0);
+}
+
+static __always_inline void update_stats_key(u32 key)
+{
+	m_stats[key]++;
+}
+
+static __always_inline void update_stats_log(u32 val)
+{
+	u32 key = 0, i = 0, tmp = 2;
+
+	#pragma clang loop unroll_count(LAST_STATS_BUCKET)
+	for (; i < LAST_STATS_BUCKET; i++) {
+		if (val < tmp)
+			break;
+		tmp <<= 1;
+		key++;
+	}
+
+	update_stats_key(key);
+}
+
+static inline int pre_tiny_output(context_info_t *info)
+{
+	handle_tiny_output(info);
+	if (func_is_free(info->func_status))
+		consume_map_ctx((void *)&info->skb);
+	return 1;
+}
+
+static inline int pre_handle_latency(context_info_t *info,
+				     match_val_t *match_val)
+{
+	u32 delta;
+
+	if (match_val) {
+		if (m_config.latency_free || !func_is_free(info->func_status) ||
+		    func_is_cfree(info->func_status)) {
+			match_val->ts2 = bpf_ktime_get_ns() / 1000;
+			match_val->func2 = info->func;
+		}
+
+		/* reentry the matcher, or the free of skb is not traced. */
+		if (info->func_status & FUNC_STATUS_MATCHER &&
+		    match_val->func1 == info->func)
+			match_val->ts1 = bpf_ktime_get_ns() / 1000;
+
+		if (func_is_free(info->func_status)) {
+			delta = match_val->ts2 - match_val->ts1;
+			/* skip a single match function */
+			if (!match_val->func2 || delta < m_config.latency_min) {
+				free_map_ctx((void *)&info->skb);
+				return 1;
+			}
+			if (m_config.latency_summary) {
+				update_stats_log(delta);
+				consume_map_ctx((void *)&info->skb);
+				return 1;
+			}
+			info->match_val = *match_val;
+			return 0;
+		}
+		return 1;
+	} else {
+		/* skip single free function for latency total mode */
+		if (func_is_free(info->func_status))
+			return 1;
+		/* if there isn't any filter, skip handle_entry() */
+		if (!m_config.has_filter) {
+			init_ctx_match((void *)&info->skb, info->func, true);
+			return 1;
+		}
+	}
+	info->no_event = true;
+	return 0;
+}
+
+static inline bool trace_mode_latency(void)
+{
+	return m_config.trace_mode & TRACE_MODE_LATENCY_MASK;
+}
+
+/* return value:
+ *   -1: invalid and return
+ *    0: valid and continue
+ *    1: valid and return
+ */
+static inline int pre_handle_entry(context_info_t *info, u16 func)
+{
+	int ret = 0;
+
+	if (!m_data.ready || check_rate_limit())
+		return -1;
+
+	if (m_config.max_event && m_data.event_count >= m_config.max_event)
+		return -1;
+
+	info->func_status = get_func_status(func);
+	if (mode_has_context()) {
+		match_val_t *match_val = bpf_map_lookup_elem(&m_matched,
+							     &info->skb);
+
+		if (!match_val) {
+			/* skip no-matcher function in match mode if it is not
+			 * matched.
+			 */
+			if (m_config.match_mode &&
+			    !(info->func_status & FUNC_STATUS_MATCHER))
+				return -1;
+			/* If the first function is a free, just ignore it. */
+			if (func_is_free(info->func_status))
+				return -1;
+		}
+
+		/* skip handle_entry() for tiny case */
+		if (match_val && m_config.tiny_output)
+			ret = pre_tiny_output(info);
+		else if (trace_mode_latency())
+			ret = pre_handle_latency(info, match_val);
+		else if (match_val)
+			info->match_val = *match_val;
+	}
+
+	if (m_config.func_stats) {
+		if (ret) {
+			update_stats_key(func);
+		} else if (!m_config.has_filter) {
+			update_stats_key(func);
+			m_data.event_count++;
+			ret = 1;
+		} else {
+			info->no_event = true;
+		}
+	}
+
+	return ret;
+}
+
+/* err:
+ *   -1: not match
+ *    0: match
+ *    1: match and no output
+ */
+static inline void handle_entry_finish(context_info_t *info, int err)
+{
+	if (err < 0)
+		return;
+
+	if (mode_has_context()) {
+		if (func_is_free(info->func_status)) {
+			if (info->matched)
+				consume_map_ctx((void *)&info->skb);
+		} else if (!info->matched) {
+			init_ctx_match((void *)&info->skb, info->func,
+				       trace_mode_latency());
+		}
+	} else {
+		m_data.event_count++;
+	}
+
+	if (m_config.func_stats)
+		update_stats_key(info->func);
+}
+
+static inline void try_set_latency(event_t *e, match_val_t *val)
+{
+	if (!val->func1 || !trace_mode_latency())
+		return;
+
+	e->latency = val->ts2 - val->ts1;
+	e->latency_func1 = val->func1;
+	e->latency_func2 = val->func2;
+}
+
+/* return value:
+ *   -1: invalid
+ *    0: valid
+ *    1: valid and no output
+ */
+static int handle_entry(context_info_t *info, event_t *e)
+{
+	struct sk_buff *skb = info->skb;
+	struct net_device *dev;
+	event_t *detail;
+	bool filter = true;
+	packet_t *pkt;
+	int err;
+
+	pr_debug_skb("begin to handle, func=%d", info->func);
+	pkt = &e->pkt;
+
+	if (info->func_status & FUNC_STATUS_SK) {
+		if (!info->sk) {
+			pr_bpf_debug("no sock available, func=%d", info->func);
+			goto err;
+		}
+		err = probe_parse_sk(info->sk, &e->ske, true);
+	} else {
+		if (!skb) {
+			pr_bpf_debug("no skb available, func=%d", info->func);
+			goto err;
+		}
+		pr_bpf_debug("L4: %d\n", m_config.pkt.l4_proto);
+		filter = !info->matched;
+		err = probe_parse_skb(skb, info->sk, pkt, filter);
+	}
+
+	if (filter && err)
+		goto err;
+
+	e->pid = (u32)bpf_get_current_pid_tgid();
+	if (filter && args_check(m_config, pid, e->pid))
+		goto err;
+
+	/* latency total mode with filter condition case */
+	if (info->no_event)
+		return 1;
+
+	if (!m_config.detail)
+		goto out;
+
+	/* store more (detail) information about net or task. */
+	dev = skb->dev;
+	detail = (void *)e;
+
+	bpf_get_current_comm(detail->task, sizeof(detail->task));
+	if (dev) {
+		bpf_core_read_str(detail->ifname, sizeof(detail->ifname) - 1,
+				  &dev->name);
+		detail->ifindex = dev->ifindex;
+	} else {
+		detail->ifindex = skb->skb_iif;
+		detail->ifname[0] = '\0';
+	}
+	detail->cpu = bpf_get_smp_processor_id();
+out:
+	pr_debug_skb("pkt matched");
+	try_trace_stack(info, &e->stack_id);
+	pkt->ts = bpf_ktime_get_ns();
+	e->key = (u64)(void *)_P(skb);
+	e->func = info->func;
+
+	try_set_latency(e, &info->match_val);
+
+	return 0;
+err:
 	return -1;
 }
+
+static inline int handle_entry_output(context_info_t *info, event_t *e)
+{
+	int err = handle_entry(info, e);
+
+	if (err) {
+		event_discard(e);
+		return err;
+	}
+
+	event_output(e);
+	return 0;
+}
+
+static inline int default_handle_entry(context_info_t *info)
+{
+	event_t *e = event_define(event_t);
+
+	return handle_entry_output(info, e);
+}
+
+static __always_inline int handle_exit(context_info_t *info, int func_index)
+{
+	match_val_t *match_val;
+	retevent_t *e;
+
+	match_val = bpf_map_lookup_elem(&m_matched, &info->skb);
+	if (!match_val || !match_val->func1)
+		return -1;
+
+	e = event_define(retevent_t);
+
+	bpf_get_func_ret(info->ctx, &e->val);
+	if (func_index == INDEX_skb_clone && e->val)
+		init_ctx_match((void *)&e->val, func_index, false);
+
+	/* TODO: convert to direct read */
+	e->key = (u64)(void *)_P(info->skb);
+	e->func = func_index;
+	e->ts = bpf_ktime_get_ns();
+	e->meta = FUNC_TYPE_RET;
+	event_output(e);
+
+	return 1;
+}
+
+
+/**********************************************************************
+ * 
+ * Following is the definntion of all kind of BPF program.
+ * 
+ * DEFINE_ALL_TRACES() will define all the default implement of BPF
+ * program, and the customize handle of kernel function or tracepoint
+ * is defined following.
+ * 
+ **********************************************************************/
+
+#define FNC(name)
+DEFINE_ALL_TRACES(TRACE_DEFAULT, TP_DEFAULT, FNC)
+
+static void on_skb_free(context_info_t *info)
+{
+	consume_map_ctx((void *)&info->skb);
+}
+
+DEFINE_TP(kfree_skb, skb, kfree_skb, 0)
+{
+	drop_event_t *e;
+	u64 reason = 0;
+	int err;
+
+	if (bpf_core_type_exists(enum skb_drop_reason)) {
+		int offset = bpf_core_field_offset(struct trace_event_raw_kfree_skb, reason);
+
+		offset  = (offset - 1) / 8;
+		_LP(&reason, ((u64 *)info->ctx) + offset);
+	}
+
+	e = event_define(drop_event_t);
+	err = handle_entry(info, (event_t *)e);
+
+	if (err) {
+		event_discard(e);
+		return err;
+	}
+
+	e->location = (u64)info_get_arg(info, 1);
+	e->reason = reason;
+
+	event_output(e);
+	return 0;
+}
+
+static inline int bpf_ipt_do_table(context_info_t *info, struct xt_table *table,
+				   struct nf_hook_state *state)
+{
+	nf_event_t *e = event_define(nf_event_t);
+
+	e->hook = state->hook;
+	e->pf = state->pf;
+
+	e->chain[0] = '\0';
+	if (bpf_core_type_exists(struct xt_table)) {
+		bpf_probe_read_kernel_str(e->table, sizeof(e->table) - 1,
+					  table->name);
+	} else {
+		e->table[0] = '\0';
+	}
+
+	return handle_entry_output(info, (event_t *)e);
+}
+
+DEFINE_TRACE_INIT(ipt_do_table_legacy, ipt_do_table, .skb = ctx_get_arg(ctx, 0))
+{
+	struct nf_hook_state *state = info_get_arg(info, 1);
+	struct xt_table *table = info_get_arg(info, 2);
+
+	return bpf_ipt_do_table(info, table, state);
+}
+
+DEFINE_TRACE_SKB(ipt_do_table, 1)
+{
+	struct nf_hook_state *state = info_get_arg(info, 2);
+	struct xt_table *table = info_get_arg(info, 0);
+
+	return bpf_ipt_do_table(info, table, state);
+}
+
+DEFINE_TRACE_INIT(vlan_do_receive, vlan_do_receive,
+		  .skb = *(struct sk_buff **)ctx_get_arg(ctx, 0))
+{
+	return default_handle_entry(info);
+}
+
+DEFINE_TRACE_SKB(nf_hook_slow, 0)
+{	
+	struct nf_hook_entries *entries;
+	nf_hooks_event_t *hooks_event;
+	struct nf_hook_state *state;
+	int num, i, err;
+	nf_event_t *e;
+
+	state = info_get_arg(info, 1);
+	if (!m_config.hooks) {
+		e = event_define(nf_event_t);
+
+		err = handle_entry(info, (event_t *)e);
+		if (err) {
+			event_discard(e);
+			return err;
+		}
+
+		e->hook = state->hook;
+		e->pf = state->pf;
+		event_output(e);
+		return 0;
+	}
+
+	hooks_event = event_define(nf_hooks_event_t);
+	err = handle_entry(info, (event_t *)hooks_event);
+	if (err) {
+		event_discard(hooks_event);
+		return err;
+	}
+
+	hooks_event->hook = state->hook;
+	hooks_event->pf = state->pf;
+	entries = info_get_arg(info, 2);
+	num = _P(entries->num_hook_entries);
+
+	for (i = 0; i < 6 && i < num; i++)
+		_LP(hooks_event->hooks + i, &entries->hooks[i].hook);
+	event_output(hooks_event);
+
+	return 0;
+}
+
+static __always_inline int
+bpf_qdisc_handle(context_info_t *info, struct Qdisc *q)
+{
+	qdisc_event_t *e = event_define(qdisc_event_t);
+	struct netdev_queue *txq;
+	unsigned long start;
+
+	txq = q->dev_queue;
+
+	if (bpf_core_helper_exist(jiffies64)) {
+		start = txq->trans_start;
+		if (start)
+			e->last_update = bpf_jiffies64() - start;
+	}
+
+	e->qlen = q->q.qlen;
+	e->state = txq->state;
+	e->flags = q->flags;
+
+	return handle_entry_output(info, (event_t *)e);
+}
+
+DEFINE_TP(qdisc_dequeue, qdisc, qdisc_dequeue, 3)
+{
+	struct Qdisc *q = info_get_arg(info, 0);
+	return bpf_qdisc_handle(info, q);
+}
+
+DEFINE_TP(qdisc_enqueue, qdisc, qdisc_enqueue, 2)
+{
+	struct Qdisc *q = info_get_arg(info, 0);
+	return bpf_qdisc_handle(info, q);
+}
+
+#if !defined(NT_DISABLE_NFT)
+
+/* use the 'ignored suffix rule' feature of CO-RE, as described in:
+ * https://nakryiko.com/posts/bpf-core-reference-guide/#handling-incompatible-field-and-type-changes
+ */
+struct nft_pktinfo___new {
+	struct sk_buff			*skb;
+	const struct nf_hook_state	*state;
+	u8				flags;
+	u8				tprot;
+	u16				fragoff;
+	u16				thoff;
+	u16				inneroff;
+};
+
+struct nf_conn_synproxy {
+	u32	isn;
+	u32	its;
+	u32	tsoff;
+};
+
+/**
+ * This function is used to the kernel version that don't support
+ * kernel module BTF.
+ */
+DEFINE_TRACE_INIT(nft_do_chain, nft_do_chain,
+		  .skb = ((struct nft_pktinfo *)ctx_get_arg(ctx, 0))->skb)
+{
+	nf_event_t *e = event_define(nf_event_t);
+	int err;
+
+	err = handle_entry(info, (event_t *)e);
+	if (err) {
+		event_discard(e);
+		return err;
+	}
+
+	if (bpf_core_type_exists(struct nft_chain)) {
+		struct nft_chain *chain = info_get_arg(info, 1);
+
+		_LP(e->table, &(_P(chain->table)->name));
+		_LP(e->chain, &chain->name);
+	}
+
+	event_output(e);
+	return 0;
+}
+#endif
+
+DEFINE_TRACE_INIT(tcp_v4_send_reset, tcp_v4_send_reset,
+		  .sk = ctx_get_arg(ctx, 0),
+		  .skb = ctx_get_arg(ctx, 1))
+{
+	struct sock_common *skc_common;
+	reset_event_t *e;
+
+	skc_common = bpf_core_cast(info->sk, struct sock_common);
+	e = event_define(reset_event_t);
+	e->state = skc_common->skc_state;
+	e->reason = (u64)info_get_arg(info, 2);
+
+	return handle_entry_output(info, (event_t *)e);
+}
+
+DEFINE_TRACE_INIT(tcp_v6_send_reset, tcp_v6_send_reset,
+		   .sk = ctx_get_arg(ctx, 0),
+ 		   .skb = ctx_get_arg(ctx, 1))
+{
+	struct sock_common *skc_common;
+	reset_event_t *e;
+
+	skc_common = bpf_core_cast(info->sk, struct sock_common);
+	e = event_define(reset_event_t);
+	e->state = skc_common->skc_state;
+	e->reason = (u64)info_get_arg(info, 2);
+
+	return handle_entry_output(info, (event_t *)e);
+}
+
+DEFINE_TRACE_INIT(tcp_send_active_reset, tcp_send_active_reset,
+		   .sk = ctx_get_arg(ctx, 0))
+{
+	struct sock_common *skc_common;
+	reset_event_t *e;
+
+	skc_common = bpf_core_cast(info->sk, struct sock_common);
+	e = event_define(reset_event_t);
+	e->state = skc_common->skc_state;
+	e->reason = (u64)info_get_arg(info, 2);
+
+	return handle_entry_output(info, (event_t *)e);
+}
+
+/*******************************************************************
+ * 
+ * Following is socket related custom BPF program.
+ * 
+ *******************************************************************/
+
+DEFINE_TRACE_INIT(inet_listen, inet_listen,
+		   .sk = ((struct socket *)ctx_get_arg(ctx, 0))->sk)
+{
+	return default_handle_entry(info);
+}
+
+DEFINE_TRACE_INIT(tcp_ack_update_rtt, tcp_ack_update_rtt,
+		   .sk = ctx_get_arg(ctx, 0))
+{
+	u64 first_rtt, last_rtt;
+	rtt_event_t *e;
+
+	first_rtt = (u64)info_get_arg(info, 2);
+	last_rtt = (u64)info_get_arg(info, 4);
+
+	if ((long)first_rtt < 0)
+		return -1;
+
+	if (first_rtt < m_config.first_rtt || last_rtt < m_config.last_rtt)
+		return -1;
+
+	if (m_config.trace_mode & TRACE_MODE_RTT_MASK &&
+	    !m_config.has_filter) {
+		update_stats_log(first_rtt);
+		return 0;
+	}
+
+	e = event_define(rtt_event_t);
+
+	if (handle_entry(info, (event_t *)e)) {
+		event_discard(e);
+		return -1;
+	}
+
+	if (m_config.trace_mode & TRACE_MODE_RTT_MASK) {
+		update_stats_log(first_rtt);
+		return 0;
+	}
+
+	e->first_rtt = first_rtt;
+	e->last_rtt = last_rtt;
+
+	event_output(e);
+	return 0;
+}
+
+char _license[] SEC("license") = "GPL";

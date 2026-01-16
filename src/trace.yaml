@@ -24,10 +24,8 @@ children:
     desc: link layer (L2) of packet in
     visual: true
     children:
-    - name: napi_gro_receive_entry
+    - name: napi_gro_receive_entry:0
       tp: net/napi_gro_receive_entry
-      skboffset: 24
-      skb: 3
     - name: dev_gro_receive:1
       rules:
       - exp: eq 4
@@ -62,7 +60,6 @@ children:
         adv: check if the target ifindex exist
     - name: __netif_receive_skb_core:0
       tp: net/netif_receive_skb
-      skboffset: 8
   - name: link-out
     desc: link layer (L2) of packet out
     visual: true
@@ -88,13 +85,11 @@ children:
     - name: qdisc_dequeue:3
       tp: qdisc/qdisc_dequeue
       custom: true
-      skboffset: 32
       analyzer: qdisc
     - &qdisc_enqueue
       name: qdisc_enqueue:2
       tp: qdisc/qdisc_enqueue
       custom: true
-      skboffset: 24
       analyzer: qdisc
   - name: ipvlan
     desc: ipvlan network interface
@@ -149,7 +144,7 @@ children:
     visual: true
     desc: vlan module
     children:
-    - vlan_do_receive:0
+    - vlan_do_receive
     - vlan_dev_hard_start_xmit:0
   - name: ovs
     visual: true
@@ -265,7 +260,7 @@ children:
     - ip_local_deliver:0
     - ip_local_deliver_finish:2
     - ip_forward:0
-    - ip_forward_finish:0
+    - ip_forward_finish:2
     - ip6_forward:0
     - ip6_rcv_finish:2
     - ip6_rcv_core:0
@@ -371,7 +366,7 @@ children:
       - exp: any
         level: info
         msg: send zero-window probe packet
-    - name: __inet_lookup_listener:2
+    - name: __inet_lookup_listener:1
       monitor: 1
       analyzer: ret
       rules:
@@ -379,7 +374,7 @@ children:
         level: warn
         msg: tcp port is not listened
         adv: check your target tcp port
-    - name: inet6_lookup_listener:2
+    - name: inet6_lookup_listener:1
       analyzer: ret
       monitor: 1
       rules:
@@ -389,7 +384,6 @@ children:
         adv: check your target tcp port
     - name: tcp_bad_csum:0
       tp: tcp/tcp_bad_csum
-      skboffset: 8
       monitor: 2
       rules:
       - exp: any
@@ -531,8 +525,7 @@ children:
   desc: skb clone and free
   visual: true
   children:
-  - name: skb_clone
-    skb: 0
+  - name: skb_clone:0
     analyzer: clone
     rules:
     - exp: any
@@ -540,7 +533,6 @@ children:
       msg: packet is cloned
   - name: consume_skb:0
     tp: skb/consume_skb
-    skboffset: 8
     analyzer: free
     rules:
     - exp: any
@@ -548,7 +540,6 @@ children:
       msg: packet is freed (normally)
   - name: kfree_skb:0
     tp: skb/kfree_skb
-    skboffset: 8
     custom: 1
     analyzer: drop
     monitor: 1

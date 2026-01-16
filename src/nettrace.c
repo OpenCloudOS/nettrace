@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MulanPSL-2.0
 
-#include <errno.h>
 #include <arpa/inet.h>
 #include <signal.h>
+#include <stdarg.h>
+#include <bpf/libbpf.h>
+#include <errno.h>
 
 #include <arg_parse.h>
 
@@ -15,9 +17,14 @@ arg_config_t config = {
 	.desc = "",
 };
 
+static int print_all_levels(enum libbpf_print_level level, const char *format, va_list args)
+{
+	return vfprintf(stdout, format, args);
+}
+
 static void do_parse_args(int argc, char *argv[])
 {
-	bool show_log = false, debug = false, version = false;
+	bool show_log = false, debug = false, version = false, libbpf_debug = false;
 	trace_args_t *trace_args = &trace_ctx.args;
 	bpf_args_t *bpf_args = &trace_ctx.bpf_args;
 	pkt_args_t *pkt_args = &bpf_args->pkt;
@@ -137,13 +144,11 @@ static void do_parse_args(int argc, char *argv[])
 			.type = OPTION_BOOL,
 			.desc = "skb drop monitor mode, for replace of 'droptrace'",
 		},
-#ifdef __F_STACK_TRACE
 		{
 			.lname = "drop-stack", .dest = &trace_args->drop_stack,
 			.type = OPTION_BOOL,
 			.desc = "print the kernel function call stack of kfree_skb",
 		},
-#endif
 		{
 			.lname = "sock", .dest = &trace_args->sock,
 			.type = OPTION_BOOL,
@@ -287,6 +292,11 @@ static void do_parse_args(int argc, char *argv[])
 			.type = OPTION_BOOL,
 			.desc = "show debug information",
 		},
+		{
+			.lname = "libbpf-debug", .dest = &libbpf_debug,
+			.type = OPTION_BOOL,
+			.desc = "show libbpf debug information",
+		},
 #ifdef BPF_DEBUG
 		{
 			.lname = "bpf-debug", .dest = &bpf_args->pkt.bpf_debug,
@@ -314,12 +324,12 @@ static void do_parse_args(int argc, char *argv[])
 	if (show_log)
 		set_log_level(1);
 
-	if (!debug) {
-		/* turn off warning of libbpf */
-		libbpf_set_print(NULL);
-	} else {
+	if (!debug && !libbpf_debug)
+		libbpf_set_print(NULL); /* turn off warning of libbpf */
+	if (libbpf_debug)
+		libbpf_set_print(print_all_levels);
+	if (debug)
 		set_log_level(2);
-	}
 
 	if (version) {
 		pr_version();
@@ -368,15 +378,13 @@ err:
 static void do_exit(int code)
 {
 	static bool is_exited = false;
-	bpf_args_t *bpf_args;
 	u64 event_count;
 
 	if (is_exited)
 		return;
 
 	is_exited = true;
-	bpf_args = get_bpf_args();
-	event_count = bpf_args->event_count;
+	event_count = get_bpf_data()->event_count;
 
 	pr_info("end trace...\n");
 	pr_debug("begin destory BPF skel...\n");

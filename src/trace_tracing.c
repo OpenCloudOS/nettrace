@@ -3,6 +3,10 @@
 
 #include "trace.h"
 #include "analysis.h"
+#include "progs/tracing.skel.h"
+#include "progs/feat_args_ext.skel.h"
+
+static struct tracing *skel;
 
 /* check whether trampoline is supported by current arch */
 static bool tracing_arch_supported()
@@ -14,14 +18,6 @@ static bool tracing_arch_supported()
 
 static bool tracing_trace_supported()
 {
-#ifdef NO_BTF
-	goto failed;
-#endif
-
-	/* for now, monitor mode only */
-	if (trace_ctx.mode != TRACE_MODE_MONITOR)
-		goto failed;
-
 	/* TRACING is not supported, skip this handle */
 	if (!libbpf_probe_bpf_prog_type(BPF_PROG_TYPE_TRACING, NULL))
 		goto failed;
@@ -36,17 +32,6 @@ failed:
 	pr_verb("TRACING is not supported, trying others\n");
 	return false;
 }
-
-#ifndef NO_BTF
-
-#include "progs/tracing.skel.h"
-#include "progs/feat_args_ext.skel.h"
-
-#define MAX_CPU_COUNT 1024
-
-trace_ops_t tracing_ops;
-
-static struct tracing *skel;
 
 static bool tracing_support_feat_args_ext()
 {
@@ -76,15 +61,6 @@ static void tracing_adjust_target()
 			trace_set_invalid_reason(trace, "BTF invalid");
 			bpf_program__set_autoload(prog, false);
 		}
-
-#if 0
-		tracing_trace_attach_manual(trace->prog, trace->name);
-		if (!trace_is_ret(trace))
-			continue;
-
-		sprintf(kret_name, "ret%s", trace->prog);
-		tracing_trace_attach_manual(kret_name, trace->name);
-#endif
 	}
 }
 
@@ -170,9 +146,8 @@ static int tracing_trace_load()
 	}
 	pr_debug("eBPF is opened successfully\n");
 
-	/* set the max entries of perf event map to current cpu count */
-	bpf_map__set_max_entries(skel->maps.m_event, get_nprocs_conf());
-	bpf_func_init(skel, BPF_PROG_TYPE_TRACING);
+	skel->rodata->m_config = trace_ctx.bpf_args;
+	skel->bss->m_data = trace_ctx.bpf_data;
 
 	trace_ctx.obj = skel->obj;
 	tracing_load_rules();
@@ -190,8 +165,6 @@ static int tracing_trace_load()
 	}
 	pr_debug("eBPF is loaded successfully\n");
 
-	bpf_set_config(skel, bss, trace_ctx.bpf_args);
-
 	return 0;
 err:
 	return -1;
@@ -204,21 +177,62 @@ void tracing_trace_close()
 	skel = NULL;
 }
 
-static analyzer_result_t
-tracing_analy_exit(trace_t *trace, analy_exit_t *e)
+analy_entry_t *
+tracing_analy_exit(trace_t *trace, retevent_t *event, fake_analy_ctx_t *fctx)
 {
+	analy_entry_t *pos = NULL;
+	u32 key = event->key;
+
+	/* the entry is added to the head, so the lastest added entry will be
+	 * matched first.
+	 */
+	list_for_each_entry(pos, &fctx->ctx->entries, list) {
+		if (pos->event->func == event->func &&
+		    pos->event->key == key &&
+		    (pos->status & ANALY_ENTRY_TO_RETURN))
+			goto found;
+	}
+	pr_debug("no entry found for exit: %s pid: %d; func: %d, ",
+		 trace->name, key, event->func);
+	return NULL;
+found:
+	pos->priv = event->val;
+	put_fake_analy_ctx(pos->fake_ctx);
+	pos->status &= ~ANALY_ENTRY_TO_RETURN;
+	pr_debug("found exit for entry: %s(%x) pid=%d with return "
+		 "value %llx, ctx:%llx:%u\n", trace->name, pos->event->key,
+		 key, event->val, PTR2X(pos->ctx),
+		 pos->ctx->refs);
+	return pos;
+}
+
+int
+tracing_analy_entry(trace_t *trace, analy_entry_t *e)
+{
+	if (!trace_is_ret(trace)) {
+		pr_debug("entry found for %s(%llx), ctx:%llx:%d\n", trace->name,
+			 (u64)e->event->key, PTR2X(e->ctx),
+			 e->ctx->refs);
+		return RESULT_CONT;
+	}
+
+	get_fake_analy_ctx(e->fake_ctx);
+	pr_debug("mounted entry %s(%llx) pid %d, ctx:%llx:%d\n", trace->name,
+		 (u64)e->event->key, e->event->pid, PTR2X(e->ctx),
+		 e->ctx->refs);
+	e->status |= ANALY_ENTRY_TO_RETURN;
+
 	return RESULT_CONT;
 }
 
-static analyzer_result_t
-tracing_analy_entry(trace_t *trace, analy_entry_t *e)
+bpf_data_t *get_bpf_data()
 {
-	return RESULT_CONT;
+	return &skel->bss->m_data;
 }
 
 static void tracing_trace_ready()
 {
-	bpf_set_config_field(skel, bss, bpf_args_t, ready, true);
+	skel->bss->m_data.ready = true;
 }
 
 static void tracing_print_stack(int key)
@@ -249,12 +263,6 @@ static void tracing_print_stack(int key)
 	pr_info("\n");
 }
 
-analyzer_t tracing_analyzer = {
-	.mode = TRACE_MODE_CTX_MASK,
-	.analy_entry = tracing_analy_entry,
-	.analy_exit = tracing_analy_exit,
-};
-
 trace_ops_t tracing_ops = {
 	.trace_attach = tracing_trace_attach,
 	.trace_load = tracing_trace_load,
@@ -262,11 +270,4 @@ trace_ops_t tracing_ops = {
 	.trace_ready = tracing_trace_ready,
 	.trace_supported = tracing_trace_supported,
 	.print_stack = tracing_print_stack,
-	.analyzer = &tracing_analyzer,
 };
-
-#else
-trace_ops_t tracing_ops = {
-	.trace_supported = tracing_trace_supported,
-};
-#endif

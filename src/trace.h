@@ -10,7 +10,7 @@
 
 #include "progs/shared.h"
 #include <bpf_utils.h>
-#include "progs/kprobe_trace.h"
+#include "progs/trace_funcs.h"
 
 enum trace_type {
 	TRACE_FUNCTION,
@@ -57,6 +57,7 @@ typedef struct trace {
 	char	*msg;
 	/* name of the eBPF program */
 	char	*prog;
+	char	*ret_prog;
 	enum trace_type type;
 	char	*cond;
 	char	*regex;
@@ -133,7 +134,7 @@ typedef struct {
 	int (*trace_load)();
 	/* load and attach the bpf program */
 	int (*trace_attach)();
-	void (*trace_poll)(void *ctx, int cpu, void *data, u32 size);
+	void (*trace_poll)(void *ctx, void *data, u32 size);
 	int (*trace_anal)(event_t *e);
 	void (*trace_close)();
 	void (*trace_ready)();
@@ -142,13 +143,13 @@ typedef struct {
 	bool (*trace_supported)();
 	void (*prepare_traces)();
 	int  (*raw_poll)();
-	struct analyzer *analyzer;
 } trace_ops_t;
 
 typedef struct {
 	trace_ops_t	*ops;
 	trace_args_t	args;
 	bpf_args_t	bpf_args;
+	bpf_data_t	bpf_data;
 	trace_mode_t	mode;
 	__u64		mode_mask;
 	bool		stop;
@@ -177,7 +178,7 @@ extern struct list_head trace_list;
 extern u32 ctx_count;
 
 #define DECLARE_TRACES(name, ...) extern trace_t trace_##name;
-DEFINE_ALL_PROBES(DECLARE_TRACES, DECLARE_TRACES, DECLARE_TRACES)
+DEFINE_ALL_TRACES(DECLARE_TRACES, DECLARE_TRACES, DECLARE_TRACES)
 
 static inline trace_t *get_trace(int index)
 {
@@ -309,6 +310,8 @@ int trace_bpf_load_and_attach();
 int trace_poll();
 bool trace_analyzer_enabled(struct analyzer *analyzer);
 int trace_pre_load();
+
 bpf_args_t *get_bpf_args();
+bpf_data_t *get_bpf_data();
 
 #endif

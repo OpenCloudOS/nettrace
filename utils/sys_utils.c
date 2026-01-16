@@ -97,6 +97,13 @@ bool debugfs_mounted()
 	return simple_exec("mount | grep debugfs") == 0;
 }
 
+char *get_tracing_path()
+{
+	if (file_exist("/sys/kernel/debug/tracing/trace"))
+		return "/sys/kernel/debug/tracing/";
+	return "/sys/kernel/tracing/";
+}
+
 int kernel_get_config(char *name, char *output)
 {
 	char tmp[128] = {};

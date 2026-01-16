@@ -20,8 +20,7 @@ trace_context_t trace_ctx = {
 };
 
 extern trace_ops_t tracing_ops;
-extern trace_ops_t probe_ops;
-trace_ops_t *trace_ops_all[] = { &tracing_ops, &probe_ops };
+trace_ops_t *trace_ops_all[] = { &tracing_ops };
 
 static bool trace_group_valid(trace_group_t *group)
 {
@@ -506,7 +505,8 @@ static int trace_prepare_args()
 		pr_err("--rate-limit can't be used in timeline(default)/diag mode\n");
 		goto err;
 	}
-	bpf_args->__rate_limit = bpf_args->rate_limit;
+
+	trace_ctx.bpf_data.__rate_limit = bpf_args->rate_limit;
 	bpf_args->has_filter = trace_has_pkt_filter();
 
 	trace_parse_traces(args->trace_exclude, 4);
@@ -653,8 +653,7 @@ static int trace_prepare_traces()
 
 		if (!trace_is_func(trace)) {
 			/* For tracepoint, check the exist of the path */
-			sprintf(name, "/sys/kernel/debug/tracing/events/%s",
-				trace->tp);
+			sprintf(name, "%s/events/%s", get_tracing_path(), trace->tp);
 			if (!file_exist(name))
 				trace_set_invalid_reason(trace, "tp not found");
 			continue;
@@ -815,7 +814,6 @@ err:
 int trace_pre_load()
 {
 	struct bpf_program *prog;
-	char kret_name[128];
 	trace_t *trace;
 	bool autoload;
 
@@ -840,10 +838,9 @@ check_ret:
 		    autoload))
 			continue;
 
-		sprintf(kret_name, "ret%s", trace->prog);
-		prog = bpf_pbn(trace_ctx.obj, kret_name);
+		prog = bpf_pbn(trace_ctx.obj, trace->ret_prog);
 		if (!prog) {
-			pr_verb("prog: %s not founded\n", kret_name);
+			pr_verb("prog: %s not founded\n", trace->ret_prog);
 			continue;
 		}
 		bpf_program__set_autoload(prog, false);
@@ -879,7 +876,7 @@ static void trace_prepare_ops()
 		trace_ctx.ops->trace_poll = basic_poll_handler;
 		break;
 	case TRACE_MODE_SOCK:
-		trace_ctx.ops->trace_poll = async_poll_handler;
+		trace_ctx.ops->trace_poll = basic_poll_handler;
 		break;
 	case TRACE_MODE_DIAG:
 	case TRACE_MODE_TIMELINE:
@@ -917,35 +914,13 @@ err:
 	return -1;
 }
 
-static void trace_on_lost(void *ctx, int cpu, __u64 cnt)
-{
-	pr_err("event losting happened, this can happen when the packets"
-	       "we trace are too many.\n"
-	       "Please add some filter argument (such as ip or port) to "
-	       "prevent this happens.\n");
-	exit(-1);
-}
-
-static inline void poll_handler_wrap(void *ctx, int cpu, void *data,
-				     u32 size)
+static inline int ringbuf_handler_wrap(void *ctx, void *data, size_t size)
 {
 	if (trace_stopped())
-		return;
+		return 0;
 
-	trace_ctx.ops->trace_poll(ctx, cpu, data, size);
-}
-
-static u8 bpf_args_buf[CONFIG_MAP_SIZE];
-bpf_args_t *get_bpf_args()
-{
-	bpf_args_t *args = (void *)bpf_args_buf;
-	int map_fd, key = 0;
-	struct bpf_map *map;
-
-	map = bpf_object__find_map_by_name(trace_ctx.obj, "m_config");
-	map_fd = bpf_map__fd(map);
-	bpf_map_lookup_elem(map_fd, &key, bpf_args_buf);
-	return args;
+	trace_ctx.ops->trace_poll(ctx, data, (u32)size);
+	return 0;
 }
 
 static int poll_timeout(int err)
@@ -954,7 +929,7 @@ static int poll_timeout(int err)
 		return 1;
 
 	if (err == 0 && trace_ctx.args.count) {
-		if (trace_ctx.args.count <= get_bpf_args()->event_count) {
+		if (trace_ctx.args.count <= get_bpf_data()->event_count) {
 			usleep(200000);
 			return 1;
 		}
@@ -966,7 +941,7 @@ static int poll_timeout(int err)
 
 int trace_poll()
 {
-	struct perf_buffer *pb;
+	struct ring_buffer *rb;
 	int err, map_fd;
 
 	if (trace_ctx.ops->raw_poll) {
@@ -974,30 +949,20 @@ int trace_poll()
 		return trace_ctx.ops->raw_poll();
 	}
 
-	map_fd = bpf_object__find_map_fd_by_name(trace_ctx.obj, "m_event");
+	map_fd = bpf_object__find_map_fd_by_name(trace_ctx.obj, "m_ringbuf");
 	if (!map_fd)
 		return -1;
 
-#if defined(LIBBPF_MAJOR_VERSION) && (LIBBPF_MAJOR_VERSION >= 1)
-	pb = perf_buffer__new(map_fd, 1024, poll_handler_wrap,
-			      trace_on_lost, NULL, NULL);
-#else
-	struct perf_buffer_opts pb_opts = {
-		.sample_cb = poll_handler_wrap,
-		.lost_cb = trace_on_lost,
-	};
+	rb = ring_buffer__new(map_fd, ringbuf_handler_wrap, NULL, NULL);
 
-	pb = perf_buffer__new(map_fd, 1024, &pb_opts);
-#endif
-
-	err = libbpf_get_error(pb);
+	err = libbpf_get_error(rb);
 	if (err) {
-		pr_err("failed to setup perf_buffer: %d\n", err);
+		pr_err("failed to setup ring_buffer: %d\n", err);
 		return err;
 	}
 
 	trace_ctx.ops->trace_ready();
-	while ((err = perf_buffer__poll(pb, 1000)) >= 0) {
+	while ((err = ring_buffer__poll(rb, 1000)) >= 0) {
 		if (poll_timeout(err))
 			break;
 	}

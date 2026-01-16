@@ -29,13 +29,13 @@ const char *level_mark[] = {
 };
 u32 ctx_count = 0;
 
-static inline struct hlist_head *get_ctx_hash_head(u64 key)
+static inline struct hlist_head *get_ctx_hash_head(u32 key)
 {
 	int index = (key >> 8) % CTX_HASH_LENGTH;
 	return &ctx_hash[index];
 }
 
-static inline fake_analy_ctx_t *analy_fake_ctx_find(u64 key)
+static inline fake_analy_ctx_t *analy_fake_ctx_find(u32 key)
 {
 	struct hlist_head *head = get_ctx_hash_head(key);
 	fake_analy_ctx_t *fake_ctx;
@@ -55,7 +55,7 @@ static inline void analy_fake_ctx_add(fake_analy_ctx_t *fake)
 }
 
 static inline fake_analy_ctx_t
-*analy_fake_ctx_alloc(u64 key, analy_ctx_t *ctx)
+*analy_fake_ctx_alloc(u32 key, analy_ctx_t *ctx)
 {
 	fake_analy_ctx_t *fake = malloc(sizeof(fake_analy_ctx_t));
 
@@ -70,18 +70,18 @@ static inline fake_analy_ctx_t
 	analy_fake_ctx_add(fake);
 
 	get_fake_analy_ctx(fake);
-	pr_debug("fake ctx alloc: %llx, %llx\n", PTR2X(fake), key);
+	pr_debug("fake ctx alloc: %llx, %x\n", PTR2X(fake), key);
 	return fake;
 }
 
-static fake_analy_ctx_t *analy_fake_ctx_fetch(u64 key)
+static fake_analy_ctx_t *analy_fake_ctx_fetch(u32 key)
 {
-	fake_analy_ctx_t *fake;
+	fake_analy_ctx_t *fctx;
 	analy_ctx_t *ctx;
 
-	fake = analy_fake_ctx_find(key);
-	if (fake)
-		return fake;
+	fctx = analy_fake_ctx_find(key);
+	if (fctx)
+		return fctx;
 
 	ctx = malloc(sizeof(analy_ctx_t));
 	if (!ctx)
@@ -92,12 +92,12 @@ static fake_analy_ctx_t *analy_fake_ctx_fetch(u64 key)
 	ctx->status = 0;
 	ctx->refs = 0;
 
-	fake = analy_fake_ctx_alloc(key, ctx);
-	if (!fake)
+	fctx = analy_fake_ctx_alloc(key, ctx);
+	if (!fctx)
 		goto err;
 	ctx_count++;
 
-	return fake;
+	return fctx;
 err:
 	free(ctx);
 	return NULL;
@@ -111,31 +111,14 @@ static inline void analy_entry_free(analy_entry_t *entry)
 	if (entry->status & ANALY_ENTRY_MSG)
 		free(entry->msg);
 
-	if (entry->status & ANALY_ENTRY_ONLIST) {
+	if (entry->status & ANALY_ENTRY_TO_RETURN) {
 		trace_t *t = get_trace_from_analy_entry(entry);
-		list_del(&entry->ret_list);
 		pr_err("entry %s is still on hash pid=%d\n", t->name,
 		       entry->event->pid);
 	}
 
-	if (entry->status & ANALY_ENTRY_DLIST)
-		free(container_of((void *)entry->event, data_list_t, data));
-	else
-		free(entry->event);
+	free(entry->event);
 	free(entry);
-}
-
-static analy_entry_t *analy_entry_from_dlist(data_list_t *dlist)
-{
-	analy_entry_t *entry = calloc(1, sizeof(*entry));
-
-	if (!entry)
-		return NULL;
-
-	entry->status |= ANALY_ENTRY_DLIST;
-	entry->event = (void *)dlist->data;
-	entry->cpu = dlist->cpu;
-	return entry;
 }
 
 static void analy_entry_output(analy_entry_t *entry, analy_entry_t *prev)
@@ -166,18 +149,12 @@ static void analy_entry_output(analy_entry_t *entry, analy_entry_t *prev)
 	}
 
 	if (trace_ctx.detail) {
-		detail_event_t *detail = (void *)e;
-		static char ifbuf[IF_NAMESIZE];
-		char *ifname = detail->ifname;
-
-		if (ifname[0] == '\0') {
-			ifname = if_indextoname(detail->ifindex, ifbuf);
-			ifname = ifname ?: "";
-		}
+		if (e->ifname[0] == '\0')
+			if_indextoname(e->ifindex, e->ifname);
 
 		sprintf(tinfo, "[%x][%-20s]%s[cpu:%-3u][%-5s][%s-%u][ns:%u] ",
-			detail->key, t->name, func_range, entry->cpu, ifname,
-			detail->task, e->pid, detail->netns);
+			e->key, t->name, func_range, e->cpu, e->ifname,
+			e->task, e->pid, e->netns);
 	} else if (trace_ctx.mode != TRACE_MODE_DROP) {
 		sprintf(tinfo, "[%-20s]%s ", t->name, func_range);
 	}
@@ -187,7 +164,8 @@ static void analy_entry_output(analy_entry_t *entry, analy_entry_t *prev)
 	else
 		ts_print_packet(buf, &e->pkt, tinfo, trace_ctx.args.date);
 
-	if ((entry->status & ANALY_ENTRY_RETURNED) && trace_ctx.args.ret)
+	if (trace_is_ret(t) && !(entry->status & ANALY_ENTRY_TO_RETURN) &&
+	    trace_ctx.args.ret)
 		sprintf_end_color(buf, " *return: %d*", (int)entry->priv);
 
 do_latency:
@@ -222,10 +200,8 @@ do_latency:
 out:
 	pr_info("%s\n", buf);
 
-#ifdef __F_STACK_TRACE
 	if (trace_is_stack(t) && e->meta != FUNC_TYPE_TINY)
 		trace_ctx.ops->print_stack(e->stack_id);
-#endif
 }
 
 static void analy_ctx_free(analy_ctx_t *ctx)
@@ -427,120 +403,55 @@ static inline void rule_run_any(analy_entry_t *entry, trace_t *trace)
 	}
 }
 
-static void analy_dlist_add(struct list_head *head, data_list_t *data)
+static int ctx_handle_ret(void *data, fake_analy_ctx_t *fctx)
 {
-	u64 ts = ((event_t *)(void *)data->data)->pkt.ts;
-	data_list_t *pos;
-
-	list_for_each_entry_reverse(pos, head, list) {
-		if (((event_t *)(void *)pos->data)->pkt.ts < ts) {
-			list_add(&data->list, &pos->list);
-			return;
-		}
-	}
-	list_add(&data->list, head);
-}
-
-static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-static bool async_thread_created;
-static pthread_t async_thread;
-static LIST_HEAD(async_list);
-typedef void (*async_cb)(data_list_t *dlist);
-static void *async_poll_thread(void *arg)
-{
-	data_list_t *dlist, *pos;
-	struct list_head head;
-	async_cb cb = arg;
-
-	while (!trace_ctx.stop) {
-		pthread_mutex_lock(&mutex);
-		INIT_LIST_HEAD(&head);
-		list_splice_init(&async_list, &head);
-		pthread_mutex_unlock(&mutex);
-
-		list_for_each_entry_safe(dlist, pos, &head, list) {
-			cb(dlist);
-		}
-		/* 0.1s */
-		usleep(100000);
-	}
-
-	return NULL;
-}
-
-void do_async_poll(int cpu, void *data, u32 size, async_cb cb)
-{
-	data_list_t *dlist;
-
-	dlist = malloc(sizeof(*dlist) + size);
-	if (!dlist) {
-		pr_err("data alloc failed\n");
-		return;
-	}
-	memcpy(dlist->data, data, size);
-	INIT_LIST_HEAD(&dlist->list);
-	dlist->cpu = cpu;
-
-	pthread_mutex_lock(&mutex);
-	/* insert the dlist to async_list in time order */
-	analy_dlist_add(&async_list, dlist);
-	pthread_mutex_unlock(&mutex);
-
-	if (!async_thread_created) {
-		pthread_create(&async_thread, NULL, async_poll_thread, cb);
-		async_thread_created = true;
-	}
-}
-
-static int ctx_handle_ret(data_list_t *dlist, analy_ctx_t **analy_ctx)
-{
-	analy_exit_t analy_exit = {
-		.event = *(retevent_t *)dlist->data,
-		.cpu = dlist->cpu,
-	};
 	analyzer_t *analyzer;
 	analy_entry_t *entry;
+	analy_exit_t e = {
+		.event = data,
+	};
 	trace_t *t;
 
-	analyzer = trace_ctx.ops->analyzer;
-	t = get_trace_from_analy_exit(&analy_exit);
-	if (analyzer->analy_exit) {
-		if (analyzer->analy_exit(t, &analy_exit))
-			return 1;
-	}
-	entry = analy_exit.entry;
+	t = get_trace(e.event->func);
+	entry = tracing_analy_exit(t, e.event, fctx);
 	if (!entry) {
-		pr_err("entry for exit not found: %llx\n",
-		       analy_exit.event.val);
-		return -1;
+		pr_err("entry for exit not found: %x\n", e.event->key);
+		return -ENOENT;
 	}
 
+	e.entry = entry;
 	analyzer = t->analyzer;
-	*analy_ctx = entry->ctx;
 	if (!analyzer || !(analyzer->mode & (1 << trace_ctx.mode)) ||
 	    !analyzer->analy_exit)
 		return 0;
 
-	analyzer->analy_exit(t, &analy_exit);
+	analyzer->analy_exit(t, &e);
 	return 0;
 }
 
-static void ctx_async_poll_cb(data_list_t *dlist)
+void ctx_poll_handler(void *raw_ctx, void *data, u32 size)
 {
-	fake_analy_ctx_t *fake;
-	analy_ctx_t *analy_ctx;
+	fake_analy_ctx_t *fctx;
 	trace_t *trace = NULL;
 	analy_entry_t *entry;
 	analyzer_t *analyzer;
-	event_t *e;
+	event_t *e = data;
+	analy_ctx_t *ctx;
 
-	if (func_get_type(dlist->data) == FUNC_TYPE_RET) {
-		if (ctx_handle_ret(dlist, &analy_ctx))
+	fctx = analy_fake_ctx_fetch(e->key);
+	if (!fctx) {
+		pr_err("analy context alloc failed\n");
+		return;
+	}
+	ctx = fctx->ctx;
+
+	if (func_get_type(data) == FUNC_TYPE_RET) {
+		if (ctx_handle_ret(data, fctx))
 			return;
 		goto check_pending;
 	}
 
-	entry = analy_entry_from_dlist(dlist);
+	entry = analy_entry_alloc(data, size);
 	if (!entry) {
 		pr_err("entry alloc failed\n");
 		return;
@@ -548,27 +459,18 @@ static void ctx_async_poll_cb(data_list_t *dlist)
 	e = entry->event;
 	pr_debug("create entry: %llx, %x\n", PTR2X(entry), e->key);
 
-	fake = analy_fake_ctx_fetch(e->key);
-	if (!fake) {
-		pr_err("analy context alloc failed\n");
-		return;
-	}
-	analy_ctx = fake->ctx;
-
 	trace = get_trace_from_analy_entry(entry);
 	if (!trace) {
 		pr_err("trace not found:%d\n", e->func);
 		free(entry);
-		put_fake_analy_ctx(fake);
+		put_fake_analy_ctx(fctx);
 		goto check_pending;
 	}
 
-	entry->ctx = analy_ctx;
-	entry->fake_ctx = fake;
+	entry->ctx = ctx;
+	entry->fake_ctx = fctx;
 
-	/* run the global analyzer */
-	analyzer = trace_ctx.ops->analyzer;
-	if (try_run_entry(trace, analyzer, entry))
+	if (tracing_analy_entry(trace, entry))
 		goto check_pending;
 
 	/* run the trace analyzer */
@@ -578,22 +480,16 @@ static void ctx_async_poll_cb(data_list_t *dlist)
 
 	if (trace->status & TRACE_CFREE) {
 		pr_debug("custom free hit %s\n", trace ? trace->name : "");
-		put_fake_analy_ctx(fake);
-		hlist_del(&fake->hash);
+		put_fake_analy_ctx(fctx);
 	}
 
-	list_add_tail(&entry->list, &analy_ctx->entries);
+	list_add_tail(&entry->list, &ctx->entries);
 check_pending:
-	if (analy_ctx->refs <= 0) {
-		pr_debug("ctx(%llx) finished with %s\n", PTR2X(analy_ctx),
+	if (ctx->refs <= 0) {
+		pr_debug("ctx(%llx) finished with %s\n", PTR2X(ctx),
 			 trace ? trace->name : "");
-		analy_ctx_output(analy_ctx);
+		analy_ctx_output(ctx);
 	}
-}
-
-void ctx_poll_handler(void *raw_ctx, int cpu, void *data, u32 size)
-{
-	do_async_poll(cpu, data, size, ctx_async_poll_cb);
 }
 
 static inline bool trace_analyse_ret(trace_t *trace)
@@ -609,42 +505,28 @@ static inline void entry_basic_poll(analy_entry_t *entry)
 	trace = get_trace_from_analy_entry(entry);
 	try_run_entry(trace, trace->analyzer, entry);
 
+	/* packet information is reported by FEXIT */
 	if (trace_analyse_ret(trace)) {
+		retevent_t rete = {
+			.val = entry->event->retval,
+		};
 		analy_exit_t analy_exit = {
-			.event = {
-				.val = entry->event->retval,
-			},
+			.event = &rete,
 			.entry = entry,
 		};
+
 		try_run_exit(trace, trace->analyzer, &analy_exit);
 	}
 
 	analy_entry_output(entry, NULL);
 }
 
-static void basic_async_poll_cb(data_list_t *dlist)
-{
-	analy_entry_t entry = {
-		.event = (void *)dlist->data,
-		.cpu = dlist->cpu,
-	};
-
-	entry_basic_poll(&entry);
-	free(dlist);
-}
-
-void basic_poll_handler(void *ctx, int cpu, void *data, u32 size)
+void basic_poll_handler(void *ctx, void *data, u32 size)
 {
 	analy_entry_t entry = {
 		.event = data,
-		.cpu = cpu
 	};
 	entry_basic_poll(&entry);
-}
-
-void async_poll_handler(void *ctx, int cpu, void *data, u32 size)
-{
-	do_async_poll(cpu, data, size, basic_async_poll_cb);
 }
 
 int stats_poll_handler()
@@ -745,11 +627,10 @@ int func_stats_poll_handler()
 	return 0;
 }
 
-void latency_poll_handler(void *ctx, int cpu, void *data, u32 size)
+void latency_poll_handler(void *ctx, void *data, u32 size)
 {
 	analy_entry_t entry = {
 		.event = data,
-		.cpu = cpu,
 	};
 	static char info[1024];
 	u32 delta;
@@ -761,15 +642,19 @@ void latency_poll_handler(void *ctx, int cpu, void *data, u32 size)
 	analy_entry_output(&entry, NULL);
 }
 
+static void on_skb_free(fake_analy_ctx_t *fctx)
+{
+	if (mode_has_context())
+		put_fake_analy_ctx(fctx);
+}
+
 DEFINE_ANALYZER_ENTRY(free, TRACE_MODE_CTX_MASK | TRACE_MODE_TINY_MASK)
 {
-	put_fake_analy_ctx(e->fake_ctx);
-	hlist_del(&e->fake_ctx->hash);
+	on_skb_free(e->fake_ctx);
 	rule_run_any(e, trace);
 
 	return RESULT_CONT;
 }
-
 enum skb_drop_reason_subsys {
 	SKB_DROP_REASON_SUBSYS_CORE,
 	SKB_DROP_REASON_SUBSYS_MAC80211_UNUSABLE,
@@ -788,16 +673,12 @@ const char *reason_subsys[] = {
 #define SKB_DROP_REASON_SUBSYS_MASK 0xffff0000
 DEFINE_ANALYZER_ENTRY(drop, TRACE_MODE_ALL_MASK | TRACE_MODE_TINY_MASK)
 {
-	define_pure_event(drop_event_t, event, e->event);
+	drop_event_t *event = (drop_event_t *)e->event;
 	char *reason_str, *sym_str, *info, __reason[32];
 	u32 reason = event->reason, subsys;
 	struct sym_result *sym;
 
-	if (mode_has_context()) {
-		put_fake_analy_ctx(e->fake_ctx);
-		hlist_del(&e->fake_ctx->hash);
-	}
-
+	on_skb_free(e->fake_ctx);
 	if (e->event->meta == FUNC_TYPE_TINY)
 		goto out;
 
@@ -847,7 +728,7 @@ out:
 
 DEFINE_ANALYZER_ENTRY(reset, TRACE_MODE_ALL_MASK | TRACE_MODE_TINY_MASK)
 {
-	define_pure_event(reset_event_t, event, e->event);
+	reset_event_t *event = (reset_event_t *)e->event;
 	char *reason_str, *info, __reason[32];
 	const char *state_str;
 	unsigned char state = event->state;
@@ -894,13 +775,13 @@ DEFINE_ANALYZER_EXIT(clone, TRACE_MODE_CTX_MASK | TRACE_MODE_TINY_MASK)
 	if (trace_ctx.args.traces_noclone)
 		return RESULT_CONT;
 
-	if (!entry || !e->event.val) {
+	if (!entry || !e->event->val) {
 		pr_err("skb clone failed\n");
 		goto out;
 	}
 
-	pr_debug("clone analyzer triggered on: %llx\n", e->event.val);
-	analy_fake_ctx_alloc(e->event.val, entry->ctx);
+	pr_debug("clone analyzer triggered on: %llx\n", e->event->val);
+	analy_fake_ctx_alloc((u32)e->event->val, entry->ctx);
 	if (trace_mode_diag())
 		rule_run_ret(entry, trace, 0);
 out:
@@ -909,7 +790,7 @@ out:
 
 DEFINE_ANALYZER_EXIT(ret, TRACE_MODE_CTX_MASK | TRACE_MODE_TINY_MASK)
 {
-	int ret = (int) e->event.val;
+	int ret = (int) e->event->val;
 
 	rule_run_ret(e->entry, trace, ret);
 	return RESULT_CONT;
@@ -966,7 +847,7 @@ const char *pf_names[] = {
 };
 DEFINE_ANALYZER_ENTRY(nf, TRACE_MODE_ALL_MASK)
 {
-	define_pure_event(nf_hooks_event_t, event, e->event);
+	nf_hooks_event_t *event = (nf_hooks_event_t *)e->event;
 	char *msg = malloc(1024), *extinfo;
 	struct sym_result *sym;
 	int i = 0;
@@ -1006,7 +887,7 @@ DEFINE_ANALYZER_EXIT_FUNC_DEFAULT(nf)
 
 DEFINE_ANALYZER_ENTRY(iptable, TRACE_MODE_ALL_MASK)
 {
-	define_pure_event(nf_event_t, event, e->event);
+	nf_event_t *event = (nf_event_t *)e->event;
 	char *msg = malloc(1024);
 	const char *chain;
 
@@ -1025,7 +906,7 @@ DEFINE_ANALYZER_EXIT_FUNC_DEFAULT(iptable)
 
 DEFINE_ANALYZER_ENTRY(qdisc, TRACE_MODE_ALL_MASK)
 {
-	define_pure_event(qdisc_event_t, event, e->event);
+	qdisc_event_t *event = (qdisc_event_t *)e->event;
 	char *msg = malloc(1024);
 	int hz;
 
@@ -1044,7 +925,7 @@ DEFINE_ANALYZER_EXIT_FUNC_DEFAULT(qdisc)
 
 DEFINE_ANALYZER_ENTRY(rtt, TRACE_MODE_ALL_MASK)
 {
-	define_pure_event(rtt_event_t, event, e->event);
+	rtt_event_t *event = (rtt_event_t *)e->event;
 	char *msg = malloc(1024);
 
 	msg[0] = '\0';

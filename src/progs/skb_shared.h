@@ -68,12 +68,10 @@ typedef struct {
 			u32	saddr;
 			u32	daddr;
 		} ipv4;
-#ifndef NT_DISABLE_IPV6
 		struct {
 			u8	saddr[16];
 			u8	daddr[16];
 		} ipv6;
-#endif
 	} l3;
 	union {
 		struct {
@@ -191,7 +189,7 @@ typedef struct {
 #endif
 } pkt_args_t;
 
-#define args_check(args, attr, value) (args->attr && args->attr != value)
+#define args_check(args, attr, value) (args.attr && args.attr != value)
 
 #define CONFIG_MAP_SIZE	1024
 

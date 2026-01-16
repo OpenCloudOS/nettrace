@@ -201,20 +201,17 @@ def gen_trace(trace, group, p_name):
     trace_name = 'trace_' + name
     trace['define_name'] = name
     probe_str = ''
-    skb_str = ''
     index_str = f'#define INDEX_{name} {global_status["trace_index"]}\n'
     rule_str = ''
     init_str = ''
     fields_str = ''
-    skb_index = 0
-    sk_index = 0
     target = trace.get('target') or trace['name']
 
     if 'tp' in trace:
         trace_type = 'TRACE_TP'
         tp = trace['tp'].split('/')
         if 'skb' in trace and 'custom' not in trace:
-            probe_str = f'\tFN_tp({name}, {tp[0]}, {tp[1]}, {trace["skb"]}, {trace["skboffset"]})\t\\\n'
+            probe_str = f'\tFN_tp({name}, {tp[0]}, {tp[1]}, {trace["skb"]})\t\\\n'
         else:
             probe_str = f'\tFNC({name})\t\\\n'
     else:
@@ -236,7 +233,7 @@ def gen_trace(trace, group, p_name):
             skb = trace['skb'] if 'skb' in trace else ''
             sk = trace['sk'] if 'sk' in trace else ''
             if 'custom' not in trace:
-                probe_str = f'\tFN({name}, {skb}, {sk}, {arg_count})\t\\\n'
+                probe_str = f'\tFN({name}, {skb}, {sk})\t\\\n'
             else:
                 probe_str = f'\tFNC({name})\t\\\n'
         else:
@@ -283,7 +280,8 @@ def gen_trace(trace, group, p_name):
 \t.desc = "{trace.get('desc') or ''}",
 \t.type = {trace_type},{analyzer}{fields_str}
 \t.index = INDEX_{name},
-\t.prog = "__trace_{name}",
+\t.prog = "nt__{name}",
+\t.ret_prog = "nt_ret__{name}",
 \t.parent = &{p_name},
 \t.rules = LIST_HEAD_INIT({trace_name}.rules),
 }};
@@ -367,12 +365,12 @@ with open('trace.yaml', 'r', encoding='utf-8') as f:
     if len(sys.argv) > 1 and sys.argv[1] == 'probe':
         print(f'''{all_index_str}
 #define TRACE_MAX {global_status['trace_index']}
-#define DEFINE_ALL_PROBES(FN, FN_tp, FNC)\t\t\\
+#define DEFINE_ALL_TRACES(FN, FN_tp, FNC)\t\t\\
 {all_probe_str}
 ''')
     else:
         print(f'''#include "trace.h"
-#include "progs/kprobe_trace.h"
+#include "progs/trace_funcs.h"
 #include "analysis.h"
 
 {all_define_str}

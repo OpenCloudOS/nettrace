@@ -1,7 +1,7 @@
 CFLAGS		+= -I./ -I$(ROOT)/shared/bpf/ -g
 BPF_CFLAGS	= $(CFLAGS) -Wno-unused-function			\
 		  -Wno-compare-distinct-pointer-types -Wuninitialized	\
-		  -D__TARGET_ARCH_$(SRCARCH) -DBPF_NO_PRESERVE_ACCESS_INDEX
+		  -D__TARGET_ARCH_$(SRCARCH)
 
 ifeq ("$(shell pkg-config --print-requires-private libelf | grep libzstd)","libzstd")
 LIBELF_ZSTD_FLAGS = -lzstd
@@ -21,70 +21,11 @@ CC		:= $(CROSS_COMPILE)gcc
 
 include $(ROOT)/script/arch.mk
 
-HEADERS		:= $(if $(KERNEL),$(KERNEL),/lib/modules/$(shell uname -r)/build/)
-NOSTDINC_FLAGS	+= -nostdinc -isystem $(shell $(CC) -print-file-name=include)
-export HEADERS
-
-USERINCLUDE	:= \
-		-I$(HEADERS)/arch/$(SRCARCH)/include/uapi \
-		-I$(HEADERS)/arch/$(SRCARCH)/include/generated/uapi \
-		-I$(HEADERS)/include/uapi \
-		-I$(HEADERS)/include/generated/uapi \
-		-include $(HEADERS)/include/linux/kconfig.h \
-		-I/usr/include/
-
-LINUXINCLUDE	:= \
-		-I$(HEADERS)/arch/$(SRCARCH)/include \
-		-I$(HEADERS)/arch/$(SRCARCH)/include/generated \
-		-I$(HEADERS)/include \
-		$(USERINCLUDE)
-
-KERNEL_CFLAGS	+= $(NOSTDINC_FLAGS) $(LINUXINCLUDE) \
-		-D__KERNEL__ -Wno-unused-value -Wno-pointer-sign \
-		-Wno-compare-distinct-pointer-types \
-		-Wno-gnu-variable-sized-type-not-at-end \
-		-Wno-address-of-packed-member -Wno-tautological-compare \
-		-Wno-unknown-warning-option -Wno-frame-address
-
-ifdef KERN_VER
-	CFLAGS		+= -DKERN_VER=$(KERN_VER)
-endif
-
-ifdef NO_GLOBAL_DATA
-	CFLAGS		+= -DBPF_NO_GLOBAL_DATA
-endif
-
-ifdef DISABLE_IPV6
-	CFLAGS		+= -DNT_DISABLE_IPV6
-endif
-
 ifdef STATIC
 	HOST_CFLAGS	+= -static
 endif
 
-ifdef NO_BTF
-ifeq ($(wildcard $(HEADERS)),)
-$(error kernel headers not exist in COMPAT mode, please install it)
-endif
-	kheaders_cmd	:= ln -s vmlinux_header.h kheaders.h
-	CFLAGS		+= -DNO_BTF
-	BPF_CFLAGS	+= $(KERNEL_CFLAGS)
-else
-	kheaders_cmd	:= ln -s ./progs/vmlinux.h kheaders.h
-	BPF_CFLAGS	+= -target bpf
-endif
-
-ifdef INLINE
-	CFLAGS		+= -DINLINE_MODE
-endif
-
-ifdef INIT
-	CFLAGS		+= -D__F_INIT_EVENT
-endif
-
-ifdef OUTPUT_WHOLE
-	CFLAGS		+= -D__F_OUTPUT_WHOLE
-endif
+BPF_CFLAGS	+= -target bpf
 
 ifndef BPFTOOL
 ifneq ("$(shell bpftool gen help 2>&1 | grep skeleton)","")
@@ -106,9 +47,6 @@ endif
 ifdef BPF_DEBUG
 	CFLAGS		+= -DBPF_DEBUG
 endif
-
-kheaders.h:
-	$(call kheaders_cmd)
 
 progs/%.o: progs/%.c $(BPF_EXTRA_DEP)
 	clang -O2 -S -Wall -fno-asynchronous-unwind-tables		\
