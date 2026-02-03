@@ -224,11 +224,7 @@ def gen_trace(trace, group, p_name):
                     arg_count = trace['arg_count']
                 else:
                     arg_count = trace['arg_count']
-                if not arg_count:
-                    print(
-                        f"BTF not found for {target}, skip monitor", file=sys.stderr)
-                    trace['monitor'] = 0
-                else:
+                if arg_count:
                     fields_str += append_trace_field('arg_count', trace, 'raw')
             skb = trace['skb'] if 'skb' in trace else ''
             sk = trace['sk'] if 'sk' in trace else ''

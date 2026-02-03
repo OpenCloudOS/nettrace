@@ -238,7 +238,6 @@ children:
       default: true
       analyzer: ret
       monitor: 1
-      arg_count: 7
       rules:
       - exp: eq 0
         level: warn
@@ -513,10 +512,8 @@ children:
       monitor: 2
     - name: tcp_rcv_spurious_retrans/0:1
       monitor: 2
-      arg_count: 2
     - name: tcp_dsack_set/0
       monitor: 2
-      arg_count: 3
       rules:
       - exp: any
         level: warn
