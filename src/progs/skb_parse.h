@@ -27,7 +27,7 @@ volatile bpf_data_t m_data;
 #define __ptr(a) ((void *)(a))
 #define __cast(a, b) (a) = bpf_core_cast(b, typeof(*(a)))
 
-#define _LP(dst, src) bpf_probe_read_kernel(dst, sizeof(*src), src)
+#define _LP(dst, src) bpf_probe_read_kernel(dst, sizeof(*dst), src)
 #define _P(src)							\
 ({								\
 	typeof(src) ____tmp;					\
