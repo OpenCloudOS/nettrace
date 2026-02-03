@@ -153,11 +153,17 @@ static void analy_entry_output(analy_entry_t *entry, analy_entry_t *prev)
 	}
 
 	if (trace_ctx.detail) {
-		if (e->ifname[0] == '\0')
-			if_indextoname(e->ifindex, e->ifname);
+		char __ifname[IFNAMSIZ], *ifname = e->ifname;
+
+		/* event can come from libbpf ringbuf directly, which is read-only */
+		if (e->ifname[0] == '\0') {
+			if (!if_indextoname(e->ifindex, __ifname))
+				__ifname[0] = '\0';
+			ifname = __ifname;
+		}
 
 		sprintf(tinfo, "[%x][%-20s]%s[cpu:%-3u][%-5s][%s-%u][ns:%u] ",
-			e->key, t->name, func_range, e->cpu, e->ifname,
+			e->key, t->name, func_range, e->cpu, ifname,
 			e->task, e->pid, e->netns);
 	} else if (trace_ctx.mode != TRACE_MODE_DROP) {
 		sprintf(tinfo, "[%-20s]%s ", t->name, func_range);
