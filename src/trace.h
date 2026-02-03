@@ -228,14 +228,13 @@ static inline bool trace_is_usable(trace_t *t)
 	return trace_is_enable(t) && !trace_is_invalid(t);
 }
 
-static inline void trace_set_status(int func, int status)
+static inline void trace_set_flag(int func, int flag)
 {
-	trace_ctx.bpf_args.trace_status[func] |= status;
+	trace_ctx.bpf_args.trace_flags[func] |= flag;
 }
 
 static inline void trace_set_ret(trace_t *t)
 {
-	trace_set_status(t->index, FUNC_STATUS_RET);
 	t->status |= TRACE_RET;
 }
 
@@ -246,6 +245,7 @@ static inline bool trace_is_ret(trace_t *t)
 
 static inline void trace_set_retonly(trace_t *t)
 {
+	trace_set_flag(t->index, FUNC_FLAG_RET_ONLY);
 	t->status |= TRACE_RET_ONLY;
 }
 
@@ -254,20 +254,19 @@ static inline bool trace_is_retonly(trace_t *t)
 	return t->status & TRACE_RET_ONLY;
 }
 
-static inline u8 trace_get_status(int func)
+static inline u8 trace_get_flags(int func)
 {
-	return trace_ctx.bpf_args.trace_status[func];
+	return trace_ctx.bpf_args.trace_flags[func];
 }
 
 static inline bool trace_using_sk(trace_t *t)
 {
-	return trace_get_status(t->index) & FUNC_STATUS_SK;
+	return trace_get_flags(t->index) & FUNC_FLAG_SK;
 }
 
 static inline int trace_set_stack(trace_t *t)
 {
-	trace_set_status(t->index, FUNC_STATUS_STACK);
-	trace_ctx.bpf_args.stack = true;
+	trace_set_flag(t->index, FUNC_FLAG_STACK);
 	t->status |= TRACE_STACK;
 	return 0;
 }

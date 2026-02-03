@@ -27,7 +27,7 @@ typedef struct {
 	u32  last_rtt;
 	u32  rate_limit;
 	u32  latency_min;
-	u8   trace_status[TRACE_MAX];
+	u8   trace_flags[TRACE_MAX];
 } bpf_args_t;
 
 typedef struct {
@@ -80,12 +80,13 @@ enum {
 };
 
 
-#define FUNC_STATUS_FREE	(1 << 0)
-#define FUNC_STATUS_SK		(1 << 1)
-#define FUNC_STATUS_MATCHER	(1 << 3)
-#define FUNC_STATUS_STACK	(1 << 4)
-#define FUNC_STATUS_RET		(1 << 5)
-#define FUNC_STATUS_CFREE	(1 << 6) /* custom skb free function */
+#define FUNC_FLAG_FREE		(1 << 0)
+#define FUNC_FLAG_SK		(1 << 1) /* parse sk instead of skb */
+#define FUNC_FLAG_MATCHER	(1 << 3)
+#define FUNC_FLAG_STACK		(1 << 4)
+#define FUNC_FLAG_RET_ONLY	(1 << 5)
+#define FUNC_FLAG_CFREE		(1 << 6) /* custom skb free function */
+#define FUNC_FLAG_RULE		(1 << 7)
 
 typedef struct {
 	event_t event;

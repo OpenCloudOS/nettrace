@@ -81,13 +81,14 @@ static void tracing_load_rules()
 		    !trace_is_ret(trace) || !trace_is_func(trace))
 			continue;
 
-		rule = &skel->bss->rules_all[trace->index];
+		rule = &skel->rodata->rules_all[trace->index];
 		i = 0;
 		list_for_each_entry(local_rule, &trace->rules, list) {
 			if (local_rule->level == RULE_INFO)
 				continue;
 			rule->expected[i] = local_rule->expected;
 			rule->op[i] = local_rule->type;
+			trace_set_flag(trace->index, FUNC_FLAG_RULE);
 			i++;
 		}
 	}
@@ -146,12 +147,12 @@ static int tracing_trace_load()
 	}
 	pr_debug("eBPF is opened successfully\n");
 
+	tracing_load_rules();
+	trace_ctx.obj = skel->obj;
+	tracing_check_args();
+
 	skel->rodata->m_config = trace_ctx.bpf_args;
 	skel->bss->m_data = trace_ctx.bpf_data;
-
-	trace_ctx.obj = skel->obj;
-	tracing_load_rules();
-	tracing_check_args();
 
 	if (trace_pre_load()) {
 		pr_err("failed to prepare load\n");

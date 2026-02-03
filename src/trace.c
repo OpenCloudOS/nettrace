@@ -20,7 +20,6 @@ trace_context_t trace_ctx = {
 };
 
 extern trace_ops_t tracing_ops;
-trace_ops_t *trace_ops_all[] = { &tracing_ops };
 
 static bool trace_group_valid(trace_group_t *group)
 {
@@ -74,18 +73,12 @@ print_trace:
 		trace = trace_list->trace;
 		status = trace->status;
 
-#if 1
 		if (trace_is_invalid(trace))
 			continue;
-#endif
 
 		buf[0] = '\0';
 		if (status & TRACE_LOADED)
 			sprintf_end(buf, ",%s", PFMT_EMPH_STR("loaded"));
-#if 0
-		if (trace_is_enable(trace))
-			sprintf_end(buf, ",%s", PFMT_EMPH_STR("enabled"));
-#endif
 		if (status & TRACE_INVALID)
 			sprintf_end(buf, ",%s", PFMT_WARN_STR("invalid"));
 
@@ -152,13 +145,13 @@ static int trace_set_target(trace_t *t, int target)
 		err = trace_set_stack(t);
 		break;
 	case 3:
-		trace_set_status(t->index, FUNC_STATUS_MATCHER);
+		trace_set_flag(t->index, FUNC_FLAG_MATCHER);
 		break;
 	case 4:
 		trace_set_invalid_reason(t, "exclude");
 		break;
 	case 5:
-		trace_set_status(t->index, FUNC_STATUS_CFREE);
+		trace_set_flag(t->index, FUNC_FLAG_CFREE);
 		t->status |= TRACE_CFREE;
 		break;
 	}
@@ -623,12 +616,12 @@ static void trace_prepare_status()
 
 	trace_for_each(trace) {
 		if (TRACE_HAS_ANALYZER(trace, free) || TRACE_HAS_ANALYZER(trace, drop))
-			trace_set_status(trace->index, FUNC_STATUS_FREE);
+			trace_set_flag(trace->index, FUNC_FLAG_FREE);
 
 		/* in the monitor mode, perfer to trace skb, then sk */
 		if (!trace->skb || (mode & (TRACE_MODE_SOCK_MASK | TRACE_MODE_RTT_MASK))) {
 			if (trace->sk)
-				trace_set_status(trace->index, FUNC_STATUS_SK);
+				trace_set_flag(trace->index, FUNC_FLAG_SK);
 		}
 	}
 }
@@ -730,22 +723,18 @@ static void trace_print_enabled()
 		if (!trace_is_usable(trace))
 			continue;
 
-		if (trace_is_func(trace)) {
-			if (trace_is_ret(trace))
-				fmt = "kprobe/kretprobe";
-			else
-				fmt = "kprobe";
-		} else {
-			fmt = "tracepoint";
-		}
+		if (trace_is_func(trace))
+			fmt = trace_is_ret(trace) ? "fexit" : "fentry";
+		else
+			fmt = "tp_btf";
 		pr_verb("\t%s: %s, prog: %s, status: 0x%x\n", fmt, trace->name,
-			trace->prog, trace_get_status(trace->index));
+			trace->prog, trace_get_flags(trace->index));
 	}
 }
 
 int trace_prepare()
 {
-	int err, i = 0;
+	int err;
 
 #ifndef NO_BTF
 	if (!file_exist("/sys/kernel/btf/vmlinux") && !trace_ctx.args.btf_path) {
@@ -770,18 +759,12 @@ int trace_prepare()
 	if (err)
 		goto err;
 
-	for (; i < ARRAY_SIZE(trace_ops_all); i++) {
-		if (trace_ops_all[i]->trace_supported()) {
-			set_trace_ops(trace_ops_all[i]);
-			break;
-		}
-	}
-
-	if (i == ARRAY_SIZE(trace_ops_all)) {
-		pr_err("no ops found!\n");
+	if (!tracing_ops.trace_supported()) {
+		pr_err("tracing (fentry/fexit) is not supported!\n");
 		err = -EINVAL;
 		goto err;
 	}
+	set_trace_ops(&tracing_ops);
 
 	err = trace_prepare_traces();
 	if (err)

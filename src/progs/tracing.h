@@ -12,11 +12,11 @@ typedef struct {
 
 typedef struct {
 	/* the bpf context args */
-	void *ctx;
+	u64 *ctx;
 	struct sk_buff *skb;
 	struct sock *sk;
 	union {
-		/* used by fexit to pass the retval to event */
+		/* used in the return only case, to pass the retval to event */
 		u64 retval;
 		/* match only used in context mode, no conflict with retval */
 		match_val_t match_val;
