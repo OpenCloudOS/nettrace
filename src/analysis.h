@@ -60,7 +60,6 @@ typedef struct {
 	char *msg;
 	/* info used in analysis context result */
 	char *extinfo;
-	u64 priv;
 	u32 status;
 	u16 cpu;
 } analy_entry_t;

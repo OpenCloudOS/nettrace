@@ -176,7 +176,7 @@ static void analy_entry_output(analy_entry_t *entry, analy_entry_t *prev)
 
 	if (trace_is_ret(t) && !(entry->status & ANALY_ENTRY_TO_RETURN) &&
 	    trace_ctx.args.ret)
-		sprintf_end_color(buf, " *return: %d*", (int)entry->priv);
+		sprintf_end_color(buf, " *return: %d*", (int)e->retval);
 
 do_latency:
 	if (prev && trace_ctx.args.latency_show) {

@@ -196,7 +196,8 @@ tracing_analy_exit(trace_t *trace, retevent_t *event, fake_analy_ctx_t *fctx)
 		     key, pos->ctx, trace->name, event->func);
 	return NULL;
 found:
-	pos->priv = event->val;
+	/* the entry event here is writable, as we copied it out in this case. */
+	pos->event->retval = event->val;
 	put_fake_analy_ctx(pos->fake_ctx);
 	pos->status &= ~ANALY_ENTRY_TO_RETURN;
 	pr_debug_ctx("func=%s, func-index=%d, entry found for exit\n",
