@@ -304,13 +304,13 @@ static inline void try_set_latency(event_t *e, match_val_t *val)
  */
 static int handle_entry(context_info_t *info, event_t *e)
 {
-	struct sk_buff *skb = info->skb;
 	struct net_device *dev;
-	event_t *detail;
+	struct sk_buff *skb;
 	packet_t *pkt;
 	bool filter;
 	int err;
 
+	__cast(skb, info->skb);
 	pkt = &e->pkt;
 	if (info->func_status & FUNC_FLAG_SK) {
 		if (!info->sk)
@@ -340,18 +340,16 @@ static int handle_entry(context_info_t *info, event_t *e)
 
 	/* store more (detail) information about net or task. */
 	dev = skb->dev;
-	detail = (void *)e;
-
-	bpf_get_current_comm(detail->task, sizeof(detail->task));
+	bpf_get_current_comm(e->task, sizeof(e->task));
 	if (dev) {
-		bpf_core_read_str(detail->ifname, sizeof(detail->ifname) - 1,
+		bpf_core_read_str(e->ifname, sizeof(e->ifname) - 1,
 				  &dev->name);
-		detail->ifindex = dev->ifindex;
+		e->ifindex = dev->ifindex;
 	} else {
-		detail->ifindex = skb->skb_iif;
-		detail->ifname[0] = '\0';
+		e->ifindex = skb->skb_iif;
+		e->ifname[0] = '\0';
 	}
-	detail->cpu = bpf_get_smp_processor_id();
+	e->cpu = bpf_get_smp_processor_id();
 out:
 	pkt->ts = bpf_ktime_get_ns();
 	e->key = (u64)(void *)_P(skb);
@@ -359,6 +357,7 @@ out:
 	if (info->func_status & FUNC_FLAG_STACK)
 		e->stack_id = bpf_get_stackid(info->ctx, &m_stack, 0);
 	e->retval = info->retval;
+	e->meta = FUNC_TYPE_FUNC;
 
 	try_set_latency(e, &info->match_val);
 
@@ -491,7 +490,7 @@ static void on_skb_free(context_info_t *info)
 	consume_map_ctx((void *)&info->skb);
 }
 
-DEFINE_TP(kfree_skb, skb, kfree_skb, 0)
+DEFINE_TP(kfree_skb, 0)
 {
 	drop_event_t *e;
 	u64 reason = 0;
@@ -621,13 +620,13 @@ bpf_qdisc_handle(context_info_t *info, struct Qdisc *q)
 	return handle_entry_output(info, (event_t *)e);
 }
 
-DEFINE_TP(qdisc_dequeue, qdisc, qdisc_dequeue, 3)
+DEFINE_TP(qdisc_dequeue, 3)
 {
 	struct Qdisc *q = info_get_arg(info, 0);
 	return bpf_qdisc_handle(info, q);
 }
 
-DEFINE_TP(qdisc_enqueue, qdisc, qdisc_enqueue, 2)
+DEFINE_TP(qdisc_enqueue, 2)
 {
 	struct Qdisc *q = info_get_arg(info, 0);
 	return bpf_qdisc_handle(info, q);
@@ -695,7 +694,10 @@ DEFINE_TRACE_INIT(tcp_v4_send_reset, tcp_v4_send_reset,
 	skc_common = bpf_core_cast(info->sk, struct sock_common);
 	e = event_define(reset_event_t);
 	e->state = skc_common->skc_state;
-	e->reason = (u64)info_get_arg(info, 2);
+	if (bpf_core_type_exists(enum sk_rst_reason))
+		e->reason = (u64)info_get_arg(info, 2);
+	else
+		e->reason = 0;
 
 	return handle_entry_output(info, (event_t *)e);
 }
@@ -710,7 +712,10 @@ DEFINE_TRACE_INIT(tcp_v6_send_reset, tcp_v6_send_reset,
 	skc_common = bpf_core_cast(info->sk, struct sock_common);
 	e = event_define(reset_event_t);
 	e->state = skc_common->skc_state;
-	e->reason = (u64)info_get_arg(info, 2);
+	if (bpf_core_type_exists(enum sk_rst_reason))
+		e->reason = (u64)info_get_arg(info, 2);
+	else
+		e->reason = 0;
 
 	return handle_entry_output(info, (event_t *)e);
 }

@@ -183,10 +183,6 @@ typedef struct {
 	u8	saddr_v6_enable:1,
 		daddr_v6_enable:1,
 		addr_v6_enable:1;
-
-#ifdef BPF_DEBUG
-	bool	bpf_debug;
-#endif
 } pkt_args_t;
 
 #define args_check(args, attr, value) (args.attr && args.attr != value)

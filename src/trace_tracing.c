@@ -55,11 +55,13 @@ static void tracing_adjust_target()
 		if (!(trace->status & TRACE_ATTACH_MANUAL))
 			continue;
 
-		prog = bpf_pbn(trace_ctx.obj, trace->prog);
 		/* function name contain "." is not supported by BTF */
-		if (prog && strchr(trace->name, '.')) {
-			trace_set_invalid_reason(trace, "BTF invalid");
+		if (strchr(trace->name, '.')) {
+			prog = bpf_pbn(trace_ctx.obj, trace->prog);
 			bpf_program__set_autoload(prog, false);
+			prog = bpf_pbn(trace_ctx.obj, trace->ret_prog);
+			bpf_program__set_autoload(prog, false);
+			trace_set_invalid_reason(trace, "BTF invalid");
 		}
 	}
 }
@@ -193,8 +195,8 @@ tracing_analy_exit(trace_t *trace, retevent_t *event, fake_analy_ctx_t *fctx)
 		    (pos->status & ANALY_ENTRY_TO_RETURN))
 			goto found;
 	}
-	pr_debug_ctx("func=%s, func-index=%d, no entry found for exit\n",
-		     key, pos->ctx, trace->name, event->func);
+	pr_debug_ctx("fctx=%llx func=%s, func-index=%d, no entry found for exit\n",
+		     key, fctx->ctx, PTR2X(fctx), trace->name, event->func);
 	return NULL;
 found:
 	/* the entry event here is writable, as we copied it out in this case. */

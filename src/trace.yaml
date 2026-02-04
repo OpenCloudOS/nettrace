@@ -58,7 +58,7 @@ children:
       - <<: *rule_ret_err
         msg: XDP failed to redirect skb
         adv: check if the target ifindex exist
-    - name: __netif_receive_skb_core:0
+    - name: netif_receive_skb:0
       tp: net/netif_receive_skb
   - name: link-out
     desc: link layer (L2) of packet out
@@ -183,7 +183,7 @@ children:
       analyzer: iptable
       monitor: 1
       skb: 1
-      custom: 
+      custom: 1
       target: ipt_do_table
       rules:
       - exp: eq 0

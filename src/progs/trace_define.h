@@ -1,7 +1,4 @@
 #define KBUILD_MODNAME ""
-#define __PROG_TYPE_TRACING 1
-
-#include "vmlinux.h"
 
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
@@ -36,12 +33,12 @@
 	SEC("fexit/"#target)						\
 	int TRACE_RET_NAME(name)(void **ctx)				\
 	{								\
-		TRACE_INIT_WRAPPER(name, 1, info_init)			\
+		TRACE_INIT_WRAPPER(name, true, info_init)		\
 	}								\
 	SEC("fentry/"#target)						\
 	int TRACE_NAME(name)(void **ctx)				\
 	{								\
-		TRACE_INIT_WRAPPER(name, 0, info_init)			\
+		TRACE_INIT_WRAPPER(name, false, info_init)		\
 	}								\
 	DECLARE_FAKE_FUNC(fake__##name)
 
@@ -66,19 +63,18 @@
 		return default_handle_entry(info);			\
 	}
 
-#define DEFINE_TP_INIT(name, cata, tp, info_init...)			\
+#define DEFINE_TP_INIT(name, info_init...)				\
 	DECLARE_FAKE_FUNC(fake__##name);				\
-	SEC("tp_btf/"#tp)						\
+	SEC("tp_btf/"#name)						\
 	int TRACE_NAME(name)(void **ctx)				\
 	{								\
-		TRACE_INIT_WRAPPER(name, 0, info_init)			\
+		TRACE_INIT_WRAPPER(name, false, info_init)		\
 	}								\
 	DECLARE_FAKE_FUNC(fake__##name)
-#define DEFINE_TP(name, cata, tp, skb_index)				\
-	DEFINE_TP_INIT(name, cata, tp,					\
-		       .skb = ctx_get_arg(ctx, skb_index))
-#define TP_DEFAULT(name, cata, tp, skb_index)				\
-	DEFINE_TP(name, cata, tp, skb_index)				\
+#define DEFINE_TP(name, skb_index)					\
+	DEFINE_TP_INIT(name, .skb = ctx_get_arg(ctx, skb_index))
+#define TP_DEFAULT(name, skb_index)					\
+	DEFINE_TP(name, skb_index)					\
 	{								\
 		return default_handle_entry(info);			\
 	}

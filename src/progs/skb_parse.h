@@ -35,17 +35,6 @@ volatile bpf_data_t m_data;
 	____tmp;						\
 })
 
-#ifdef BPF_DEBUG
-#define pr_bpf_debug(fmt, args...) {			\
-	if (m_config.pkt.bpf_debug)				\
-		bpf_printk("nettrace: "fmt"\n", ##args);\
-}
-#else
-#define pr_bpf_debug(fmt, ...)
-#endif
-#define pr_debug_skb(fmt, ...)	\
-	pr_bpf_debug("skb=%llx, "fmt, (u64)(void *)skb, ##__VA_ARGS__)
-
 typedef struct {
 	u64 pad;
 	u64 skb;
@@ -312,8 +301,7 @@ static inline int probe_parse_l3(struct sk_buff *skb, bool filter,
 	return probe_parse_l4(l4, pkt, filter);
 }
 
-static inline int probe_parse_sk(struct sock *sk, sock_t *ske,
-				 bool filter)
+static inline int probe_parse_sk(struct sock *sk, sock_t *ske, bool filter)
 {
 	struct inet_connection_sock *icsk;
 	struct sock_common *skc;
@@ -491,8 +479,8 @@ static inline int probe_parse_skb_sk(struct sock *sk, struct sk_buff *skb,
 	return filter_port(pkt->l4.tcp.sport, pkt->l4.tcp.dport, filter);
 }
 
-static int probe_parse_skb(struct sk_buff *skb, struct sock *sk,
-			   packet_t *pkt, bool filter)
+static inline int probe_parse_skb(struct sk_buff *skb, struct sock *sk,
+				  packet_t *pkt, bool filter)
 {
 	parse_ctx_t __ctx, *ctx = &__ctx;
 	u16 l3_proto;
@@ -502,8 +490,6 @@ static int probe_parse_skb(struct sk_buff *skb, struct sock *sk,
 	ctx->mac_header = skb->mac_header;
 	ctx->data = skb->head;
 
-	pr_debug_skb("begin to parse, nh=%d mh=%d", ctx->network_header,
-		     ctx->mac_header);
 	if (skb_l2_check(ctx->mac_header)) {
 		int family;
 
@@ -569,8 +555,6 @@ static int probe_parse_skb(struct sk_buff *skb, struct sock *sk,
 	}
 
 	pkt->proto_l3 = l3_proto;
-	pr_debug_skb("l3=%d", l3_proto);
-
 	switch (l3_proto) {
 	case ETH_P_IPV6:
 	case ETH_P_IP:

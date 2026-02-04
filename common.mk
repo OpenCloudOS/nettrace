@@ -44,10 +44,6 @@ endif
 endif
 endif
 
-ifdef BPF_DEBUG
-	CFLAGS		+= -DBPF_DEBUG
-endif
-
 progs/%.o: progs/%.c $(BPF_EXTRA_DEP)
 	clang -O2 -S -Wall -fno-asynchronous-unwind-tables		\
 	-Wno-incompatible-pointer-types-discards-qualifiers		\

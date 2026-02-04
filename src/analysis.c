@@ -54,8 +54,7 @@ static inline void analy_fake_ctx_add(fake_analy_ctx_t *fake)
 	hlist_add_head(&fake->hash, head);
 }
 
-static inline fake_analy_ctx_t
-*analy_fake_ctx_alloc(u32 key, analy_ctx_t *ctx)
+static inline fake_analy_ctx_t *analy_fake_ctx_alloc(u32 key, analy_ctx_t *ctx)
 {
 	fake_analy_ctx_t *fake = malloc(sizeof(fake_analy_ctx_t));
 

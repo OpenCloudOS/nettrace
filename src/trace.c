@@ -723,12 +723,20 @@ static void trace_print_enabled()
 		if (!trace_is_usable(trace))
 			continue;
 
-		if (trace_is_func(trace))
-			fmt = trace_is_ret(trace) ? "fexit" : "fentry";
-		else
+		if (trace_is_func(trace)) {
+			if (trace_is_ret(trace)) {
+				if (trace_is_retonly(trace))
+					fmt = "fexit";
+				else
+					fmt = "fentry/fexit";
+			} else {
+				fmt = "fentry";
+			}
+		} else {
 			fmt = "tp_btf";
-		pr_verb("\t%s: %s, prog: %s, status: 0x%x\n", fmt, trace->name,
-			trace->prog, trace_get_flags(trace->index));
+		}
+		pr_verb("\t%s: %s, prog: %s, status: 0x%x, flags: 0x%x\n", fmt, trace->name,
+			trace->prog, trace->status, trace_get_flags(trace->index));
 	}
 }
 

@@ -211,7 +211,7 @@ def gen_trace(trace, group, p_name):
         trace_type = 'TRACE_TP'
         tp = trace['tp'].split('/')
         if 'skb' in trace and 'custom' not in trace:
-            probe_str = f'\tFN_tp({name}, {tp[0]}, {tp[1]}, {trace["skb"]})\t\\\n'
+            probe_str = f'\tFN_tp({name}, {trace["skb"]})\t\\\n'
         else:
             probe_str = f'\tFNC({name})\t\\\n'
     else:
