@@ -173,7 +173,7 @@ static void analy_entry_output(analy_entry_t *entry, analy_entry_t *prev)
 	else
 		ts_print_packet(buf, &e->pkt, tinfo, trace_ctx.args.date);
 
-	if (trace_is_ret(t) && !(entry->status & ANALY_ENTRY_TO_RETURN) &&
+	if (trace_is_ret_any(t) && !(entry->status & ANALY_ENTRY_TO_RETURN) &&
 	    trace_ctx.args.ret)
 		sprintf_end_color(buf, " *return: %d*", (int)e->retval);
 
@@ -467,7 +467,7 @@ void ctx_poll_handler(void *raw_ctx, void *data, u32 size)
 	}
 	e = entry->event;
 	pr_debug_ctx("fctx=%llx, entry=%llx entry create\n",
-		     e->key, ctx, PTR2X(entry->fake_ctx), PTR2X(entry));
+		     e->key, ctx, PTR2X(fctx), PTR2X(entry));
 
 	trace = get_trace_from_analy_entry(entry);
 	if (!trace) {

@@ -17,25 +17,29 @@ struct {
 } m_stack SEC(".maps");
 
 struct {
-	__uint(type, BPF_MAP_TYPE_LRU_HASH);
+	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, 102400);
 	__uint(key_size, sizeof(u64));
-	__uint(value_size, sizeof(match_val_t));
+	__uint(value_size, sizeof(skb_ctx_t));
 } m_skb_ctx SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
-	__uint(max_entries, 1 << 12);
+	/* the size of the ringbuf, 16M by default. */
+	__uint(max_entries, 1 << 24);
 } m_ringbuf SEC(".maps");
 
 /* allocate event data */
 #define event_define(type) ({						\
 	type *___tmp = bpf_ringbuf_reserve(&m_ringbuf, sizeof(type), 0);\
-	if (!___tmp) return -1;						\
+	if (unlikely(!___tmp)) {					\
+		bpf_printk("ERROR: failed to alloc %s\n", #type);	\
+		return -1;						\
+	}								\
 	___tmp;								\
 })
-#define event_output(e) bpf_ringbuf_submit(e, 0)
-#define event_discard(e) bpf_ringbuf_discard(e, 0)
+#define event_output(e) { bpf_ringbuf_submit(e, 0); }
+#define event_discard(e) { bpf_ringbuf_discard(e, 0); }
 
 static __always_inline int check_rate_limit()
 {
@@ -66,9 +70,9 @@ static __always_inline int check_rate_limit()
 	return 0;
 }
 
-static inline void handle_tiny_output(context_info_t *info)
+static inline int handle_tiny_output(context_info_t *info)
 {
-	tiny_event_t *e = bpf_ringbuf_reserve(&m_ringbuf, sizeof(tiny_event_t), 0);
+	tiny_event_t *e = event_define(tiny_event_t);
 	
 	*e = (tiny_event_t) {
 		.func = info->func,
@@ -77,6 +81,8 @@ static inline void handle_tiny_output(context_info_t *info)
 		.ts = bpf_ktime_get_ns(),
 	};
 	event_output(e);
+
+	return 0;
 }
 
 static inline bool mode_has_context(void)
@@ -97,30 +103,60 @@ static inline bool func_is_free(u8 status)
 	return status & (FUNC_FLAG_FREE | FUNC_FLAG_CFREE);
 }
 
+static inline bool func_is_ret(u8 status)
+{
+	return status & FUNC_FLAG_RET;
+}
+
+static inline bool func_is_retonly(u8 status)
+{
+	return status & FUNC_FLAG_RET_ONLY;
+}
+
 static inline bool func_is_cfree(u8 status)
 {
 	return status & FUNC_FLAG_CFREE;
 }
 
-static inline void consume_map_ctx(u64 *key)
+static inline bool func_has_rule(u8 status)
 {
-	bpf_map_delete_elem(&m_skb_ctx, key);
-	m_data.event_count++;
+	return status & FUNC_FLAG_RULE;
 }
 
-static inline void free_map_ctx(u64 *key)
+static inline void consume_skb_ctx(skb_ctx_t *sctx, u64 *key)
+{
+	if (sctx->dead && !sctx->ref) {
+		bpf_map_delete_elem(&m_skb_ctx, key);
+		m_data.event_count++;
+	}
+}
+
+static inline void free_skb_ctx(u64 *key)
 {
 	bpf_map_delete_elem(&m_skb_ctx, key);
 }
 
-static inline void init_ctx_match(u64 *key, u16 func, bool ts)
+static inline void get_skb_ctx(skb_ctx_t *sctx)
 {
-	match_val_t matched = {
+	sctx->ref++;
+}
+
+static inline void put_skb_ctx(skb_ctx_t *sctx, u64 *key)
+{
+	sctx->ref--;
+	consume_skb_ctx(sctx, key);
+}
+
+static inline void init_skb_ctx(u64 *key, u16 func, bool ts, bool ref)
+{
+	skb_ctx_t matched = {
 		.ts1 = ts ? bpf_ktime_get_ns() / 1000 : 0,
 		.func1 = func,
+		.ref = !!ref,
 	};
 
-	bpf_map_update_elem(&m_skb_ctx, key, &matched, 0);
+	if (unlikely(bpf_map_update_elem(&m_skb_ctx, key, &matched, 0)))
+		bpf_printk("ERROR: failed to init skb ctx, key: %lx\n", *key);
 }
 
 volatile __u64 m_stats[512];
@@ -147,40 +183,38 @@ static inline int pre_tiny_output(context_info_t *info)
 {
 	handle_tiny_output(info);
 	if (func_is_free(info->func_status))
-		consume_map_ctx((void *)&info->skb);
+		consume_skb_ctx(info->sctx, (void *)&info->skb);
 	return 1;
 }
 
-static inline int pre_handle_latency(context_info_t *info,
-				     match_val_t *match_val)
+static inline int pre_handle_latency(context_info_t *info, skb_ctx_t *sctx)
 {
 	u32 delta;
 
-	if (match_val) {
+	if (sctx) {
 		if (m_config.latency_free || !func_is_free(info->func_status) ||
 		    func_is_cfree(info->func_status)) {
-			match_val->ts2 = bpf_ktime_get_ns() / 1000;
-			match_val->func2 = info->func;
+			sctx->ts2 = bpf_ktime_get_ns() / 1000;
+			sctx->func2 = info->func;
 		}
 
 		/* reentry the matcher, or the free of skb is not traced. */
-		if (info->func_status & FUNC_FLAG_MATCHER &&
-		    match_val->func1 == info->func)
-			match_val->ts1 = bpf_ktime_get_ns() / 1000;
+		if (info->func_status & FUNC_FLAG_MATCHER && sctx->func1 == info->func)
+			sctx->ts1 = bpf_ktime_get_ns() / 1000;
 
 		if (func_is_free(info->func_status)) {
-			delta = match_val->ts2 - match_val->ts1;
+			delta = sctx->ts2 - sctx->ts1;
 			/* skip a single match function */
-			if (!match_val->func2 || delta < m_config.latency_min) {
-				free_map_ctx((void *)&info->skb);
+			if (!sctx->func2 || delta < m_config.latency_min) {
+				free_skb_ctx((void *)&info->skb);
 				return 1;
 			}
 			if (m_config.latency_summary) {
 				update_stats_log(delta);
-				consume_map_ctx((void *)&info->skb);
+				consume_skb_ctx(sctx, (void *)&info->skb);
 				return 1;
 			}
-			info->match_val = *match_val;
+			info->sctx = sctx;
 			return 0;
 		}
 		return 1;
@@ -190,7 +224,7 @@ static inline int pre_handle_latency(context_info_t *info,
 			return 1;
 		/* if there isn't any filter, skip handle_entry() */
 		if (!m_config.has_filter) {
-			init_ctx_match((void *)&info->skb, info->func, true);
+			init_skb_ctx((void *)&info->skb, info->func, true, false);
 			return 1;
 		}
 	}
@@ -208,7 +242,7 @@ static inline bool trace_mode_latency(void)
  *    0: valid and continue
  *    1: valid and return
  */
-static inline int pre_handle_entry(context_info_t *info, u16 func)
+static inline int pre_handle_entry(context_info_t *info, u16 func, bool is_return)
 {
 	int ret = 0;
 
@@ -220,9 +254,10 @@ static inline int pre_handle_entry(context_info_t *info, u16 func)
 
 	info->func_status = get_func_flags(func);
 	if (mode_has_context()) {
-		match_val_t *match_val = bpf_map_lookup_elem(&m_skb_ctx, &info->skb);
+		skb_ctx_t *sctx = info->sctx ?: bpf_map_lookup_elem(&m_skb_ctx, &info->skb);
 
-		if (!match_val) {
+		info->is_return = is_return;
+		if (!sctx) {
 			/* skip no-matcher function in match mode if it is not
 			 * matched.
 			 */
@@ -234,12 +269,12 @@ static inline int pre_handle_entry(context_info_t *info, u16 func)
 		}
 
 		/* skip handle_entry() for tiny case */
-		if (match_val && m_config.tiny_output)
+		if (sctx && m_config.tiny_output)
 			ret = pre_tiny_output(info);
 		else if (trace_mode_latency())
-			ret = pre_handle_latency(info, match_val);
-		else if (match_val)
-			info->match_val = *match_val;
+			ret = pre_handle_latency(info, sctx);
+		else if (sctx)
+			info->sctx = sctx;
 	}
 
 	if (m_config.func_stats) {
@@ -264,33 +299,55 @@ static inline int pre_handle_entry(context_info_t *info, u16 func)
  */
 static inline void handle_entry_finish(context_info_t *info, int err)
 {
+	skb_ctx_t *sctx;
+
 	if (err < 0)
 		return;
 
-	if (mode_has_context()) {
-		if (func_is_free(info->func_status)) {
-			if (info->matched)
-				consume_map_ctx((void *)&info->skb);
-		} else if (!info->matched) {
-			init_ctx_match((void *)&info->skb, info->func,
-				       trace_mode_latency());
-		}
-	} else {
+	/* the event count will be increased in skb ctx free for context mode */
+	if (!mode_has_context()) {
 		m_data.event_count++;
+		goto out;
 	}
 
+	sctx = info->sctx;
+	if (sctx) {
+		/* free the skb context in two conditions:
+		 *   1. free function called
+		 *   2. no pending return for the fentry+fexit progs
+		 */
+		if (func_is_free(info->func_status))
+			sctx->dead = 1;
+
+		/* for fentry+fexit case, check the free of skb context in put_skb_ctx().
+		 * In other case, check it if it is a free function.
+		 */
+		if (func_is_ret(info->func_status)) {
+			if (info->is_return)
+				put_skb_ctx(sctx, (void *)&info->skb);
+			else
+				get_skb_ctx(sctx);
+		} else if (func_is_free(info->func_status)) {
+			consume_skb_ctx(sctx, (void *)&info->skb);
+		}
+	} else {
+		init_skb_ctx((void *)&info->skb, info->func, trace_mode_latency(),
+			     func_is_ret(info->func_status));
+	}
+
+out:
 	if (m_config.func_stats)
 		update_stats_key(info->func);
 }
 
-static inline void try_set_latency(event_t *e, match_val_t *val)
+static inline void try_set_latency(event_t *e, skb_ctx_t *sctx)
 {
-	if (!val->func1 || !trace_mode_latency())
+	if (!trace_mode_latency() || !sctx || !sctx->func1)
 		return;
 
-	e->latency = val->ts2 - val->ts1;
-	e->latency_func1 = val->func1;
-	e->latency_func2 = val->func2;
+	e->latency = sctx->ts2 - sctx->ts1;
+	e->latency_func1 = sctx->func1;
+	e->latency_func2 = sctx->func2;
 }
 
 /*
@@ -320,7 +377,7 @@ static int handle_entry(context_info_t *info, event_t *e)
 	} else {
 		if (!skb)
 			goto err;
-		filter = !info->matched;
+		filter = !info->sctx;
 		err = probe_parse_skb(skb, info->sk, pkt, filter);
 	}
 
@@ -359,7 +416,7 @@ out:
 	e->retval = info->retval;
 	e->meta = FUNC_TYPE_FUNC;
 
-	try_set_latency(e, &info->match_val);
+	try_set_latency(e, info->sctx);
 
 	return 0;
 err:
@@ -430,29 +487,32 @@ static __always_inline int handle_exit_rules(u64 retval, int func)
  */
 static __always_inline int pre_handle_exit(context_info_t *info, int func)
 {
-	match_val_t *match_val;
+	skb_ctx_t *sctx;
 	u64 retval = 0;
 	retevent_t *e;
 	u8 func_flags;
 
 	func_flags = get_func_flags(func);
+	if (func_is_retonly(func_flags))
+		goto on_retonly;
 	/* 
 	 * check if the entry has matched according to the skb context in the
 	 * fentry/fexit mode.
 	 */
-	match_val = bpf_map_lookup_elem(&m_skb_ctx, &info->skb);
-	if (!(func_flags & FUNC_FLAG_RET_ONLY) && (!match_val || !match_val->func1))
+	sctx = bpf_map_lookup_elem(&m_skb_ctx, &info->skb);
+	if (!sctx)
 		return -1;
-
+	info->sctx = sctx;
+on_retonly:
 	bpf_get_func_ret(info->ctx, &retval);
 	/* follow the cloned skb in skb context */
 	if (mode_has_context() && func == INDEX_skb_clone && retval)
-		init_ctx_match((void *)&retval, func, false);
+		init_skb_ctx((void *)&retval, func, false, false);
 
 	/* this is a return only case, handle the fexit fully */
-	if (func_flags & FUNC_FLAG_RET_ONLY) {
+	if (func_is_retonly(func_flags)) {
 		/* rule doesn't match, just finish */
-		if (func_flags & FUNC_FLAG_RULE && handle_exit_rules(retval, func))
+		if (func_has_rule(func_flags) && handle_exit_rules(retval, func))
 			return 1;
 		info->retval = retval;
 		return 0;
@@ -467,6 +527,10 @@ static __always_inline int pre_handle_exit(context_info_t *info, int func)
 	e->meta = FUNC_TYPE_RET;
 	e->val = retval;
 	event_output(e);
+
+	/* decrease the skb ref and free the skb context when necessary */
+	if (func_is_ret(func_flags))
+		put_skb_ctx(sctx, (void *)&info->skb);
 
 	return 1;
 }
@@ -484,11 +548,6 @@ static __always_inline int pre_handle_exit(context_info_t *info, int func)
 
 #define FNC(name)
 DEFINE_ALL_TRACES(TRACE_DEFAULT, TP_DEFAULT, FNC)
-
-static void on_skb_free(context_info_t *info)
-{
-	consume_map_ctx((void *)&info->skb);
-}
 
 DEFINE_TP(kfree_skb, 0)
 {
@@ -740,14 +799,12 @@ DEFINE_TRACE_INIT(tcp_send_active_reset, tcp_send_active_reset,
  * 
  *******************************************************************/
 
-DEFINE_TRACE_INIT(inet_listen, inet_listen,
-		   .sk = ((struct socket *)ctx_get_arg(ctx, 0))->sk)
+DEFINE_TRACE_INIT(inet_listen, inet_listen, .sk = ((struct socket *)ctx_get_arg(ctx, 0))->sk)
 {
 	return default_handle_entry(info);
 }
 
-DEFINE_TRACE_INIT(tcp_ack_update_rtt, tcp_ack_update_rtt,
-		   .sk = ctx_get_arg(ctx, 0))
+DEFINE_TRACE_INIT(tcp_ack_update_rtt, tcp_ack_update_rtt, .sk = ctx_get_arg(ctx, 0))
 {
 	u64 first_rtt, last_rtt;
 	rtt_event_t *e;
@@ -776,6 +833,7 @@ DEFINE_TRACE_INIT(tcp_ack_update_rtt, tcp_ack_update_rtt,
 
 	if (m_config.trace_mode & TRACE_MODE_RTT_MASK) {
 		update_stats_log(first_rtt);
+		event_discard(e);
 		return 0;
 	}
 

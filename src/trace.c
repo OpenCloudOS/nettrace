@@ -302,7 +302,6 @@ static int trace_prepare_mode(trace_args_t *args)
 			switch (trace->monitor) {
 			case TRACE_MONITOR_EXIT:
 				trace_set_retonly(trace);
-				trace_set_ret(trace);
 				break;
 			default:
 				break;
@@ -724,14 +723,12 @@ static void trace_print_enabled()
 			continue;
 
 		if (trace_is_func(trace)) {
-			if (trace_is_ret(trace)) {
-				if (trace_is_retonly(trace))
-					fmt = "fexit";
-				else
-					fmt = "fentry/fexit";
-			} else {
+			if (trace_is_ret(trace))
+				fmt = "fentry/fexit";
+			else if (trace_is_retonly(trace))
+				fmt = "fexit";
+			else
 				fmt = "fentry";
-			}
 		} else {
 			fmt = "tp_btf";
 		}
@@ -825,7 +822,7 @@ int trace_pre_load()
 		pr_debug("prog: %s is made no-autoload\n", trace->prog);
 
 check_ret:
-		if (!trace_is_func(trace) || (trace_is_ret(trace) &&
+		if (!trace_is_func(trace) || (trace_is_ret_any(trace) &&
 		    autoload))
 			continue;
 

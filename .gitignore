@@ -8,7 +8,6 @@ output
 GPATH
 GTAGS
 GRTAGS
-kheaders.h
 build*.sh
 release.sh
 compile_commands.json

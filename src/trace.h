@@ -22,10 +22,10 @@ struct analyzer;
 #define TRACE_LOADED		(1 << 0)
 #define TRACE_ENABLE		(1 << 1)
 #define TRACE_INVALID		(1 << 2)
-#define TRACE_RET		(1 << 3)
+#define TRACE_RET		(1 << 3) /* fentry + fexit */
 #define TRACE_STACK		(1 << 4)
 #define TRACE_ATTACH_MANUAL	(1 << 5)
-#define TRACE_RET_ONLY		(1 << 6)
+#define TRACE_RET_ONLY		(1 << 6) /* fexit only, no fentry */
 #define TRACE_CFREE		(1 << 7)
 
 #define trace_for_each(pos)		\
@@ -235,6 +235,7 @@ static inline void trace_set_flag(int func, int flag)
 
 static inline void trace_set_ret(trace_t *t)
 {
+	trace_set_flag(t->index, FUNC_FLAG_RET);
 	t->status |= TRACE_RET;
 }
 
@@ -252,6 +253,11 @@ static inline void trace_set_retonly(trace_t *t)
 static inline bool trace_is_retonly(trace_t *t)
 {
 	return t->status & TRACE_RET_ONLY;
+}
+
+static inline bool trace_is_ret_any(trace_t *t)
+{
+	return trace_is_ret(t) || trace_is_retonly(t);
 }
 
 static inline u8 trace_get_flags(int func)

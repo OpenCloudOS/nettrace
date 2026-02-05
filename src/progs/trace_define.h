@@ -21,7 +21,7 @@
 	};								\
 	if (__is_return && pre_handle_exit(&info, INDEX_##name))	\
 		return 0;						\
-	if (pre_handle_entry(&info, INDEX_##name))			\
+	if (pre_handle_entry(&info, INDEX_##name, __is_return))		\
 		return 0;						\
 	handle_entry_finish(&info, fake__##name(&info));		\
 	return 0;							\

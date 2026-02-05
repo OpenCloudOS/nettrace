@@ -80,7 +80,7 @@ static void tracing_load_rules()
 
 	trace_for_each(trace) {
 		if (trace_is_invalid(trace) || !trace_is_enable(trace) ||
-		    !trace_is_ret(trace) || !trace_is_func(trace))
+		    !trace_is_ret_any(trace) || !trace_is_func(trace))
 			continue;
 
 		rule = &skel->rodata->rules_all[trace->index];
@@ -208,8 +208,7 @@ found:
 	return pos;
 }
 
-int
-tracing_analy_entry(trace_t *trace, analy_entry_t *e)
+int tracing_analy_entry(trace_t *trace, analy_entry_t *e)
 {
 	if (!trace_is_ret(trace)) {
 		pr_debug_ctx("func=%s, entry without return\n",
@@ -219,8 +218,7 @@ tracing_analy_entry(trace_t *trace, analy_entry_t *e)
 
 	get_fake_analy_ctx(e->fake_ctx);
 	e->status |= ANALY_ENTRY_TO_RETURN;
-	pr_debug_ctx("func=%s, mount entry\n",
-		     e->event->key, e->ctx, trace->name);
+	pr_debug_ctx("func=%s, mount entry\n", e->event->key, e->ctx, trace->name);
 
 	return RESULT_CONT;
 }
