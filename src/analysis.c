@@ -9,6 +9,7 @@
 #include <net/if.h>
 #include <pthread.h>
 #include <errno.h>
+#include <string.h>
 
 #include <stdlib.h>
 #include <parse_sym.h>
@@ -28,6 +29,156 @@ const char *level_mark[] = {
 	[RULE_ERROR] = "ERROR",
 };
 u32 ctx_count = 0;
+
+typedef struct {
+	struct list_head list;
+	analy_ctx_t *ctx;
+} ctx_output_task_t;
+
+typedef struct {
+	struct list_head list;
+	u32 size;
+	u8 data[0];
+} event_handle_task_t;
+
+typedef void (*async_worker_consume_t)(struct list_head *node);
+
+typedef struct {
+	struct list_head list;
+} async_node_t;
+
+typedef struct {
+	pthread_mutex_t lock;
+	pthread_cond_t cond;
+	struct list_head queue;
+	pthread_t thread;
+	async_worker_consume_t consume;
+	const char *name;
+	bool started;
+	bool stop;
+	bool unavailable;
+} async_worker_t;
+
+void analy_ctx_output(analy_ctx_t *ctx);
+
+static void ctx_output_task_consume(struct list_head *node);
+static void event_handle_task_consume(struct list_head *node);
+
+static async_worker_t ctx_output_async = {
+	.lock = PTHREAD_MUTEX_INITIALIZER,
+	.cond = PTHREAD_COND_INITIALIZER,
+	.consume = ctx_output_task_consume,
+	.name = "ctx output worker",
+};
+
+static async_worker_t event_handle_async = {
+	.lock = PTHREAD_MUTEX_INITIALIZER,
+	.cond = PTHREAD_COND_INITIALIZER,
+	.consume = event_handle_task_consume,
+	.name = "event handle worker",
+};
+
+static void *async_worker_main(void *arg)
+{
+	async_worker_t *worker = arg;
+	async_node_t *node, *n;
+	LIST_HEAD(local_queue);
+
+	while (1) {
+		pthread_mutex_lock(&worker->lock);
+		while (list_empty(&worker->queue) && !worker->stop)
+			pthread_cond_wait(&worker->cond, &worker->lock);
+
+		if (list_empty(&worker->queue) && worker->stop) {
+			pthread_mutex_unlock(&worker->lock);
+			break;
+		}
+
+		list_splice_init(&worker->queue, &local_queue);
+		pthread_mutex_unlock(&worker->lock);
+
+		list_for_each_entry_safe(node, n, &local_queue, list) {
+			list_del(&node->list);
+			worker->consume(&node->list);
+		}
+	}
+
+	return NULL;
+}
+
+static void async_worker_fatal(const char *what, int err)
+{
+	if (err < 0)
+		pr_err("%s: %s\n", what, strerror(-err));
+	else
+		pr_err("%s\n", what);
+	trace_stop();
+	exit(EXIT_FAILURE);
+}
+
+static int async_worker_start(async_worker_t *worker)
+{
+	int err = 0;
+
+	pthread_mutex_lock(&worker->lock);
+	if (worker->started)
+		goto out;
+	if (worker->unavailable) {
+		err = -ENOTSUP;
+		goto out;
+	}
+
+	INIT_LIST_HEAD(&worker->queue);
+	worker->stop = false;
+	err = pthread_create(&worker->thread, NULL, async_worker_main, worker);
+	if (!err) {
+		worker->started = true;
+	} else {
+		worker->unavailable = true;
+		err = -err;
+	}
+out:
+	pthread_mutex_unlock(&worker->lock);
+	return err;
+}
+
+static int async_worker_submit(async_worker_t *worker, struct list_head *node)
+{
+	pthread_mutex_lock(&worker->lock);
+	if (worker->stop || !worker->started) {
+		pthread_mutex_unlock(&worker->lock);
+		return -ESHUTDOWN;
+	}
+
+	list_add_tail(node, &worker->queue);
+	pthread_cond_signal(&worker->cond);
+	pthread_mutex_unlock(&worker->lock);
+	return 0;
+}
+
+static void async_worker_shutdown(async_worker_t *worker)
+{
+	pthread_t thread;
+
+	pthread_mutex_lock(&worker->lock);
+	if (!worker->started) {
+		pthread_mutex_unlock(&worker->lock);
+		return;
+	}
+
+	worker->stop = true;
+	thread = worker->thread;
+	pthread_cond_signal(&worker->cond);
+	pthread_mutex_unlock(&worker->lock);
+
+	pthread_join(thread, NULL);
+
+	pthread_mutex_lock(&worker->lock);
+	worker->started = false;
+	worker->stop = false;
+	INIT_LIST_HEAD(&worker->queue);
+	pthread_mutex_unlock(&worker->lock);
+}
 
 static inline struct hlist_head *get_ctx_hash_head(u32 key)
 {
@@ -95,12 +246,25 @@ static fake_analy_ctx_t *analy_fake_ctx_fetch(u32 key)
 	fctx = analy_fake_ctx_alloc(key, ctx);
 	if (!fctx)
 		goto err;
-	ctx_count++;
+	__sync_fetch_and_add(&ctx_count, 1);
 
 	return fctx;
 err:
 	free(ctx);
 	return NULL;
+}
+
+static inline analy_entry_t *analy_entry_alloc(void *data, u32 size)
+{
+	analy_entry_t *entry = calloc(1, sizeof(*entry));
+
+	if (!entry)
+		return NULL;
+
+	entry->event = data;
+	entry->status |= ANALY_ENTRY_FREE_DATA;
+
+	return entry;
 }
 
 static inline void analy_entry_free(analy_entry_t *entry)
@@ -111,13 +275,19 @@ static inline void analy_entry_free(analy_entry_t *entry)
 	if (entry->status & ANALY_ENTRY_MSG)
 		free(entry->msg);
 
+	/* free event_handle_task_t */
+	if (entry->status & ANALY_ENTRY_FREE_DATA) {
+		free((void *)((char *)entry->event -
+			      offsetof(event_handle_task_t, data)));
+	}
+
 	if (entry->status & ANALY_ENTRY_TO_RETURN) {
 		trace_t *t = get_trace_from_analy_entry(entry);
+
 		pr_err("entry %s is still on hash pid=%d\n", t->name,
 		       entry->event->pid);
 	}
 
-	free(entry->event);
 	free(entry);
 }
 
@@ -228,7 +398,7 @@ static void analy_ctx_free(analy_ctx_t *ctx)
 		analy_entry_free(entry);
 	}
 
-	ctx_count--;
+	__sync_fetch_and_sub(&ctx_count, 1);
 	free(ctx);
 }
 
@@ -311,6 +481,45 @@ void analy_ctx_output(analy_ctx_t *ctx)
 	pr_info("\n");
 free_ctx:
 	analy_ctx_free(ctx);
+}
+
+static void ctx_output_task_consume(struct list_head *node)
+{
+	ctx_output_task_t *task = list_entry(node, ctx_output_task_t, list);
+
+	analy_ctx_output(task->ctx);
+	free(task);
+}
+
+static void ctx_output_submit(analy_ctx_t *ctx)
+{
+	ctx_output_task_t *task;
+	int err;
+
+	if (!ctx_output_async.started) {
+		err = async_worker_start(&ctx_output_async);
+		if (err)
+			async_worker_fatal("ctx output worker start failed", err);
+	}
+
+	task = malloc(sizeof(*task));
+	if (!task) {
+		pr_warn("ctx output task alloc failed\n");
+		return;
+	}
+	task->ctx = ctx;
+
+	err = async_worker_submit(&ctx_output_async, &task->list);
+	if (err) {
+		free(task);
+		pr_warn("ctx output worker submit failed: %s\n", strerror(-err));
+	}
+}
+
+void analysis_async_shutdown(void)
+{
+	async_worker_shutdown(&event_handle_async);
+	async_worker_shutdown(&ctx_output_async);
 }
 
 static int try_run_entry(trace_t *trace, analyzer_t *analyzer,
@@ -422,6 +631,11 @@ static int ctx_handle_ret(void *data, fake_analy_ctx_t *fctx)
 	trace_t *t;
 
 	t = get_trace(e.event->func);
+	if (!t) {
+		pr_err("trace not found for ret: %d\n", e.event->func);
+		return -ENOENT;
+	}
+
 	entry = tracing_analy_exit(t, e.event, fctx);
 	if (!entry) {
 		pr_err("entry for exit not found: %x\n", e.event->key);
@@ -438,32 +652,36 @@ static int ctx_handle_ret(void *data, fake_analy_ctx_t *fctx)
 	return 0;
 }
 
-void ctx_poll_handler(void *raw_ctx, void *data, u32 size)
+static void event_handle_task_consume(struct list_head *node)
 {
+	event_handle_task_t *task = list_entry(node, event_handle_task_t, list);
+	event_t *e = (void *)task->data;
 	fake_analy_ctx_t *fctx;
-	trace_t *trace = NULL;
 	analy_entry_t *entry;
 	analyzer_t *analyzer;
-	event_t *e = data;
 	analy_ctx_t *ctx;
+	u32 key = e->key;
+	trace_t *trace;
 
 	fctx = analy_fake_ctx_fetch(e->key);
 	if (!fctx) {
 		pr_err("analy context alloc failed\n");
-		return;
+		goto on_err;
 	}
 	ctx = fctx->ctx;
 
-	if (func_get_type(data) == FUNC_TYPE_RET) {
-		if (ctx_handle_ret(data, fctx))
-			return;
+	if (func_get_type(task->data) == FUNC_TYPE_RET) {
+		if (ctx_handle_ret(task->data, fctx))
+			goto on_err;
+		trace = NULL;
+		free(task);
 		goto check_pending;
 	}
 
-	entry = analy_entry_alloc(data, size);
+	entry = analy_entry_alloc(task->data, task->size);
 	if (!entry) {
 		pr_err("entry alloc failed\n");
-		return;
+		goto on_err;
 	}
 	e = entry->event;
 	pr_debug_ctx("fctx=%llx, entry=%llx entry create\n",
@@ -472,7 +690,7 @@ void ctx_poll_handler(void *raw_ctx, void *data, u32 size)
 	trace = get_trace_from_analy_entry(entry);
 	if (!trace) {
 		pr_err("trace not found:%d\n", e->func);
-		free(entry);
+		analy_entry_free(entry);
 		put_fake_analy_ctx(fctx);
 		goto check_pending;
 	}
@@ -489,18 +707,47 @@ void ctx_poll_handler(void *raw_ctx, void *data, u32 size)
 		goto check_pending;
 
 	if (trace->status & TRACE_CFREE) {
-	pr_debug_ctx("fctx=%llx, custom free: %s\n",
-		      entry->event->key, entry->fake_ctx->ctx,
-		      PTR2X(entry->fake_ctx),
-		      trace ? trace->name : "");
+	pr_debug_ctx("fctx=%llx, custom free: %s\n", entry->event->key,
+		     entry->fake_ctx->ctx, PTR2X(entry->fake_ctx),
+		     trace ? trace->name : "");
 		put_fake_analy_ctx(fctx);
 	}
 
 	list_add_tail(&entry->list, &ctx->entries);
 check_pending:
 	if (ctx->refs <= 0) {
-		pr_debug_ctx("ctx finish with %s\n", e->key, ctx, trace ? trace->name : "");
-		analy_ctx_output(ctx);
+		pr_debug_ctx("ctx finish with %s\n", key, ctx, trace ? trace->name : "");
+		ctx_output_submit(ctx);
+	}
+	return;
+
+on_err:
+	free(task);
+}
+
+void ctx_poll_handler(void *raw_ctx, void *data, u32 size)
+{
+	event_handle_task_t *task;
+	int err = 0;
+
+	if (!event_handle_async.started) {
+		err = async_worker_start(&event_handle_async);
+		if (err)
+			async_worker_fatal("event handle worker start failed", err);
+	}
+
+	task = malloc(sizeof(*task) + size);
+	if (!task) {
+		pr_warn("event worker queue alloc failed\n");
+		return;
+	}
+	task->size = size;
+	memcpy(task->data, data, size);
+
+	err = async_worker_submit(&event_handle_async, &task->list);
+	if (err) {
+		pr_warn("event handle worker submit failed: %s\n", strerror(-err));
+		free(task);
 	}
 }
 

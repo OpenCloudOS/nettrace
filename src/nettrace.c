@@ -10,6 +10,7 @@
 
 #include "nettrace.h"
 #include "trace.h"
+#include "analysis.h"
 
 arg_config_t config = {
 	.name = "nettrace",
@@ -372,21 +373,29 @@ static void do_exit(int code)
 {
 	static bool is_exited = false;
 	u64 event_count;
+	(void)code;
 
 	if (is_exited)
 		return;
 
 	is_exited = true;
+	trace_ctx.stop = true;
 	event_count = get_bpf_data()->event_count;
+	analysis_async_shutdown();
 
 	pr_info("end trace...\n");
 	pr_debug("begin destory BPF skel...\n");
 	trace_ctx.ops->trace_close();
 	pr_debug("BPF skel is destroied\n");
-	trace_ctx.stop = true;
 
 	pr_info("total event: %llu, %d context skipped\n",
 		event_count, ctx_count);
+}
+
+static void do_stop(int sig)
+{
+	(void)sig;
+	trace_ctx.stop = true;
 }
 
 int main(int argc, char *argv[])
@@ -402,8 +411,8 @@ int main(int argc, char *argv[])
 		goto err;
 	}
 
-	signal(SIGTERM, do_exit);
-	signal(SIGINT, do_exit);
+	signal(SIGTERM, do_stop);
+	signal(SIGINT, do_stop);
 
 	pr_info("begin trace...\n");
 	trace_poll();

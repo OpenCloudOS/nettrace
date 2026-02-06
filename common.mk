@@ -8,7 +8,7 @@ LIBELF_ZSTD_FLAGS = -lzstd
 endif
 
 HOST_CFLAGS	= \
-		-lbpf -lelf -lz $(LIBELF_ZSTD_FLAGS) -O2 $(CFLAGS) -Wall \
+		-lbpf -lelf -lz $(LIBELF_ZSTD_FLAGS) -pthread -O2 $(CFLAGS) -Wall \
 		-Wno-deprecated-declarations -DVERSION=$(VERSION)	\
 		-DRELEASE=$(RELEASE)					\
 		-I$(ROOT)/shared/ -I$(ROOT)/utils

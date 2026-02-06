@@ -91,6 +91,7 @@ typedef struct analyzer {
 #define ANALY_ENTRY_EXTINFO	(1 << 1)
 #define ANALY_ENTRY_MSG		(1 << 2)
 #define ANALY_ENTRY_MSG_CONST	(1 << 3)
+#define ANALY_ENTRY_FREE_DATA	(1 << 4)
 
 #define ANALYZER(name) analyzer_##name
 #define DEFINE_ANALYZER_PART(name, type, mode_mask)			\
@@ -148,6 +149,7 @@ int tracing_analy_entry(trace_t *trace, analy_entry_t *e);
 
 int stats_poll_handler();
 int func_stats_poll_handler();
+void analysis_async_shutdown(void);
 
 static inline trace_t *get_trace_from_analy_entry(analy_entry_t *e)
 {
@@ -233,28 +235,6 @@ static inline void entry_set_msg_const(analy_entry_t *e, char *info)
 {
 	e->msg = info;
 	e->status |= ANALY_ENTRY_MSG_CONST;
-}
-
-static inline analy_entry_t *analy_entry_alloc(void *data, u32 size)
-{
-	analy_entry_t *entry = calloc(1, sizeof(*entry));
-	int copy_size = size;
-	void *event;
-
-	if (!entry)
-		return NULL;
-
-	if (size > MAX_EVENT_SIZE + 8) {
-		pr_err("trace data is too big! size: %u, max: %lu\n",
-		       size, MAX_EVENT_SIZE);
-		return NULL;
-	}
-	copy_size = MIN(size, MAX_EVENT_SIZE);
-	event = malloc(copy_size);
-
-	memcpy(event, data, copy_size);
-	entry->event = event;
-	return entry;
 }
 
 static inline bool mode_has_context()
