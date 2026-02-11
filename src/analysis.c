@@ -215,6 +215,7 @@ static inline fake_analy_ctx_t *analy_fake_ctx_alloc(u32 key, analy_ctx_t *ctx)
 	fake->ctx = ctx;
 	fake->key = key;
 	fake->refs = 0;
+	fake->dead = false;
 
 	list_add_tail(&fake->list, &ctx->fakes);
 	analy_fake_ctx_add(fake);
@@ -284,8 +285,8 @@ static inline void analy_entry_free(analy_entry_t *entry)
 	if (entry->status & ANALY_ENTRY_TO_RETURN) {
 		trace_t *t = get_trace_from_analy_entry(entry);
 
-		pr_err("entry %s is still on hash pid=%d\n", t->name,
-		       entry->event->pid);
+		pr_err("entry %s is still on hash key=%x\n", t->name,
+		       entry->event->key);
 	}
 
 	free(entry);
@@ -465,7 +466,7 @@ void analy_ctx_output(analy_ctx_t *ctx)
 	keys[0] = ' ';
 	pr_info_color("*****************%s ***************\n", keys);
 	head = &ctx->entries;
-	list_for_each_entry(entry, head, list) {
+	list_for_each_entry_reverse(entry, head, list) {
 		analy_entry_output(entry, prev);
 		prev = entry;
 	}
@@ -638,7 +639,8 @@ static int ctx_handle_ret(void *data, fake_analy_ctx_t *fctx)
 
 	entry = tracing_analy_exit(t, e.event, fctx);
 	if (!entry) {
-		pr_err("entry for exit not found: %x\n", e.event->key);
+		pr_err("entry for exit not found: key=%x, func=%s\n", e.event->key,
+		       t->name);
 		return -ENOENT;
 	}
 
@@ -713,7 +715,7 @@ static void event_handle_task_consume(struct list_head *node)
 		put_fake_analy_ctx(fctx);
 	}
 
-	list_add_tail(&entry->list, &ctx->entries);
+	list_add(&entry->list, &ctx->entries);
 check_pending:
 	if (ctx->refs <= 0) {
 		pr_debug_ctx("ctx finish with %s\n", key, ctx, trace ? trace->name : "");
@@ -903,8 +905,10 @@ void latency_poll_handler(void *ctx, void *data, u32 size)
 
 static void on_skb_free(fake_analy_ctx_t *fctx)
 {
-	if (mode_has_context())
+	if (mode_has_context() && !fctx->dead) {
+		fctx->dead = true;
 		put_fake_analy_ctx(fctx);
+	}
 }
 
 DEFINE_ANALYZER_ENTRY(free, TRACE_MODE_CTX_MASK | TRACE_MODE_TINY_MASK)

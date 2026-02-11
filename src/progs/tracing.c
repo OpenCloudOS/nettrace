@@ -123,19 +123,6 @@ static inline bool func_has_rule(u8 status)
 	return status & FUNC_FLAG_RULE;
 }
 
-static inline void consume_skb_ctx(skb_ctx_t *sctx, u64 *key)
-{
-	if (sctx->dead && !sctx->ref) {
-		bpf_map_delete_elem(&m_skb_ctx, key);
-		m_data.event_count++;
-	}
-}
-
-static inline void free_skb_ctx(u64 *key)
-{
-	bpf_map_delete_elem(&m_skb_ctx, key);
-}
-
 static inline void get_skb_ctx(skb_ctx_t *sctx)
 {
 	sctx->ref++;
@@ -144,15 +131,18 @@ static inline void get_skb_ctx(skb_ctx_t *sctx)
 static inline void put_skb_ctx(skb_ctx_t *sctx, u64 *key)
 {
 	sctx->ref--;
-	consume_skb_ctx(sctx, key);
+	if (!sctx->ref) {
+		bpf_map_delete_elem(&m_skb_ctx, key);
+		m_data.event_count++;
+	}
 }
 
-static inline void init_skb_ctx(u64 *key, u16 func, bool ts, bool ref)
+static inline void init_skb_ctx(u64 *key, u16 func, bool ts, bool entry_pending)
 {
 	skb_ctx_t matched = {
 		.ts1 = ts ? bpf_ktime_get_ns() / 1000 : 0,
 		.func1 = func,
-		.ref = !!ref,
+		.ref = entry_pending + 1,
 	};
 
 	if (unlikely(bpf_map_update_elem(&m_skb_ctx, key, &matched, 0)))
@@ -179,11 +169,19 @@ static __always_inline void update_stats_log(u32 val)
 	update_stats_key(key);
 }
 
+static __always_inline void check_skb_dead(u8 func_flags, skb_ctx_t *sctx)
+{
+	if (!sctx->dead && func_is_free(func_flags)) {
+		sctx->dead = true;
+		put_skb_ctx(sctx, (void *)&sctx);
+	}
+}
+
 static inline int pre_tiny_output(context_info_t *info)
 {
 	handle_tiny_output(info);
-	if (func_is_free(info->func_status))
-		consume_skb_ctx(info->sctx, (void *)&info->skb);
+	check_skb_dead(info->func_status, info->sctx);
+
 	return 1;
 }
 
@@ -198,31 +196,31 @@ static inline int pre_handle_latency(context_info_t *info, skb_ctx_t *sctx)
 			sctx->func2 = info->func;
 		}
 
-		/* reentry the matcher, or the free of skb is not traced. */
+		/* reenter the matcher, or the free of skb is not traced. */
 		if (info->func_status & FUNC_FLAG_MATCHER && sctx->func1 == info->func)
 			sctx->ts1 = bpf_ktime_get_ns() / 1000;
 
 		if (func_is_free(info->func_status)) {
 			delta = sctx->ts2 - sctx->ts1;
-			/* skip a single match function */
-			if (!sctx->func2 || delta < m_config.latency_min) {
-				free_skb_ctx((void *)&info->skb);
+
+			if (!sctx->func2 || /* skip a single match function */
+			    delta < m_config.latency_min ||
+			    m_config.latency_summary) {
+				check_skb_dead(info->func_status, sctx);
+				if (m_config.latency_summary)
+					update_stats_log(delta);
+
 				return 1;
 			}
-			if (m_config.latency_summary) {
-				update_stats_log(delta);
-				consume_skb_ctx(sctx, (void *)&info->skb);
-				return 1;
-			}
+
 			info->sctx = sctx;
 			return 0;
 		}
 		return 1;
 	} else {
-		/* skip single free function for latency total mode */
-		if (func_is_free(info->func_status))
-			return 1;
-		/* if there isn't any filter, skip handle_entry() */
+		/* if there isn't any filter, skip handle_entry(). Otherwise,
+		 * the skb context will be created in handle_entry_finish().
+		 */
 		if (!m_config.has_filter) {
 			init_skb_ctx((void *)&info->skb, info->func, true, false);
 			return 1;
@@ -238,9 +236,8 @@ static inline bool trace_mode_latency(void)
 }
 
 /* return value:
- *   -1: invalid and return
- *    0: valid and continue
- *    1: valid and return
+ *   0: valid and continue to handle the entry event
+ *   otherwise: finish directly
  */
 static inline int pre_handle_entry(context_info_t *info, u16 func, bool is_return)
 {
@@ -316,8 +313,7 @@ static inline void handle_entry_finish(context_info_t *info, int err)
 		 *   1. free function called
 		 *   2. no pending return for the fentry+fexit progs
 		 */
-		if (func_is_free(info->func_status))
-			sctx->dead = 1;
+		check_skb_dead(info->func_status, sctx);
 
 		/* for fentry+fexit case, check the free of skb context in put_skb_ctx().
 		 * In other case, check it if it is a free function.
@@ -327,8 +323,6 @@ static inline void handle_entry_finish(context_info_t *info, int err)
 				put_skb_ctx(sctx, (void *)&info->skb);
 			else
 				get_skb_ctx(sctx);
-		} else if (func_is_free(info->func_status)) {
-			consume_skb_ctx(sctx, (void *)&info->skb);
 		}
 	} else {
 		init_skb_ctx((void *)&info->skb, info->func, trace_mode_latency(),
@@ -500,7 +494,8 @@ static __always_inline int pre_handle_exit(context_info_t *info, int func)
 	 * fentry/fexit mode.
 	 */
 	sctx = bpf_map_lookup_elem(&m_skb_ctx, &info->skb);
-	if (!sctx)
+	/* check if there are pending return. */
+	if (!sctx || sctx->ref - !sctx->dead <= 0)
 		return -1;
 	info->sctx = sctx;
 on_retonly:

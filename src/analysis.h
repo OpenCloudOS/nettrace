@@ -46,6 +46,7 @@ typedef struct fake_analy_ctx {
 	struct list_head list;
 	u32 key;
 	u16 refs;
+	bool dead;
 } fake_analy_ctx_t;
 
 typedef struct {
