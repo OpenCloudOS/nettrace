@@ -595,9 +595,12 @@ DEFINE_TRACE_SKB(ipt_do_table, 1)
 	return bpf_ipt_do_table(info, table, state);
 }
 
-DEFINE_TRACE_INIT(vlan_do_receive, vlan_do_receive,
-		  .skb = *(struct sk_buff **)ctx_get_arg(ctx, 0))
+DEFINE_TRACE_INIT(vlan_do_receive, vlan_do_receive)
 {
+	struct sk_buff **pskb = (void *)_P(info->ctx[0]);
+
+	__cast(info->skb, _P(*pskb));
+
 	return default_handle_entry(info);
 }
 
@@ -749,8 +752,8 @@ DEFINE_TRACE_INIT(tcp_v4_send_reset, tcp_v4_send_reset,
 }
 
 DEFINE_TRACE_INIT(tcp_v6_send_reset, tcp_v6_send_reset,
-		   .sk = ctx_get_arg(ctx, 0),
- 		   .skb = ctx_get_arg(ctx, 1))
+		  .sk = ctx_get_arg(ctx, 0),
+ 		  .skb = ctx_get_arg(ctx, 1))
 {
 	struct sock_common *skc_common;
 	reset_event_t *e;
@@ -767,7 +770,7 @@ DEFINE_TRACE_INIT(tcp_v6_send_reset, tcp_v6_send_reset,
 }
 
 DEFINE_TRACE_INIT(tcp_send_active_reset, tcp_send_active_reset,
-		   .sk = ctx_get_arg(ctx, 0))
+		 .sk = ctx_get_arg(ctx, 0))
 {
 	struct sock_common *skc_common;
 	reset_event_t *e;
@@ -775,7 +778,10 @@ DEFINE_TRACE_INIT(tcp_send_active_reset, tcp_send_active_reset,
 	skc_common = bpf_core_cast(info->sk, struct sock_common);
 	e = event_define(reset_event_t);
 	e->state = skc_common->skc_state;
-	e->reason = (u64)info_get_arg(info, 2);
+	if (bpf_core_type_exists(enum sk_rst_reason))
+		e->reason = (u64)info_get_arg(info, 2);
+	else
+		e->reason = 0;
 
 	return handle_entry_output(info, (event_t *)e);
 }

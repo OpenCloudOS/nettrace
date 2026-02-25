@@ -62,12 +62,12 @@ typedef struct trace {
 	char	*cond;
 	char	*regex;
 	char	*tp;
-	/* index of skb in function args, start from 1, 0 means no skb */
-	u8	skb;
+	/* index of skb in function args, -1 means no skb */
+	short	skb;
 	/* offset of skb in ftrace event */
 	u8	skboffset;
 	/* the same as skb */
-	u8	sk;
+	short	sk;
 	/* the same as skb_offset */
 	u8	skoffset;
 	/* traces in a global list */

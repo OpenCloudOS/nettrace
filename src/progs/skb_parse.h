@@ -193,8 +193,7 @@ static inline int probe_parse_l4(void *l4, packet_t *pkt, bool filter)
 			return -1;
 
 		flags = _P(((u8 *)tcp)[13]);
-		if (filter_enabled(filter, tcp_flags) &&
-		    !(flags & m_config.pkt.tcp_flags))
+		if (filter_enabled(filter, tcp_flags) && !(flags & m_config.pkt.tcp_flags))
 			return -1;
 
 		pkt->l4.tcp.sport = sport;

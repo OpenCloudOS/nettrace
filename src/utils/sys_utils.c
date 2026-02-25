@@ -17,7 +17,7 @@
 #include "sys_utils.h"
 
 static int __hz = -1;
-static char *available_filter_funcs;
+static char *available_filter_funcs = NULL;
 static char *proc_syms;
 static struct sym_result *result_list;
 int log_level = 0;
@@ -164,7 +164,7 @@ struct sym_result *sym_parse_exact(__u64 pc)
 
 int sym_search_pattern(const char *name, char *result, bool partial)
 {
-	char func[128], module[128], search[128], *target;
+	char func[128], module_name[128], search[128], *target;
 	int count;
 
 	sym_init_data();
@@ -176,7 +176,7 @@ int sym_search_pattern(const char *name, char *result, bool partial)
 		if (!target)
 			break;
 
-		count = sscanf(target, " %s [%[^]]]", func, module);
+		count = sscanf(target, " %s [%[^]]]", func, module_name);
 		target++;
 
 		if (count <= 0)

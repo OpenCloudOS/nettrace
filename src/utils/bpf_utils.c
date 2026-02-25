@@ -9,6 +9,8 @@
 #include <sys/syscall.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+#include <string.h>
+#include <dirent.h>
 
 #include "sys_utils.h"
 #include <bpf/btf.h>
@@ -82,33 +84,227 @@ exist:;
 }
 
 static struct btf *local_btf;
-const struct btf_type *btf_get_type(char *name)
+struct btf_module_cache {
+	char module[256];
+	struct btf *btf;
+	struct btf_module_cache *next;
+};
+
+static struct btf_module_cache *module_btf_cache;
+static bool module_btf_loaded;
+
+static int btf_prepare()
+{
+	if (!local_btf) {
+		local_btf = btf__load_vmlinux_btf();
+		if (libbpf_get_error(local_btf)) {
+			local_btf = NULL;
+			return -ENOENT;
+		}
+	}
+
+	return 0;
+}
+
+static void btf_release_module_cache()
+{
+	struct btf_module_cache *cache;
+	struct btf_module_cache *tmp;
+
+	cache = module_btf_cache;
+	while (cache) {
+		tmp = cache->next;
+		if (cache->btf)
+			btf__free(cache->btf);
+		free(cache);
+		cache = tmp;
+	}
+
+	module_btf_cache = NULL;
+	module_btf_loaded = false;
+}
+
+void btf_release_cache(void)
+{
+	btf_release_module_cache();
+	if (local_btf) {
+		btf__free(local_btf);
+		local_btf = NULL;
+	}
+}
+
+static int btf_load_all_module_btf()
+{
+	struct btf_module_cache *cache;
+	struct dirent *ent;
+	struct btf *btf;
+	DIR *dir;
+	int loaded = 0;
+
+	if (module_btf_loaded)
+		return 0;
+
+	dir = opendir("/sys/kernel/btf");
+	if (!dir)
+		return -ENOENT;
+
+	while ((ent = readdir(dir))) {
+		if (ent->d_name[0] == '.' ||
+		    strcmp(ent->d_name, "vmlinux") == 0)
+			continue;
+
+		cache = calloc(1, sizeof(*cache));
+		if (!cache)
+			continue;
+
+		snprintf(cache->module, sizeof(cache->module), "%s", ent->d_name);
+		btf = btf__load_module_btf(ent->d_name, local_btf);
+		if (libbpf_get_error(btf))
+			btf = NULL;
+		if (btf)
+			loaded++;
+
+		cache->btf = btf;
+		cache->next = module_btf_cache;
+		module_btf_cache = cache;
+	}
+
+	closedir(dir);
+	module_btf_loaded = true;
+	return loaded ? 0 : -ENOENT;
+}
+
+static const struct btf_type *btf_find_func_type(struct btf *btf, const char *name)
 {
 	const struct btf_type *t;
 	int id;
 
-	if (!local_btf)
-		local_btf = btf__load_vmlinux_btf();
-
-	id = btf__find_by_name(local_btf, name);
+	id = btf__find_by_name_kind(btf, name, BTF_KIND_FUNC);
 	if (id < 0)
 		return NULL;
 
-	t = btf__type_by_id(local_btf, id);
+	t = btf__type_by_id(btf, id);
 	return t;
+}
+
+const struct btf_type *btf_get_type_ext(char *name, struct btf **type_btf)
+{
+	struct btf_module_cache *cache;
+	const struct btf_type *t;
+
+	if (type_btf)
+		*type_btf = NULL;
+
+	if (btf_prepare())
+		return NULL;
+
+	t = btf_find_func_type(local_btf, name);
+	if (t) {
+		if (type_btf)
+			*type_btf = local_btf;
+		return t;
+	}
+
+	btf_load_all_module_btf();
+	for (cache = module_btf_cache; cache; cache = cache->next) {
+		if (!cache->btf)
+			continue;
+
+		t = btf_find_func_type(cache->btf, name);
+		if (!t)
+			continue;
+
+		if (type_btf)
+			*type_btf = cache->btf;
+		return t;
+	}
+
+	return NULL;
+}
+
+const struct btf_type *btf_get_type(char *name)
+{
+	return btf_get_type_ext(name, NULL);
 }
 
 int btf_get_arg_count(char *name)
 {
 	const struct btf_type *t;
+	struct btf *type_btf;
 
-	t = btf_get_type(name);
+	t = btf_get_type_ext(name, &type_btf);
 	if (!t)
 		return -ENOENT;
 
-	t = btf__type_by_id(local_btf, t->type);
-	if (!t)
+	t = btf__type_by_id(type_btf, t->type);
+	if (!t || !btf_is_func_proto(t))
 		return -ENOENT;
 
 	return btf_vlen(t);
+}
+
+static bool btf_param_type_match(struct btf *btf, __u32 type_id,
+				 const char *struct_name)
+{
+	const struct btf_type *t;
+	const char *name;
+	int id;
+
+	if (!type_id || !struct_name || !struct_name[0])
+		return false;
+
+	id = btf__resolve_type(btf, type_id);
+	if (id < 0)
+		return false;
+
+	t = btf__type_by_id(btf, id);
+	if (!t)
+		return false;
+
+	if (btf_is_ptr(t)) {
+		id = btf__resolve_type(btf, t->type);
+		if (id < 0)
+			return false;
+
+		t = btf__type_by_id(btf, id);
+		if (!t)
+			return false;
+	}
+
+	if (!btf_is_struct(t) && !btf_is_fwd(t))
+		return false;
+
+	name = btf__name_by_offset(btf, t->name_off);
+	if (!name || !name[0])
+		return false;
+
+	return strcmp(name, struct_name) == 0;
+}
+
+int btf_get_trace_param_index(char *name, const char *struct_name)
+{
+	const struct btf_type *func_type, *func_proto;
+	const struct btf_param *params;
+	struct btf *type_btf;
+	int i, nr;
+
+	if (!struct_name || !struct_name[0])
+		return -EINVAL;
+
+	func_type = btf_get_type_ext(name, &type_btf);
+	if (!func_type)
+		return -ENOENT;
+
+	func_proto = btf__type_by_id(type_btf, func_type->type);
+	if (!func_proto || !btf_is_func_proto(func_proto))
+		return -ENOENT;
+
+	nr = btf_vlen(func_proto);
+	params = btf_params(func_proto);
+	for (i = 0; i < nr; i++) {
+		if (btf_param_type_match(type_btf, params[i].type, struct_name))
+			return i;
+	}
+
+	return -ENOENT; /* not found */
 }

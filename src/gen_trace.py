@@ -247,9 +247,9 @@ def gen_trace(trace, group, p_name):
         init_str += _init_str
 
     if 'skb' in trace:
-        trace['skb'] = int(trace.get('skb') or 0) + 1
+        trace['skb'] = int(trace.get('skb') or -1)
     if 'sk' in trace:
-        trace['sk'] = int(trace.get('sk') or 0) + 1
+        trace['sk'] = int(trace.get('sk') or -1)
 
     fields_str += append_trace_field('cond', trace)
     fields_str += append_trace_field('regex', trace)

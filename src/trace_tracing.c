@@ -45,26 +45,6 @@ static bool tracing_support_feat_args_ext()
 	return err == 0;
 }
 
-static void tracing_adjust_target()
-{
-	struct bpf_program *prog;
-	trace_t *trace;
-
-	trace_for_each(trace) {
-		if (!(trace->status & TRACE_ATTACH_MANUAL))
-			continue;
-
-		/* function name contain "." is not supported by BTF */
-		if (strchr(trace->name, '.')) {
-			prog = bpf_pbn(trace_ctx.obj, trace->prog);
-			bpf_program__set_autoload(prog, false);
-			prog = bpf_pbn(trace_ctx.obj, trace->ret_prog);
-			bpf_program__set_autoload(prog, false);
-			trace_set_invalid_reason(trace, "BTF invalid");
-		}
-	}
-}
-
 static int tracing_trace_attach()
 {
 	return tracing__attach(skel);
@@ -161,12 +141,12 @@ err:
 
 static int tracing_trace_load()
 {
-	tracing_adjust_target();
 	if (tracing__load(skel)) {
 		pr_err("failed to load tracing-based eBPF\n");
 		goto err;
 	}
 	pr_debug("eBPF is loaded successfully\n");
+	btf_release_cache();
 
 	return 0;
 err:
@@ -261,6 +241,53 @@ static void tracing_print_stack(int key)
 	pr_info("\n");
 }
 
+static void tracing_prepare_traces()
+{
+	trace_t *trace;
+
+	pr_debug("begin to resolve kernel symbol...\n");
+
+	/* make the programs that target kernel function can't be found
+	 * load manually.
+	 */
+	trace_for_each(trace) {
+		char __name[136], *name;
+
+		if (trace_is_invalid(trace) || !trace_is_enable(trace))
+			continue;
+
+		/* function name contain "." is not supported by BTF */
+		if (strchr(trace->name, '.')) {
+			trace_set_invalid_reason(trace, "BTF invalid");
+			continue;
+		}
+
+		if (!trace_is_func(trace)) {
+			name = __name;
+			sprintf(__name, "__bpf_trace_%s", trace->name);
+		} else {
+			name = trace->name;
+		}
+
+		if (!btf_get_type_ext(name, NULL)) {
+			pr_verb("kernel function %s not founded, skipped\n", name);
+			trace_set_invalid_reason(trace, "not found");
+			continue;
+		}
+
+		trace->skb = btf_get_trace_param_index(name, "sk_buff");
+		trace->sk = btf_get_trace_param_index(name, "sock");
+
+		if (trace->skb >= 0 || trace->sk >= 0) {
+			pr_debug("trace %s args resolved by BTF: skb=%d, sk=%d\n",
+				 name, trace->skb, trace->sk);
+		} else {
+			pr_debug("trace %s has no skb or sk argument\n", name);
+		}
+	}
+	pr_debug("finished to resolve kernel symbol\n");
+}
+
 trace_ops_t tracing_ops = {
 	.trace_attach = tracing_trace_attach,
 	.trace_load = tracing_trace_load,
@@ -268,5 +295,6 @@ trace_ops_t tracing_ops = {
 	.trace_close = tracing_trace_close,
 	.trace_ready = tracing_trace_ready,
 	.trace_supported = tracing_trace_supported,
+	.prepare_traces = tracing_prepare_traces,
 	.print_stack = tracing_print_stack,
 };

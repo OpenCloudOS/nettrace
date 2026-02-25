@@ -131,7 +131,7 @@ trace_t *search_trace_enabled(char *name)
 	return NULL;
 }
 
-enum {
+enum trace_parse {
 	TRACE_PARSE_ENABLE,
 	TRACE_PARSE_STACK,
 	TRACE_PARSE_MATCHER,
@@ -139,7 +139,7 @@ enum {
 	TRACE_PARSE_CFREE,
 };
 
-static int trace_set_target(trace_t *t, int target)
+static int trace_set_target(trace_t *t, enum trace_parse target)
 {
 	int err = 0;
 
@@ -165,7 +165,7 @@ static int trace_set_target(trace_t *t, int target)
 	return err;
 }
 
-int trace_enable(char *name, int target)
+int trace_enable(char *name, enum trace_parse target)
 {
 	bool found = false;
 	int err = 0;
@@ -185,7 +185,7 @@ int trace_enable(char *name, int target)
 	return !found;
 }
 
-static int __trace_group_enable(trace_group_t *group, int target)
+static int __trace_group_enable(trace_group_t *group, enum trace_parse target)
 {
 	trace_group_t *pos;
 	trace_list_t *t;
@@ -207,7 +207,7 @@ static int __trace_group_enable(trace_group_t *group, int target)
 }
 
 /* enable all traces in the group of 'name' */
-int trace_group_enable(char *name, int target)
+int trace_group_enable(char *name, enum trace_parse target)
 {
 	trace_group_t *g = search_trace_group(name);
 
@@ -270,80 +270,7 @@ static int trace_check_force()
 	return -1;
 }
 
-static int trace_prepare_mode(trace_args_t *args)
-{	trace_t *trace;
-
-	switch (trace_ctx.mode) {
-	case TRACE_MODE_DIAG:
-		trace_all_set_ret();
-	case TRACE_MODE_TIMELINE:
-		if (!trace_ctx.args.traces_noclone) {
-			/* enable skb clone trace */
-			trace_set_ret(&trace_skb_clone);
-		}
-		break;
-	case TRACE_MODE_LATENCY:
-		trace_set_invalid_reason(&trace_skb_clone, "latency");
-		break;
-	case TRACE_MODE_DROP:
-		if (!trace_ctx.drop_reason)
-			pr_warn("skb drop reason is not support by your kernel"
-				", drop reason will not be printed\n");
-		if (args->drop_stack) {
-			if (trace_set_stack(&trace_kfree_skb))
-				goto err;
-		}
-		trace_set_enable(&trace_kfree_skb);
-	case TRACE_MODE_BASIC:
-	case TRACE_MODE_SOCK:
-		break;
-	case TRACE_MODE_MONITOR:
-		trace_for_each(trace) {
-			if (!trace->monitor) {
-				trace_set_invalid_reason(trace, "monitor");
-				continue;
-			}
-			if (!trace_is_func(trace))
-				continue;
-			switch (trace->monitor) {
-			case TRACE_MONITOR_EXIT:
-				trace_set_retonly(trace);
-				break;
-			default:
-				break;
-			}
-		}
-		break;
-	case TRACE_MODE_RTT:
-		trace_set_enable(&trace_tcp_ack_update_rtt);
-		break;
-	default:
-		pr_err("mode not supported!\n");
-		goto err;
-	}
-
-	if (!args->ret)
-		return 0;
-
-	switch (trace_ctx.mode) {
-	case TRACE_MODE_BASIC:
-		pr_err("return value trace is only supported on "
-		       "default and 'diag' mode\n");
-		goto err;
-	case TRACE_MODE_TIMELINE:
-		trace_all_set_ret();
-		break;
-	case TRACE_MODE_DIAG:
-	default:
-		break;
-	}
-	return 0;
-
-err:
-	return -EINVAL;
-}
-
-static int trace_parse_traces(char *traces, int target)
+static int trace_parse_traces(char *traces, enum trace_parse target)
 {
 	char *tmp, *cur;
 
@@ -406,8 +333,8 @@ static void trace_check_sock_skb()
 	/* disable traces that don't support sk in SOCK_MODE, and disable
 	 * traces that don't support skb in !(SOCK_MODE || MONITOR_MODE).
 	 */
-	trace_for_each_cond(trace, (require_skb && !trace->skb) ||
-				   (require_sk && !trace->sk))
+	trace_for_each_cond(trace, (require_skb && trace->skb < 0) ||
+				   (require_sk && trace->sk < 0))
 			trace_set_invalid_reason(trace, "sock or sk mode");
 }
 
@@ -437,13 +364,9 @@ static int trace_prepare_args()
 {
 	bpf_args_t *bpf_args = &trace_ctx.bpf_args;
 	trace_args_t *args = &trace_ctx.args;
-	char *traces_stack = args->traces_stack;
-	bool fix_trace;
-	char *traces;
 	int err;
 
 	trace_prepare_pesudo(args, bpf_args);
-	traces = args->traces;
 
 	if (args->basic + args->intel + args->drop + args->sock +
 	    args->rtt + args->latency > 1) {
@@ -465,22 +388,6 @@ static int trace_prepare_args()
 	ASSIGN_MODE(latency, LATENCY);
 
 	trace_ctx.mode_mask = 1 << trace_ctx.mode;
-	fix_trace = args->drop || args->rtt;
-	if (!traces) {
-		if (!fix_trace)
-			trace_enable_default();
-	} else if (strcmp(traces, "?") == 0) {
-		args->show_traces = true;
-		traces = "all";
-	} else {
-		if (fix_trace) {
-			pr_err("can't specify traces in this mode!\n");
-			goto err;
-		}
-		trace_parse_traces(traces, TRACE_PARSE_ENABLE);
-	}
-
-	trace_parse_traces(traces_stack, TRACE_PARSE_STACK);
 
 	if (drop_reason_support()) {
 		bpf_args->drop_reason = true;
@@ -500,24 +407,6 @@ static int trace_prepare_args()
 
 	trace_ctx.bpf_data.__rate_limit = bpf_args->rate_limit;
 	bpf_args->has_filter = trace_has_pkt_filter();
-
-	trace_parse_traces(args->trace_exclude, TRACE_PARSE_EXCLUDE);
-	if (args->trace_matcher) {
-		if (!(trace_ctx.mode_mask & TRACE_MODE_BPF_CTX_MASK)) {
-			pr_err("--trace-matcher not supported in this mode\n");
-			goto err;
-		}
-		trace_parse_traces(args->trace_matcher, TRACE_PARSE_MATCHER);
-		bpf_args->match_mode = true;
-	}
-
-	if (args->trace_free) {
-		if (!(trace_ctx.mode_mask & TRACE_MODE_BPF_CTX_MASK)) {
-			pr_err("--trace_free not supported in this mode\n");
-			goto err;
-		}
-		trace_parse_traces(args->trace_free, TRACE_PARSE_CFREE);
-	}
 
 	if (args->latency_show && !mode_has_context()) {
 		pr_err("--latency-show not supported in this mode\n");
@@ -539,12 +428,6 @@ static int trace_prepare_args()
 		bpf_args->last_rtt *= 1000;
 		trace_tcp_ack_update_rtt.monitor = 2;
 	}
-
-	if (trace_prepare_mode(args))
-		goto err;
-
-	if (!fix_trace)
-		trace_check_sock_skb();
 
 	if (args->netns_current) {
 		bpf_args->netns = file_inode("/proc/self/ns/net");
@@ -625,57 +508,138 @@ static void trace_prepare_status()
 	}
 }
 
-static int trace_prepare_traces()
-{
-	char func[128], name[136];
-	trace_t *trace;
+static int trace_prepare_mode(trace_args_t *args)
+{	trace_t *trace;
 
-	if ((1 << trace_ctx.mode) & TRACE_MODE_BPF_CTX_MASK)
-		trace_group_enable("life", 1);
-
-	trace_exec_cond();
-	pr_debug("begin to resolve kernel symbol...\n");
-
-	/* make the programs that target kernel function can't be found
-	 * load manually.
-	 */
-	trace_for_each(trace) {
-		if (trace_is_invalid(trace) || !trace_is_enable(trace))
-			continue;
-
-		if (!trace_is_func(trace)) {
-			/* For tracepoint, check the exist of the path */
-			sprintf(name, "%s/events/%s", get_tracing_path(), trace->tp);
-			if (!file_exist(name))
-				trace_set_invalid_reason(trace, "tp not found");
-			continue;
+	switch (trace_ctx.mode) {
+	case TRACE_MODE_DIAG:
+		trace_all_set_ret();
+	case TRACE_MODE_TIMELINE:
+		if (!trace_ctx.args.traces_noclone) {
+			/* enable skb clone trace */
+			trace_set_ret(&trace_skb_clone);
 		}
-
-		if (symbol_in_available_filter_functions(trace->name, false, NULL))
-			continue;
-
-		if (!trace_is_func(trace)) {
-			trace_set_invalid(trace);
-			continue;
+		break;
+	case TRACE_MODE_LATENCY:
+		trace_set_invalid_reason(&trace_skb_clone, "latency");
+		break;
+	case TRACE_MODE_DROP:
+		if (!trace_ctx.drop_reason)
+			pr_warn("skb drop reason is not support by your kernel"
+				", drop reason will not be printed\n");
+		if (args->drop_stack) {
+			if (trace_set_stack(&trace_kfree_skb))
+				goto err;
 		}
-
-		sprintf(name, "%s.", trace->name);
-		if (!symbol_in_available_filter_functions(name, true, func)) {
-			pr_verb("kernel function %s not founded, skipped\n",
-				trace->name);
-			trace_set_invalid_reason(trace, "not found");
-			continue;
+		trace_set_enable(&trace_kfree_skb);
+	case TRACE_MODE_BASIC:
+	case TRACE_MODE_SOCK:
+		break;
+	case TRACE_MODE_MONITOR:
+		trace_for_each(trace) {
+			if (!trace->monitor) {
+				trace_set_invalid_reason(trace, "monitor");
+				continue;
+			}
+			if (!trace_is_func(trace))
+				continue;
+			switch (trace->monitor) {
+			case TRACE_MONITOR_EXIT:
+				trace_set_retonly(trace);
+				break;
+			default:
+				break;
+			}
 		}
-		trace->status |= TRACE_ATTACH_MANUAL;
-		strcpy(trace->name, func);
-		pr_debug("%s is made manual attach\n", trace->name);
+		break;
+	case TRACE_MODE_RTT:
+		trace_set_enable(&trace_tcp_ack_update_rtt);
+		break;
+	default:
+		pr_err("mode not supported!\n");
+		goto err;
 	}
 
-	pr_debug("finished to resolve kernel symbol\n");
+	if (!args->ret)
+		return 0;
+
+	switch (trace_ctx.mode) {
+	case TRACE_MODE_BASIC:
+		pr_err("return value trace is only supported on "
+		       "default and 'diag' mode\n");
+		goto err;
+	case TRACE_MODE_TIMELINE:
+		trace_all_set_ret();
+		break;
+	case TRACE_MODE_DIAG:
+	default:
+		break;
+	}
+	return 0;
+
+err:
+	return -EINVAL;
+}
+
+static int trace_prepare_traces()
+{
+	bpf_args_t *bpf_args = &trace_ctx.bpf_args;
+	trace_args_t *args = &trace_ctx.args;
+	char *traces_stack = args->traces_stack;
+	char *traces = args->traces;
+	bool fix_trace;
+
+	if ((1 << trace_ctx.mode) & TRACE_MODE_BPF_CTX_MASK)
+		trace_group_enable("life", TRACE_PARSE_ENABLE);
+	trace_exec_cond();
+
 	trace_prepare_status();
+
+	fix_trace = args->drop || args->rtt;
+	if (!traces) {
+		if (!fix_trace)
+			trace_enable_default();
+	} else if (strcmp(traces, "?") == 0) {
+		args->show_traces = true;
+		traces = "all";
+	} else {
+		if (fix_trace) {
+			pr_err("can't specify traces in this mode!\n");
+			return -EINVAL;
+		}
+		trace_parse_traces(traces, TRACE_PARSE_ENABLE);
+	}
+
+	trace_parse_traces(args->trace_exclude, TRACE_PARSE_EXCLUDE);
+	if (args->trace_matcher) {
+		if (!(trace_ctx.mode_mask & TRACE_MODE_BPF_CTX_MASK)) {
+			pr_err("--trace-matcher not supported in this mode\n");
+			return -EINVAL;
+		}
+		trace_parse_traces(args->trace_matcher, TRACE_PARSE_MATCHER);
+		bpf_args->match_mode = true;
+	}
+
+	if (args->trace_free) {
+		if (!(trace_ctx.mode_mask & TRACE_MODE_BPF_CTX_MASK)) {
+			pr_err("--trace_free not supported in this mode\n");
+			return -EINVAL;
+		}
+		trace_parse_traces(args->trace_free, TRACE_PARSE_CFREE);
+	}
+
+	trace_parse_traces(traces_stack, TRACE_PARSE_STACK);
+	if (trace_prepare_mode(args))
+		return -EINVAL;
 
 	if (trace_ctx.ops->prepare_traces)
 		trace_ctx.ops->prepare_traces();
+
+	/* This should be called after trace_ctx.ops->prepare_traces, as it
+	 * will setup the skb or sk index for the traces.
+	 */
+	if (!fix_trace)
+		trace_check_sock_skb();
 
 	return 0;
 }
@@ -817,8 +781,7 @@ int trace_pre_load()
 		pr_debug("prog: %s is made no-autoload\n", trace->prog);
 
 check_ret:
-		if (!trace_is_func(trace) || (trace_is_ret_any(trace) &&
-		    autoload))
+		if (!trace_is_func(trace) || (trace_is_ret_any(trace) && autoload))
 			continue;
 
 		prog = bpf_pbn(trace_ctx.obj, trace->ret_prog);
