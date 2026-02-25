@@ -10,7 +10,7 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
-#include <sys_utils.h>
+#include "sys_utils.h"
 #include <bpf/btf.h>
 
 #include "bpf_utils.h"

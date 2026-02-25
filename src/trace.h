@@ -4,12 +4,12 @@
 #define _H_TRACE
 
 #include <stdbool.h>
-#include <list.h>
-#include <sys_utils.h>
-#include <net_utils.h>
 
+#include "utils/list.h"
+#include "utils/sys_utils.h"
+#include "utils/net_utils.h"
 #include "progs/shared.h"
-#include <bpf_utils.h>
+#include "utils/bpf_utils.h"
 #include "progs/trace_funcs.h"
 
 enum trace_type {
@@ -132,6 +132,7 @@ typedef struct trace_args {
 typedef struct {
 	/* open and initialize the bpf program */
 	int (*trace_load)();
+	int (*trace_pre_load)();
 	/* load and attach the bpf program */
 	int (*trace_attach)();
 	void (*trace_poll)(void *ctx, void *data, u32 size);
@@ -139,7 +140,6 @@ typedef struct {
 	void (*trace_close)();
 	void (*trace_ready)();
 	void (*print_stack)(int key);
-	void (*trace_feat_probe)();
 	bool (*trace_supported)();
 	void (*prepare_traces)();
 	int  (*raw_poll)();
@@ -310,11 +310,10 @@ static inline bool trace_mode_diag()
 void trace_show(trace_group_t *group);
 void init_trace_group();
 trace_group_t *search_trace_group(char *name);
-int trace_prepare();
-int trace_bpf_load_and_attach();
 int trace_poll();
 bool trace_analyzer_enabled(struct analyzer *analyzer);
 int trace_pre_load();
+int trace_main();
 
 bpf_args_t *get_bpf_args();
 bpf_data_t *get_bpf_data();

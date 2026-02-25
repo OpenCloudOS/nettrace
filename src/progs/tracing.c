@@ -587,14 +587,6 @@ static inline int bpf_ipt_do_table(context_info_t *info, struct xt_table *table,
 	return handle_entry_output(info, (event_t *)e);
 }
 
-DEFINE_TRACE_INIT(ipt_do_table_legacy, ipt_do_table, .skb = ctx_get_arg(ctx, 0))
-{
-	struct nf_hook_state *state = info_get_arg(info, 1);
-	struct xt_table *table = info_get_arg(info, 2);
-
-	return bpf_ipt_do_table(info, table, state);
-}
-
 DEFINE_TRACE_SKB(ipt_do_table, 1)
 {
 	struct nf_hook_state *state = info_get_arg(info, 2);

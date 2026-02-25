@@ -12,14 +12,13 @@
 #include <string.h>
 
 #include <stdlib.h>
-#include <parse_sym.h>
 
 #include "output.h"
 #include "trace.h"
 #include "analysis.h"
 #include "dropreason.h"
 #include "rstreason.h"
-#include "sys_utils.h"
+#include "utils/sys_utils.h"
 
 #define CTX_HASH_LENGTH 1024
 static struct hlist_head ctx_hash[CTX_HASH_LENGTH] = {};

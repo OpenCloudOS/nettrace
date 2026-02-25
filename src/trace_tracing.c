@@ -1,5 +1,4 @@
 #include <sys/sysinfo.h>
-#include <parse_sym.h>
 
 #include "trace.h"
 #include "analysis.h"
@@ -136,7 +135,7 @@ static void tracing_check_args()
 	}
 }
 
-static int tracing_trace_load()
+static int tracing_trace_pre_load()
 {
 	DECLARE_LIBBPF_OPTS(bpf_object_open_opts, opts,
 		.btf_custom_path = trace_ctx.args.btf_path,
@@ -155,12 +154,13 @@ static int tracing_trace_load()
 
 	skel->rodata->m_config = trace_ctx.bpf_args;
 	skel->bss->m_data = trace_ctx.bpf_data;
+	return 0;
+err:
+	return -1;
+}
 
-	if (trace_pre_load()) {
-		pr_err("failed to prepare load\n");
-		goto err;
-	}
-
+static int tracing_trace_load()
+{
 	tracing_adjust_target();
 	if (tracing__load(skel)) {
 		pr_err("failed to load tracing-based eBPF\n");
@@ -264,6 +264,7 @@ static void tracing_print_stack(int key)
 trace_ops_t tracing_ops = {
 	.trace_attach = tracing_trace_attach,
 	.trace_load = tracing_trace_load,
+	.trace_pre_load = tracing_trace_pre_load,
 	.trace_close = tracing_trace_close,
 	.trace_ready = tracing_trace_ready,
 	.trace_supported = tracing_trace_supported,

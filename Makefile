@@ -57,7 +57,7 @@ pack:
 rpm:
 	@make clean
 	@rm -rf ${SOURCE_DIR} && mkdir -p ${SOURCE_DIR}
-	@cp -r docs src utils script Makefile common.mk README.md LICENSE ${SOURCE_DIR}/
+	@cp -r docs src script Makefile README.md LICENSE ${SOURCE_DIR}/
 	@sed -i 's/%{VERSION}/$(VERSION)/' ${SOURCE_DIR}/script/nettrace.spec
 	@cd ~/rpmbuild/SOURCES/ && tar -czf nettrace-${VERSION}.tar.gz	\
 		nettrace-${VERSION}

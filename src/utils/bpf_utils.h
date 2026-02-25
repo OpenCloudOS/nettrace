@@ -2,7 +2,7 @@
 #define _H_BPF_UTILS
 
 #include <bpf/bpf.h>
-#include <net_utils.h>
+#include "net_utils.h"
 
 #define BPF_PROG_FD(name)	(bpf_program__fd(obj->progs.name))
 #define BPF_MAP_FD(name)	(bpf_map__fd(obj->maps.name))

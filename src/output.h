@@ -1,7 +1,7 @@
 #ifndef _H_PKT_UTILS
 #define _H_PKT_UTILS
 
-#include <net_utils.h>
+#include "utils/net_utils.h"
 #include "progs/skb_shared.h"
 
 #define MAX_ADDR_LENGTH		48

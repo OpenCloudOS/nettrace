@@ -174,17 +174,10 @@ children:
     desc: base netfilter entry
     visual: true
     children:
-    - names:
-      - &ipt_do_table
-        name: ipt_do_table
-      - name: ipt_do_table_legacy
-        cond: '[ $(verlte "$(uname -r)" "5.16") -eq -1 ]' # valid when kernel < 5.16
-        backup: *ipt_do_table
+    - name: ipt_do_table
       analyzer: iptable
       monitor: 1
-      skb: 1
       custom: 1
-      target: ipt_do_table
       rules:
       - exp: eq 0
         level: error

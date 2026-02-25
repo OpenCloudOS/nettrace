@@ -6,7 +6,7 @@
 #include <bpf/libbpf.h>
 #include <errno.h>
 
-#include <arg_parse.h>
+#include "utils/arg_parse.h"
 
 #include "nettrace.h"
 #include "trace.h"
@@ -23,7 +23,7 @@ static int print_all_levels(enum libbpf_print_level level, const char *format, v
 	return vfprintf(stdout, format, args);
 }
 
-static void do_parse_args(int argc, char *argv[])
+static int do_parse_args(int argc, char *argv[])
 {
 	bool show_log = false, debug = false, version = false, libbpf_debug = false;
 	trace_args_t *trace_args = &trace_ctx.args;
@@ -327,7 +327,7 @@ static void do_parse_args(int argc, char *argv[])
 
 	if (version) {
 		pr_version();
-		exit(0);
+		return 1;
 	}
 
 /* convert the args to the eBPF pkt_arg struct */
@@ -364,9 +364,9 @@ static void do_parse_args(int argc, char *argv[])
 	pkt_args->daddr_v6_enable = !!daddr_pf;
 	pkt_args->addr_v6_enable = !!addr_pf;
 
-	return;
+	return 0;
 err:
-	exit(-EINVAL);
+	return -EINVAL;
 }
 
 static void do_exit(int code)
@@ -400,16 +400,16 @@ static void do_stop(int sig)
 
 int main(int argc, char *argv[])
 {
+	int err = 0;
+
 	init_trace_group();
-	do_parse_args(argc, argv);
+	err = do_parse_args(argc, argv);
+	if (err)
+		return err < 0 ? err : 0;
 
-	if (trace_prepare())
-		goto err;
-
-	if (trace_bpf_load_and_attach()) {
-		pr_err("failed to load bpf\n");
-		goto err;
-	}
+	err = trace_main();
+	if (err)
+		goto out;
 
 	signal(SIGTERM, do_stop);
 	signal(SIGINT, do_stop);
@@ -417,7 +417,6 @@ int main(int argc, char *argv[])
 	pr_info("begin trace...\n");
 	trace_poll();
 	do_exit(0);
-	return 0;
-err:
-	return -1;
+out:
+	return err;
 }

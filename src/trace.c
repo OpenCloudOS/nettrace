@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: MulanPSL-2.0
 
 #include <stdio.h>
-#include <list.h>
 #include <errno.h>
 
-#include <parse_sym.h>
-
+#include "utils/list.h"
 #include "trace.h"
 #include "analysis.h"
 #include "dropreason.h"
@@ -133,24 +131,32 @@ trace_t *search_trace_enabled(char *name)
 	return NULL;
 }
 
+enum {
+	TRACE_PARSE_ENABLE,
+	TRACE_PARSE_STACK,
+	TRACE_PARSE_MATCHER,
+	TRACE_PARSE_EXCLUDE,
+	TRACE_PARSE_CFREE,
+};
+
 static int trace_set_target(trace_t *t, int target)
 {
 	int err = 0;
 
 	switch (target) {
-	case 1:
+	case TRACE_PARSE_ENABLE:
 		trace_set_enable(t);
 		break;
-	case 2:
+	case TRACE_PARSE_STACK:
 		err = trace_set_stack(t);
 		break;
-	case 3:
+	case TRACE_PARSE_MATCHER:
 		trace_set_flag(t->index, FUNC_FLAG_MATCHER);
 		break;
-	case 4:
+	case TRACE_PARSE_EXCLUDE:
 		trace_set_invalid_reason(t, "exclude");
 		break;
-	case 5:
+	case TRACE_PARSE_CFREE:
 		trace_set_flag(t->index, FUNC_FLAG_CFREE);
 		t->status |= TRACE_CFREE;
 		break;
@@ -471,16 +477,10 @@ static int trace_prepare_args()
 			pr_err("can't specify traces in this mode!\n");
 			goto err;
 		}
-		trace_parse_traces(traces, 1);
+		trace_parse_traces(traces, TRACE_PARSE_ENABLE);
 	}
 
-	trace_parse_traces(traces_stack, 2);
-	if (!debugfs_mounted()) {
-		pr_err("debugfs is not mounted! Please mount it with the "
-		       "command: mount -t debugfs debugfs "
-		       "/sys/kernel/debug\n");
-		goto err;
-	}
+	trace_parse_traces(traces_stack, TRACE_PARSE_STACK);
 
 	if (drop_reason_support()) {
 		bpf_args->drop_reason = true;
@@ -501,13 +501,13 @@ static int trace_prepare_args()
 	trace_ctx.bpf_data.__rate_limit = bpf_args->rate_limit;
 	bpf_args->has_filter = trace_has_pkt_filter();
 
-	trace_parse_traces(args->trace_exclude, 4);
+	trace_parse_traces(args->trace_exclude, TRACE_PARSE_EXCLUDE);
 	if (args->trace_matcher) {
 		if (!(trace_ctx.mode_mask & TRACE_MODE_BPF_CTX_MASK)) {
 			pr_err("--trace-matcher not supported in this mode\n");
 			goto err;
 		}
-		trace_parse_traces(args->trace_matcher, 3);
+		trace_parse_traces(args->trace_matcher, TRACE_PARSE_MATCHER);
 		bpf_args->match_mode = true;
 	}
 
@@ -516,7 +516,7 @@ static int trace_prepare_args()
 			pr_err("--trace_free not supported in this mode\n");
 			goto err;
 		}
-		trace_parse_traces(args->trace_free, 5);
+		trace_parse_traces(args->trace_free, TRACE_PARSE_CFREE);
 	}
 
 	if (args->latency_show && !mode_has_context()) {
@@ -651,7 +651,7 @@ static int trace_prepare_traces()
 			continue;
 		}
 
-		if (sym_get_type(trace->name) != SYM_NOT_EXIST)
+		if (symbol_in_available_filter_functions(trace->name, false, NULL))
 			continue;
 
 		if (!trace_is_func(trace)) {
@@ -660,7 +660,7 @@ static int trace_prepare_traces()
 		}
 
 		sprintf(name, "%s.", trace->name);
-		if (sym_search_pattern(name, func, true) == SYM_NOT_EXIST) {
+		if (!symbol_in_available_filter_functions(name, true, func)) {
 			pr_verb("kernel function %s not founded, skipped\n",
 				trace->name);
 			trace_set_invalid_reason(trace, "not found");
@@ -678,38 +678,6 @@ static int trace_prepare_traces()
 		trace_ctx.ops->prepare_traces();
 
 	return 0;
-}
-
-static void trace_prepare_backup()
-{
-	trace_t *trace, *next;
-
-	trace_for_each(trace) {
-		bool hitted = false;
-
-		/* find a enabled leader of a backup chain */
-		if (trace->is_backup || !trace->backup ||
-		    !trace_is_enable(trace))
-			continue;
-
-		next = trace;
-		while (next) {
-			/* keep the first valid trace and make the others
-			 * invalid.
-			 */
-			if (hitted) {
-				trace_set_invalid_reason(next, "backup");
-				goto next_bk;
-			}
-			if (!trace_is_invalid(next)) {
-				pr_debug("backup: valid prog for %s is %s\n",
-					 next->name, next->prog);
-				hitted = true;
-			}
-next_bk:
-			next = next->backup;
-		}
-	}
 }
 
 static void trace_print_enabled()
@@ -735,119 +703,6 @@ static void trace_print_enabled()
 		pr_verb("\t%s: %s, prog: %s, status: 0x%x, flags: 0x%x\n", fmt, trace->name,
 			trace->prog, trace->status, trace_get_flags(trace->index));
 	}
-}
-
-int trace_prepare()
-{
-	int err;
-
-#ifndef NO_BTF
-	if (!file_exist("/sys/kernel/btf/vmlinux") && !trace_ctx.args.btf_path) {
-		pr_err("BTF is not support by your kernel, please compile"
-		       "this tool with \"NO_BTF=1\"\n");
-		err = -ENOTSUP;
-		goto err;
-	}
-	if (!kernel_has_config("DEBUG_INFO_BTF_MODULES")) {
-		pr_warn("DEBUG_INFO_BTF_MODULES not enabled, some infomation, "
-			"such as nf_tables, maybe incorrect\n");
-	}
-#else
-	if (strcmp(kernel_version_str(), macro_to_str(__KERN_VER)) != 0) {
-		pr_warn("running kernel version(%s) is not compatible with the compile version(%s), "
-			"result maybe incorrect!\n",
-			kernel_version_str(), macro_to_str(__KERN_VER));
-	}
-#endif
-
-	err = trace_prepare_args();
-	if (err)
-		goto err;
-
-	if (!tracing_ops.trace_supported()) {
-		pr_err("tracing (fentry/fexit) is not supported!\n");
-		err = -EINVAL;
-		goto err;
-	}
-	set_trace_ops(&tracing_ops);
-
-	err = trace_prepare_traces();
-	if (err)
-		goto err;
-
-	if (geteuid() != 0) {
-		pr_err("Please run as root!\n");
-		err = -EPERM;
-		goto err;
-	}
-
-	if (trace_ctx.ops->trace_feat_probe) {
-		pr_debug("kernel feature probe begin\n");
-		trace_ctx.ops->trace_feat_probe();
-		pr_debug("kernel feature probe end\n");
-	}
-
-	trace_prepare_backup();
-	if (trace_ctx.args.show_traces) {
-		trace_show(&root_group);
-		exit(0);
-	}
-	trace_print_enabled();
-
-	return 0;
-err:
-	return err;
-}
-
-int trace_pre_load()
-{
-	struct bpf_program *prog;
-	trace_t *trace;
-	bool autoload;
-
-	/* disable all programs that is not enabled or invalid */
-	trace_for_each(trace) {
-		autoload = !trace_is_invalid(trace) &&
-			   trace_is_enable(trace);
-
-		if (autoload && !trace_is_retonly(trace))
-			goto check_ret;
-
-		prog = bpf_pbn(trace_ctx.obj, trace->prog);
-		if (!prog) {
-			pr_verb("prog: %s not founded\n", trace->prog);
-			continue;
-		}
-		bpf_program__set_autoload(prog, false);
-		pr_debug("prog: %s is made no-autoload\n", trace->prog);
-
-check_ret:
-		if (!trace_is_func(trace) || (trace_is_ret_any(trace) &&
-		    autoload))
-			continue;
-
-		prog = bpf_pbn(trace_ctx.obj, trace->ret_prog);
-		if (!prog) {
-			pr_verb("prog: %s not founded\n", trace->ret_prog);
-			continue;
-		}
-		bpf_program__set_autoload(prog, false);
-		pr_debug("ret prog: %s is made no-autoload\n", trace->prog);
-	}
-
-	return 0;
-}
-
-static int trace_bpf_load()
-{
-	/* skel is already opened */
-	if (trace_ctx.obj)
-		return 0;
-
-	if (liberate_l())
-		pr_warn("failed to set rlimit\n");
-
-	return trace_ctx.ops->trace_load();
 }
 
 static void trace_prepare_ops()
@@ -883,23 +738,99 @@ static void trace_prepare_ops()
 	}
 }
 
-int trace_bpf_load_and_attach()
+static int trace_sys_check(void)
 {
-	if (trace_bpf_load())
+	if (!debugfs_mounted()) {
+		pr_err("debugfs is not mounted! Please mount it with the "
+		       "command: mount -t debugfs debugfs "
+		       "/sys/kernel/debug\n");
+		return -EOPNOTSUPP;
+	}
+
+	if (!file_exist("/sys/kernel/btf/vmlinux") && !trace_ctx.args.btf_path) {
+		pr_err("BTF is not support by your kernel, please use the legancy version\n");
+		return -EOPNOTSUPP;
+	}
+
+	if (!kernel_has_config("DEBUG_INFO_BTF_MODULES")) {
+		pr_warn("DEBUG_INFO_BTF_MODULES not enabled, some infomation, "
+			"such as nf_tables, maybe incorrect\n");
+	}
+
+	return 0;
+}
+
+static int trace_prepare()
+{
+	int err;
+
+	err = trace_prepare_args();
+	if (err)
 		goto err;
 
-	pr_debug("begin to attach eBPF program...\n");
-	if (trace_ctx.ops->trace_attach()) {
-		trace_ctx.ops->trace_close();
+	if (!tracing_ops.trace_supported()) {
+		pr_err("tracing (fentry/fexit) is not supported!\n");
+		err = -EINVAL;
 		goto err;
 	}
-	pr_debug("eBPF program attached successfully\n");
+	set_trace_ops(&tracing_ops);
 
+	err = trace_prepare_traces();
+	if (err)
+		goto err;
+
+	if (trace_ctx.args.show_traces) {
+		trace_show(&root_group);
+		exit(0);
+	}
+	trace_print_enabled();
 	trace_prepare_ops();
 
 	return 0;
 err:
-	return -1;
+	return err;
+}
+
+int trace_pre_load()
+{
+	struct bpf_program *prog;
+	trace_t *trace;
+
+	if (geteuid() != 0) {
+		pr_err("Please run as root!\n");
+		return -EPERM;
+	}
+
+	/* disable all programs that is not enabled or invalid */
+	trace_for_each(trace) {
+		bool autoload = !trace_is_invalid(trace) && trace_is_enable(trace);
+
+		if (autoload && !trace_is_retonly(trace))
+			goto check_ret;
+
+		prog = bpf_pbn(trace_ctx.obj, trace->prog);
+		if (!prog) {
+			pr_verb("prog: %s not founded\n", trace->prog);
+			continue;
+		}
+		bpf_program__set_autoload(prog, false);
+		pr_debug("prog: %s is made no-autoload\n", trace->prog);
+
+check_ret:
+		if (!trace_is_func(trace) || (trace_is_ret_any(trace) &&
+		    autoload))
+			continue;
+
+		prog = bpf_pbn(trace_ctx.obj, trace->ret_prog);
+		if (!prog) {
+			pr_verb("prog: %s not founded\n", trace->ret_prog);
+			continue;
+		}
+		bpf_program__set_autoload(prog, false);
+		pr_debug("ret prog: %s is made no-autoload\n", trace->prog);
+	}
+
+	return 0;
 }
 
 static inline int ringbuf_handler_wrap(void *ctx, void *data, size_t size)
@@ -954,5 +885,49 @@ int trace_poll()
 		if (poll_timeout(err))
 			break;
 	}
+	return 0;
+}
+
+int trace_main()
+{
+	int err;
+
+	err = trace_sys_check();
+	if (err)
+		return err;
+
+	err = trace_prepare();
+	if (err)
+		return err;
+
+	if (liberate_l())
+		pr_warn("failed to set rlimit\n");
+
+	if (trace_ctx.ops->trace_pre_load) {
+		err = trace_ctx.ops->trace_pre_load();
+		if (err)
+			return err;
+	}
+
+	err = trace_pre_load();
+	if (err) {
+		pr_err("failed to prepare load\n");
+		return err;
+	}
+
+	err = trace_ctx.ops->trace_load();
+	if (err) {
+		pr_err("failed to load bpf\n");
+		return err;
+	}
+
+	pr_debug("begin to attach eBPF program...\n");
+	err = trace_ctx.ops->trace_attach();
+	if (err) {
+		trace_ctx.ops->trace_close();
+		return err;
+	}
+	pr_debug("eBPF program attached successfully\n");
+
 	return 0;
 }
