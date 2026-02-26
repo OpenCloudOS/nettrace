@@ -24,21 +24,21 @@ children:
     desc: link layer (L2) of packet in
     visual: true
     children:
-    - name: napi_gro_receive_entry:0
+    - name: napi_gro_receive_entry
       tp: net/napi_gro_receive_entry
-    - name: dev_gro_receive:1
+    - name: dev_gro_receive
       rules:
       - exp: eq 4
         level: error
         msg: packet is dropped by GRO
-    - name: enqueue_to_backlog:0
+    - name: enqueue_to_backlog
       analyzer: ret
       monitor: 1
       rules:
       - <<: *rule_ret_err
         msg: failed to enqeueu to CPU backlog
         adv: increase the /proc/sys/net/core/netdev_max_backlog
-    - name: netif_receive_generic_xdp:0
+    - name: netif_receive_generic_xdp
       analyzer: ret
       rules:
       - exp: eq 1
@@ -51,27 +51,27 @@ children:
       - exp: eq 4
         level: info
         msg: packet is redirected by XDP program
-    - name: xdp_do_generic_redirect:1
+    - name: xdp_do_generic_redirect
       analyzer: ret
       monitor: 1
       rules:
       - <<: *rule_ret_err
         msg: XDP failed to redirect skb
         adv: check if the target ifindex exist
-    - name: netif_receive_skb:0
+    - name: netif_receive_skb
       tp: net/netif_receive_skb
   - name: link-out
     desc: link layer (L2) of packet out
     visual: true
     children:
-    - name: __dev_queue_xmit:0
+    - name: __dev_queue_xmit
       analyzer: ret
       monitor: 1
       rules:
       - <<: *rule_ret_err
         msg: failed to queue packet to qdisc
         adv: too complex to say
-    - name: dev_hard_start_xmit:0
+    - name: dev_hard_start_xmit
       rules:
       - <<: *rule_msg
         msg: skb is successfully sent to the NIC driver
@@ -79,15 +79,14 @@ children:
     desc: TC(traffic control) module
     visual: true
     children:
-    - tcf_classify:0
-    - cls_bpf_classify:0
-    - tcf_bpf_act:0
-    - name: qdisc_dequeue:3
+    - tcf_classify
+    - cls_bpf_classify
+    - tcf_bpf_act
+    - name: qdisc_dequeue
       tp: qdisc/qdisc_dequeue
       custom: true
       analyzer: qdisc
-    - &qdisc_enqueue
-      name: qdisc_enqueue:2
+    - name: qdisc_enqueue
       tp: qdisc/qdisc_enqueue
       custom: true
       analyzer: qdisc
@@ -96,29 +95,29 @@ children:
     default: false
     visual: true
     children:
-    - ipvlan_queue_xmit:0
-    - ipvlan_handle_frame:0
-    - ipvlan_rcv_frame:1
-    - ipvlan_xmit_mode_l3:0
-    - ipvlan_process_v4_outbound:0
+    - ipvlan_queue_xmit
+    - ipvlan_handle_frame
+    - ipvlan_rcv_frame
+    - ipvlan_xmit_mode_l3
+    - ipvlan_process_v4_outbound
   - name: bridge
     desc: bridge network interface
     default: false
     visual: true
     children:
-    - name: br_nf_pre_routing:1
+    - name: br_nf_pre_routing
       analyzer: ret
       msg: ebtable in PREROUTING
       rules: *rules_nf
-    - name: br_nf_forward_ip:1
+    - name: br_nf_forward_ip
       analyzer: ret
       msg: ebtable in FORWARD
       rules: *rules_nf
-    - name: br_nf_forward_arp:1
+    - name: br_nf_forward_arp
       analyzer: ret
       msg: ebtable in FORWARD
       rules: *rules_nf
-    - name: br_nf_post_routing:1
+    - name: br_nf_post_routing
       analyzer: ret
       msg: ebtable in POST_ROUTING
       rules: *rules_nf
@@ -126,33 +125,34 @@ children:
     visual: true
     desc: arp protocol
     children:
-    - arp_rcv:0
-    - arp_process:2
+    - arp_rcv
+    - arp_process
   - name: bonding
     visual: true
     desc: bonding netdevice
     children:
-    - bond_dev_queue_xmit:1
+    - bond_dev_queue_xmit
   - name: vxlan
     visual: true
     desc: vxlan model
     children:
-    - __iptunnel_pull_header:0
-    - vxlan_rcv/0:1
-    - vxlan_xmit_one:0
+    - __iptunnel_pull_header
+    - vxlan_rcv
+    - vxlan_xmit_one
   - name: vlan
     visual: true
     desc: vlan module
     children:
-    - vlan_do_receive
-    - vlan_dev_hard_start_xmit:0
+    - name: vlan_do_receive
+      custom: 1
+    - vlan_dev_hard_start_xmit
   - name: ovs
     visual: true
     desc: openvswitch module
     children:
-    - netdev_port_receive:0
-    - ovs_vport_receive:1
-    - ovs_dp_process_packet:0
+    - netdev_port_receive
+    - ovs_vport_receive
+    - ovs_dp_process_packet
 - name: packet
   desc: the process of skb of type PF_PACKET
   children:
@@ -160,13 +160,13 @@ children:
     desc: the process of skb of type PF_PACKET
     visual: true
     children:
-    - packet_rcv:0
-    - tpacket_rcv:0
+    - packet_rcv
+    - tpacket_rcv
   - name: pkt-output
     desc: the process of skb of type PF_PACKET
     visual: true
     children:
-    - packet_direct_xmit:0
+    - packet_direct_xmit
 - name: netfilter
   desc: netfilter process(filter, nat, etc)
   children:
@@ -186,7 +186,7 @@ children:
       - exp: eq 1
         level: info
         msg: packet is accepted
-    - name: nft_do_chain:0
+    - name: nft_do_chain
       analyzer: iptable
       monitor: 1
       custom: 1
@@ -198,13 +198,13 @@ children:
       - exp: eq 1
         level: info
         msg: packet is accepted
-    - name: nf_nat_manip_pkt:0
+    - name: nf_nat_manip_pkt
       analyzer: ret
       rules:
       - exp: any
         msg: NAT happens (packet address will change)
         level: warn
-    - name: nf_hook_slow:0
+    - name: nf_hook_slow
       monitor: 1
       analyzer: nf
       custom: 1
@@ -218,16 +218,16 @@ children:
     default: false
     visual: true
     children:
-    - ipv4_confirm:1
-    - nf_confirm:0
-    - ipv4_conntrack_in:1
-    - nf_conntrack_in:3
-    - ipv4_pkt_to_tuple:0
-    - tcp_new:1
-    - tcp_pkt_to_tuple:0
-    - resolve_normal_ct:2
-    - tcp_packet:1
-    - name: tcp_in_window:4
+    - ipv4_confirm
+    - nf_confirm
+    - ipv4_conntrack_in
+    - nf_conntrack_in
+    - ipv4_pkt_to_tuple
+    - tcp_new
+    - tcp_pkt_to_tuple
+    - resolve_normal_ct
+    - tcp_packet
+    - name: tcp_in_window
       default: true
       analyzer: ret
       monitor: 1
@@ -238,7 +238,7 @@ children:
         adv: |
           enable 'nf_conntrack_tcp_be_liberal' with the command
           'echo 1 > /proc/sys/net/netfilter/nf_conntrack_tcp_be_liberal'
-    - __nf_ct_refresh_acct:2
+    - __nf_ct_refresh_acct
 - name: ip
   desc: ip protocol layer (L3) of the network stack
   children:
@@ -246,61 +246,61 @@ children:
     desc: ip layer of packet in
     visual: true
     children:
-    - ip_rcv:0
-    - ip_rcv_core:0
-    - ip_rcv_finish:2
-    - ip_local_deliver:0
-    - ip_local_deliver_finish:2
-    - ip_forward:0
-    - ip_forward_finish:2
-    - ip6_forward:0
-    - ip6_rcv_finish:2
-    - ip6_rcv_core:0
-    - ipv6_rcv:0
+    - ip_rcv
+    - ip_rcv_core
+    - ip_rcv_finish
+    - ip_local_deliver
+    - ip_local_deliver_finish
+    - ip_forward
+    - ip_forward_finish
+    - ip6_forward
+    - ip6_rcv_finish
+    - ip6_rcv_core
+    - ipv6_rcv
   - name: ip-out
     desc: ip layer of packet out
     visual: true
     children:
-    - name: __ip_queue_xmit:1/0
-    - __ip_local_out:2/1
-    - ip_output:2
-    - ip_finish_output:2
-    - ip_finish_output_gso:2
-    - ip_finish_output2:2
-    - ip6_output:2
-    - ip6_finish_output:2
-    - ip6_finish_output2:2
-    - ip6_send_skb:0
-    - ip6_local_out:2
+    - name: __ip_queue_xmit
+    - __ip_local_out
+    - ip_output
+    - ip_finish_output
+    - ip_finish_output_gso
+    - ip_finish_output2
+    - ip6_output
+    - ip6_finish_output
+    - ip6_finish_output2
+    - ip6_send_skb
+    - ip6_local_out
   - name: xfrm
     desc: xfrm module
     visual: true
     children:
-    - xfrm4_output:2
-    - xfrm_output:1
-    - xfrm_output2:2
-    - xfrm_output_gso:2
-    - xfrm_output_resume:1
-    - xfrm4_transport_output:1
-    - xfrm4_prepare_output:1
-    - xfrm4_policy_check:2
-    - xfrm4_rcv:0
-    - xfrm_input:0
-    - xfrm4_transport_input:1
+    - xfrm4_output
+    - xfrm_output
+    - xfrm_output2
+    - xfrm_output_gso
+    - xfrm_output_resume
+    - xfrm4_transport_output
+    - xfrm4_prepare_output
+    - xfrm4_policy_check
+    - xfrm4_rcv
+    - xfrm_input
+    - xfrm4_transport_input
   - name: esp
     desc: ip layer of packet out
     visual: true
     children:
-    - ah_output:1
-    - esp_output:1
-    - esp_output_tail:1
-    - ah_input:1
-    - esp_input:1
+    - ah_output
+    - esp_output
+    - esp_output_tail
+    - ah_input
+    - esp_input
   - name: ip-route
     desc: ip route for packet in and out
     visual: true
     children:
-    - name: fib_validate_source:0
+    - name: fib_validate_source
       monitor: 1
       rules:
       - <<: *rule_ret_err
@@ -308,7 +308,7 @@ children:
         adv: |
           check you ip route config or disable rp_filter with command
           'echo 0 > /proc/sys/net/ipv4/conf/all/rp_filter'
-    - name: ip_route_input_slow:0
+    - name: ip_route_input_slow
       monitor: 1
       rules:
       - <<: *rule_ret_err
@@ -321,44 +321,44 @@ children:
     desc: tcp layer of packet in
     visual: true
     children:
-    - tcp_v4_rcv:0
-    - tcp_v6_rcv:0
-    - tcp_filter:1
-    - tcp_child_process:2
-    - name: tcp_v4_send_reset:1/0
+    - tcp_v4_rcv
+    - tcp_v6_rcv
+    - tcp_filter
+    - tcp_child_process
+    - name: tcp_v4_send_reset
       custom: 1
       analyzer: reset
       rules:
       - exp: any
         level: error
         msg: connection reset initiated by transport layer (TCP stack, skb)
-    - name: tcp_v6_send_reset:1/0
+    - name: tcp_v6_send_reset
       custom: 1
       analyzer: reset
       rules:
       - exp: any
         level: error
         msg: connection reset initiated by transport layer (TCP stack, skb)
-    - tcp_v4_do_rcv:1
-    - tcp_v6_do_rcv:1
-    - tcp_rcv_established:1/0
+    - tcp_v4_do_rcv
+    - tcp_v6_do_rcv
+    - tcp_rcv_established
     - &tcp_rcv_state_process
-      name: tcp_rcv_state_process:1/0
+      name: tcp_rcv_state_process
       rules:
       - exp: any
         level: info
         msg: TCP socket state has changed
-    - tcp_queue_rcv:1/0
-    - tcp_data_queue_ofo:1/0
-    - tcp_ack_probe/0
-    - tcp_ack:1/0
-    - tcp_probe_timer/0
-    - name: tcp_send_probe0/0
+    - tcp_queue_rcv
+    - tcp_data_queue_ofo
+    - tcp_ack_probe
+    - tcp_ack
+    - tcp_probe_timer
+    - name: tcp_send_probe0
       rules:
       - exp: any
         level: info
         msg: send zero-window probe packet
-    - name: __inet_lookup_listener:1
+    - name: __inet_lookup_listener
       monitor: 1
       analyzer: ret
       rules:
@@ -366,7 +366,7 @@ children:
         level: warn
         msg: tcp port is not listened
         adv: check your target tcp port
-    - name: inet6_lookup_listener:1
+    - name: inet6_lookup_listener
       analyzer: ret
       monitor: 1
       rules:
@@ -374,7 +374,7 @@ children:
         level: warn
         msg: tcp port is not listened
         adv: check your target tcp port
-    - name: tcp_bad_csum:0
+    - name: tcp_bad_csum
       tp: tcp/tcp_bad_csum
       monitor: 2
       rules:
@@ -385,17 +385,17 @@ children:
     desc: tcp layer of packet out
     visiual: true
     children:
-    - tcp_sendmsg_locked/0
-    - name: tcp_skb_entail/0:1
-    - name: skb_entail/0:1
-    - __tcp_push_pending_frames/0
-    - name: __tcp_transmit_skb:1/0
+    - tcp_sendmsg_locked
+    - name: tcp_skb_entail
+    - name: skb_entail
+    - __tcp_push_pending_frames
+    - name: __tcp_transmit_skb
       rules:
       - exp: ne 0
         level: warn
         msg: failed to xmit skb to ip layer
-    - name: __tcp_retransmit_skb/0:1
-    - tcp_rate_skb_delivered/0:1
+    - name: __tcp_retransmit_skb
+    - tcp_rate_skb_delivered
 - name: udp
   desc: udp protocol layer (L4) of the network stack
   children:
@@ -403,13 +403,13 @@ children:
     desc: udp layer of packet in
     visual: true
     children:
-    - udp_rcv:0
-    - udp_unicast_rcv_skb:1
-    - udp_queue_rcv_skb:1
-    - xfrm4_udp_encap_rcv:1
-    - xfrm4_rcv_encap:0
-    - __udp_queue_rcv_skb:1
-    - __udp_enqueue_schedule_skb:1
+    - udp_rcv
+    - udp_unicast_rcv_skb
+    - udp_queue_rcv_skb
+    - xfrm4_udp_encap_rcv
+    - xfrm4_rcv_encap
+    - __udp_queue_rcv_skb
+    - __udp_enqueue_schedule_skb
 - name: icmp
   desc: icmp(ping) protocol layer (L4) of the network stack
   children:
@@ -417,15 +417,15 @@ children:
     desc: icmp layer of packet in
     visual: true
     children:
-    - icmp_rcv:0
-    - icmp_echo:0
-    - icmp_reply:1
-    - icmpv6_rcv:0
-    - icmpv6_echo_reply:0
-    - ping_rcv:0
-    - __ping_queue_rcv_skb:1
-    - ping_queue_rcv_skb:1
-    - name: ping_lookup:1
+    - icmp_rcv
+    - icmp_echo
+    - icmp_reply
+    - icmpv6_rcv
+    - icmpv6_echo_reply
+    - ping_rcv
+    - __ping_queue_rcv_skb
+    - ping_queue_rcv_skb
+    - name: ping_lookup
       analyzer: ret
       rules:
       - exp: eq 0
@@ -439,73 +439,73 @@ children:
   - name: tcp-state
     desc: TCP socket state releated hooks
     children:
-    - name: inet_listen/0
+    - name: inet_listen
       custom: true
       rules:
       - exp: any
         level: info
         msg: TCP socket begin to listen
-    - tcp_v4_destroy_sock/0
-    - name: tcp_close/0
+    - tcp_v4_destroy_sock
+    - name: tcp_close
       rules:
       - exp: any
         level: info
         msg: TCP socket is closed
     - *tcp_rcv_state_process
-    - name: tcp_send_active_reset/0
+    - name: tcp_send_active_reset
       custom: 1
       analyzer: reset
       rules:
       - exp: any
         level: error
         msg: connection reset initiated by application (active close, sk)
-    - name: tcp_ack_update_rtt/0
+    - name: tcp_ack_update_rtt
       custom: 1
       analyzer: rtt
   - name: tcp-congestion
     desc: TCP congestion control releated hooks
     children:
-    - tcp_write_timer_handler/0
-    - name: tcp_retransmit_timer/0
+    - tcp_write_timer_handler
+    - name: tcp_retransmit_timer
       monitor: 2
       rules:
       - exp: any
         level: warn
         msg: TCP retransmission timer out
-    - name: tcp_enter_recovery/0
+    - name: tcp_enter_recovery
       rules:
       - exp: any
         level: warn
         msg: TCP enter conguestion recover
-    - name: tcp_enter_loss/0
+    - name: tcp_enter_loss
       rules:
       - exp: any
         level: warn
         msg: TCP enter conguestion loss
-    - name: tcp_try_keep_open/0
+    - name: tcp_try_keep_open
       rules:
       - exp: any
         level: info
         msg: TCP enter conguestion open state
-    - name: tcp_enter_cwr/0
+    - name: tcp_enter_cwr
       rules:
       - exp: any
         level: info
         msg: TCP enter conguestion CWR state
-    - tcp_fastretrans_alert/0
-    - tcp_rearm_rto/0
-    - tcp_event_new_data_sent/0
-    - tcp_schedule_loss_probe/0
+    - tcp_fastretrans_alert
+    - tcp_rearm_rto
+    - tcp_event_new_data_sent
+    - tcp_schedule_loss_probe
   - name: tcp-retrans
     desc: TCP retransmission releated hooks
     children:
-    - name: tcp_rtx_synack/0
+    - name: tcp_rtx_synack
       monitor: 2
-    - name: tcp_retransmit_skb/0
+    - name: tcp_retransmit_skb
       monitor: 2
-    - name: tcp_rcv_spurious_retrans/0:1
+    - name: tcp_rcv_spurious_retrans
       monitor: 2
-    - name: tcp_dsack_set/0
+    - name: tcp_dsack_set
       monitor: 2
       rules:
       - exp: any
@@ -515,20 +515,20 @@ children:
   desc: skb clone and free
   visual: true
   children:
-  - name: skb_clone:0
+  - name: skb_clone
     analyzer: clone
     rules:
     - exp: any
       level: info
       msg: packet is cloned
-  - name: consume_skb:0
+  - name: consume_skb
     tp: skb/consume_skb
     analyzer: free
     rules:
     - exp: any
       level: info
       msg: packet is freed (normally)
-  - name: kfree_skb:0
+  - name: kfree_skb
     tp: skb/kfree_skb
     custom: 1
     analyzer: drop
@@ -537,9 +537,9 @@ children:
     - exp: any
       level: error
       msg: packet is dropped by kernel
-  - name: __kfree_skb:0
+  - name: __kfree_skb
     analyzer: free
-  - name: kfree_skb_partial:0
+  - name: kfree_skb_partial
     analyzer: free
-  - name: skb_attempt_defer_free:0
+  - name: skb_attempt_defer_free
     analyzer: free

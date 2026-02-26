@@ -866,8 +866,8 @@ int trace_main()
 	if (liberate_l())
 		pr_warn("failed to set rlimit\n");
 
-	if (trace_ctx.ops->trace_pre_load) {
-		err = trace_ctx.ops->trace_pre_load();
+	if (trace_ctx.ops->trace_open) {
+		err = trace_ctx.ops->trace_open();
 		if (err)
 			return err;
 	}

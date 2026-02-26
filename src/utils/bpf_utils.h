@@ -13,6 +13,8 @@ extern long int syscall (long int __sysno, ...);
 const struct btf_type *btf_get_type(char *name);
 int btf_get_arg_count(char *name);
 int btf_get_trace_param_index(char *name, const char *struct_name);
+int btf_get_trace_args(char *name, int *arg_count, int *skb, int *sk);
+int btf_get_trace_args_local(char *name, int *arg_count, int *skb, int *sk);
 void btf_release_cache(void);
 const struct btf_type *btf_get_type_ext(char *name, struct btf **type_btf);
 

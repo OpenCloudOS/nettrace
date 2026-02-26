@@ -209,14 +209,13 @@ def gen_trace(trace, group, p_name):
 
     if 'tp' in trace:
         trace_type = 'TRACE_TP'
-        tp = trace['tp'].split('/')
-        if 'skb' in trace and 'custom' not in trace:
-            probe_str = f'\tFN_tp({name}, {trace["skb"]})\t\\\n'
+        if 'custom' not in trace:
+            probe_str = f'\tFN_tp({name})\t\\\n'
         else:
             probe_str = f'\tFNC({name})\t\\\n'
     else:
         trace_type = 'TRACE_FUNCTION'
-        if 'skb' in trace or 'sk' in trace:
+        if 'custom' not in trace:
             arg_count = ''
             if 'monitor' in trace:
                 if 'arg_count' not in trace:
@@ -226,12 +225,7 @@ def gen_trace(trace, group, p_name):
                     arg_count = trace['arg_count']
                 if arg_count:
                     fields_str += append_trace_field('arg_count', trace, 'raw')
-            skb = trace['skb'] if 'skb' in trace else ''
-            sk = trace['sk'] if 'sk' in trace else ''
-            if 'custom' not in trace:
-                probe_str = f'\tFN({name}, {skb}, {sk})\t\\\n'
-            else:
-                probe_str = f'\tFNC({name})\t\\\n'
+            probe_str = f'\tFN({name})\t\\\n'
         else:
             probe_str = f'\tFNC({name})\t\\\n'
             trace['custom'] = True

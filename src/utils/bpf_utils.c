@@ -90,6 +90,9 @@ struct btf_module_cache {
 	struct btf_module_cache *next;
 };
 
+static bool btf_param_type_match(struct btf *btf, __u32 type_id,
+				 const char *struct_name);
+
 static struct btf_module_cache *module_btf_cache;
 static bool module_btf_loaded;
 
@@ -187,7 +190,9 @@ static const struct btf_type *btf_find_func_type(struct btf *btf, const char *na
 	return t;
 }
 
-const struct btf_type *btf_get_type_ext(char *name, struct btf **type_btf)
+static const struct btf_type *btf_get_type_ext_opt(char *name,
+						    struct btf **type_btf,
+						    bool load_module_btf)
 {
 	struct btf_module_cache *cache;
 	const struct btf_type *t;
@@ -205,6 +210,9 @@ const struct btf_type *btf_get_type_ext(char *name, struct btf **type_btf)
 		return t;
 	}
 
+	if (!load_module_btf)
+		return NULL;
+
 	btf_load_all_module_btf();
 	for (cache = module_btf_cache; cache; cache = cache->next) {
 		if (!cache->btf)
@@ -220,6 +228,11 @@ const struct btf_type *btf_get_type_ext(char *name, struct btf **type_btf)
 	}
 
 	return NULL;
+}
+
+const struct btf_type *btf_get_type_ext(char *name, struct btf **type_btf)
+{
+	return btf_get_type_ext_opt(name, type_btf, true);
 }
 
 const struct btf_type *btf_get_type(char *name)
@@ -241,6 +254,57 @@ int btf_get_arg_count(char *name)
 		return -ENOENT;
 
 	return btf_vlen(t);
+}
+
+static int btf_get_trace_args_opt(char *name, int *arg_count, int *skb, int *sk,
+				  bool load_module_btf)
+{
+	const struct btf_type *func_type, *func_proto;
+	const struct btf_param *params;
+	struct btf *type_btf;
+	int i, nr;
+	int local_skb = -ENOENT;
+	int local_sk = -ENOENT;
+
+	func_type = btf_get_type_ext_opt(name, &type_btf, load_module_btf);
+	if (!func_type)
+		return -ENOENT;
+
+	func_proto = btf__type_by_id(type_btf, func_type->type);
+	if (!func_proto || !btf_is_func_proto(func_proto))
+		return -ENOENT;
+
+	nr = btf_vlen(func_proto);
+	params = btf_params(func_proto);
+	for (i = 0; i < nr; i++) {
+		if (local_skb < 0 &&
+		    btf_param_type_match(type_btf, params[i].type, "sk_buff"))
+			local_skb = i;
+		if (local_sk < 0 &&
+		    btf_param_type_match(type_btf, params[i].type, "sock"))
+			local_sk = i;
+		if (local_skb >= 0 && local_sk >= 0)
+			break;
+	}
+
+	if (arg_count)
+		*arg_count = nr;
+	if (skb)
+		*skb = local_skb;
+	if (sk)
+		*sk = local_sk;
+
+	return 0;
+}
+
+int btf_get_trace_args(char *name, int *arg_count, int *skb, int *sk)
+{
+	return btf_get_trace_args_opt(name, arg_count, skb, sk, true);
+}
+
+int btf_get_trace_args_local(char *name, int *arg_count, int *skb, int *sk)
+{
+	return btf_get_trace_args_opt(name, arg_count, skb, sk, false);
 }
 
 static bool btf_param_type_match(struct btf *btf, __u32 type_id,

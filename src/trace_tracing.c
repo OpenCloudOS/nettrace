@@ -1,4 +1,6 @@
 #include <sys/sysinfo.h>
+#include <string.h>
+#include <linux/bpf.h>
 
 #include "trace.h"
 #include "analysis.h"
@@ -75,47 +77,98 @@ static void tracing_load_rules()
 	}
 }
 
-static void tracing_check_args()
+static trace_t *find_trace_by_prog(const char *prog_name)
 {
-	bool support_feat_args_ext, support_btf_modules;
 	trace_t *trace;
 
-	support_feat_args_ext = tracing_support_feat_args_ext();
-	if (!support_feat_args_ext)
-		pr_warn("tracing kernel function with 6+ arguments is not"
-			"supportd by your kernel, following functions "
-			"are skipped:\n");
+	if (!prog_name)
+		return NULL;
 
 	trace_for_each(trace) {
-		if (trace_is_invalid(trace) || !trace_is_enable(trace) ||
-		    !trace_is_func(trace))
-			continue;
-
-		if (!support_feat_args_ext && trace->arg_count > 6) {
-			pr_warn("\t%s\n", trace->name);
-			trace_set_invalid(trace);
-		}
+		if ((trace->prog && !strcmp(prog_name, trace->prog)) ||
+		    (trace->ret_prog && !strcmp(prog_name, trace->ret_prog)))
+			return trace;
 	}
 
-	support_btf_modules = kernel_has_config("DEBUG_INFO_BTF_MODULES");
-	if (!support_btf_modules)
-		pr_warn("CONFIG_DEBUG_INFO_BTF_MODULES is not supported "
-			"by your kernel, following functions are "
-			"skipped:\n");
-
-	trace_for_each(trace) {
-		if (trace_is_invalid(trace) || !trace_is_enable(trace) ||
-		    !trace_is_func(trace))
-			continue;
-
-		if (!support_btf_modules && !btf_get_type(trace->name)) {
-			pr_warn("\t%s\n", trace->name);
-			trace_set_invalid(trace);
-		}
-	}
+	return NULL;
 }
 
-static int tracing_trace_pre_load()
+static int fixup_insn(struct bpf_program *prog, trace_t *trace)
+{
+	const short magic_skb = (short)(BPF_MAGIC_SKB * sizeof(__u64));
+	const short magic_sk = (short)(BPF_MAGIC_SK * sizeof(__u64));
+	const short skb_off = (short)(trace->skb * sizeof(__u64));
+	const short sk_off = (short)(trace->sk * sizeof(__u64));
+	struct bpf_insn *insns;
+	size_t insn_cnt, i;
+	int fixed = 0;
+
+	insns = (struct bpf_insn *)bpf_program__insns(prog);
+	insn_cnt = bpf_program__insn_cnt(prog);
+
+	for (i = 0; i < insn_cnt; i++) {
+		struct bpf_insn *insn = &insns[i];
+
+		if (BPF_CLASS(insn->code) != BPF_LDX ||
+		    BPF_MODE(insn->code) != BPF_MEM ||
+		    BPF_SIZE(insn->code) != BPF_DW)
+			continue;
+
+		if (insn->off == magic_skb) {
+			if (trace->skb >= 0) {
+				insn->off = skb_off;
+			} else {
+				insn->code = BPF_ALU64 | BPF_MOV | BPF_K;
+				insn->src_reg = 0;
+				insn->off = 0;
+				insn->imm = 0;
+			}
+			fixed++;
+			continue;
+		}
+
+		if (insn->off == magic_sk) {
+			if (trace->sk >= 0) {
+				insn->off = sk_off;
+			} else {
+				insn->code = BPF_ALU64 | BPF_MOV | BPF_K;
+				insn->src_reg = 0;
+				insn->off = 0;
+				insn->imm = 0;
+			}
+			fixed++;
+		}
+	}
+
+	return fixed;
+}
+
+static void fixup_programs()
+{
+	struct bpf_program *prog;
+	int fixed_total = 0;
+
+	bpf_object__for_each_program(prog, skel->obj) {
+		const char *prog_name = bpf_program__name(prog);
+		trace_t *trace = find_trace_by_prog(prog_name);
+		int fixed;
+
+		if (!trace || trace_is_invalid(trace))
+			continue;
+
+		fixed = fixup_insn(prog, trace);
+		if (!fixed)
+			continue;
+
+		pr_debug("fixed %d instruction(s) in prog=%s, trace=%s (skb=%d sk=%d)\n",
+			 fixed, prog_name, trace->name, trace->skb, trace->sk);
+		fixed_total += fixed;
+	}
+
+	pr_debug("instruction fixup done, total=%d\n", fixed_total);
+}
+
+static int tracing_trace_open()
 {
 	DECLARE_LIBBPF_OPTS(bpf_object_open_opts, opts,
 		.btf_custom_path = trace_ctx.args.btf_path,
@@ -130,10 +183,12 @@ static int tracing_trace_pre_load()
 
 	tracing_load_rules();
 	trace_ctx.obj = skel->obj;
-	tracing_check_args();
 
 	skel->rodata->m_config = trace_ctx.bpf_args;
 	skel->bss->m_data = trace_ctx.bpf_data;
+
+	fixup_programs();
+
 	return 0;
 err:
 	return -1;
@@ -243,6 +298,8 @@ static void tracing_print_stack(int key)
 
 static void tracing_prepare_traces()
 {
+	bool support_feat_args_ext;
+	int checked = 0, resolved = 0, missing = 0;
 	trace_t *trace;
 
 	pr_debug("begin to resolve kernel symbol...\n");
@@ -252,9 +309,11 @@ static void tracing_prepare_traces()
 	 */
 	trace_for_each(trace) {
 		char __name[136], *name;
+		int skb_idx, sk_idx;
 
 		if (trace_is_invalid(trace) || !trace_is_enable(trace))
 			continue;
+		checked++;
 
 		/* function name contain "." is not supported by BTF */
 		if (strchr(trace->name, '.')) {
@@ -269,14 +328,28 @@ static void tracing_prepare_traces()
 			name = trace->name;
 		}
 
-		if (!btf_get_type_ext(name, NULL)) {
-			pr_verb("kernel function %s not founded, skipped\n", name);
-			trace_set_invalid_reason(trace, "not found");
-			continue;
+		if (btf_get_trace_args_local(name, &trace->arg_count,
+					     &skb_idx, &sk_idx)) {
+			if (sym_get_type(name) == SYM_MODULE &&
+			    !btf_get_trace_args(name, &trace->arg_count,
+						&skb_idx, &sk_idx)) {
+				/* fallback to module BTF for module symbols */
+			} else {
+				pr_verb("kernel function %s not founded, skipped\n",
+					name);
+				trace_set_invalid_reason(trace, "not found");
+				missing++;
+				continue;
+			}
 		}
-
-		trace->skb = btf_get_trace_param_index(name, "sk_buff");
-		trace->sk = btf_get_trace_param_index(name, "sock");
+		trace->skb = skb_idx;
+		trace->sk = sk_idx;
+		if (!trace_is_func(trace)) {
+			trace->arg_count -= 1;
+			trace->skb -= 1;
+			trace->sk -= 1;
+		}
+		resolved++;
 
 		if (trace->skb >= 0 || trace->sk >= 0) {
 			pr_debug("trace %s args resolved by BTF: skb=%d, sk=%d\n",
@@ -285,13 +358,27 @@ static void tracing_prepare_traces()
 			pr_debug("trace %s has no skb or sk argument\n", name);
 		}
 	}
-	pr_debug("finished to resolve kernel symbol\n");
+
+	support_feat_args_ext = tracing_support_feat_args_ext();
+	if (!support_feat_args_ext) {
+		pr_warn("tracing kernel function with 6+ arguments is not"
+			"supportd by your kernel, following functions "
+			"are skipped:\n");
+		trace_for_each(trace) {
+			if (trace->arg_count > 6) {
+				pr_warn("\t%s\n", trace->name);
+				trace_set_invalid(trace);
+			}
+		}
+	}
+	pr_debug("finished to resolve kernel symbol: checked=%d resolved=%d missing=%d\n",
+		 checked, resolved, missing);
 }
 
 trace_ops_t tracing_ops = {
 	.trace_attach = tracing_trace_attach,
 	.trace_load = tracing_trace_load,
-	.trace_pre_load = tracing_trace_pre_load,
+	.trace_open = tracing_trace_open,
 	.trace_close = tracing_trace_close,
 	.trace_ready = tracing_trace_ready,
 	.trace_supported = tracing_trace_supported,

@@ -532,19 +532,38 @@ on_retonly:
 
 
 /**********************************************************************
- * 
+ *
  * Following is the definntion of all kind of BPF program.
  * 
  * DEFINE_ALL_TRACES() will define all the default implement of BPF
  * program, and the customize handle of kernel function or tracepoint
  * is defined following.
- * 
+ *
  **********************************************************************/
+
+#define arg_skb(ctx) ctx_get_arg(ctx, BPF_MAGIC_SKB)
+#define arg_sk(ctx) ctx_get_arg(ctx, BPF_MAGIC_SK)
+
+#define TRACE_DEFAULT(name)						\
+	DEFINE_TRACE_INIT(name, name, .skb = arg_skb(ctx),		\
+			  .sk = arg_sk(ctx))				\
+	{								\
+		return default_handle_entry(info);			\
+	}
+/* init the skb by the index of func args */
+#define DEFINE_TRACE_SKB(name)						\
+	DEFINE_TRACE_INIT(name, name, .skb = arg_skb(ctx))
+
+#define DEFINE_TP(name) DEFINE_TP_INIT(name, .skb = arg_skb(ctx))
+#define TP_DEFAULT(name) DEFINE_TP(name)				\
+	{								\
+		return default_handle_entry(info);			\
+	}
 
 #define FNC(name)
 DEFINE_ALL_TRACES(TRACE_DEFAULT, TP_DEFAULT, FNC)
 
-DEFINE_TP(kfree_skb, 0)
+DEFINE_TP(kfree_skb)
 {
 	drop_event_t *e;
 	u64 reason = 0;
@@ -587,7 +606,7 @@ static inline int bpf_ipt_do_table(context_info_t *info, struct xt_table *table,
 	return handle_entry_output(info, (event_t *)e);
 }
 
-DEFINE_TRACE_SKB(ipt_do_table, 1)
+DEFINE_TRACE_SKB(ipt_do_table)
 {
 	struct nf_hook_state *state = info_get_arg(info, 2);
 	struct xt_table *table = info_get_arg(info, 0);
@@ -604,7 +623,7 @@ DEFINE_TRACE_INIT(vlan_do_receive, vlan_do_receive)
 	return default_handle_entry(info);
 }
 
-DEFINE_TRACE_SKB(nf_hook_slow, 0)
+DEFINE_TRACE_SKB(nf_hook_slow)
 {	
 	struct nf_hook_entries *entries;
 	nf_hooks_event_t *hooks_event;
@@ -669,13 +688,13 @@ bpf_qdisc_handle(context_info_t *info, struct Qdisc *q)
 	return handle_entry_output(info, (event_t *)e);
 }
 
-DEFINE_TP(qdisc_dequeue, 3)
+DEFINE_TP(qdisc_dequeue)
 {
 	struct Qdisc *q = info_get_arg(info, 0);
 	return bpf_qdisc_handle(info, q);
 }
 
-DEFINE_TP(qdisc_enqueue, 2)
+DEFINE_TP(qdisc_enqueue)
 {
 	struct Qdisc *q = info_get_arg(info, 0);
 	return bpf_qdisc_handle(info, q);
@@ -733,9 +752,7 @@ DEFINE_TRACE_INIT(nft_do_chain, nft_do_chain,
 }
 #endif
 
-DEFINE_TRACE_INIT(tcp_v4_send_reset, tcp_v4_send_reset,
-		  .sk = ctx_get_arg(ctx, 0),
-		  .skb = ctx_get_arg(ctx, 1))
+DEFINE_TRACE_INIT(tcp_v4_send_reset, tcp_v4_send_reset, .sk = arg_sk(ctx), .skb = arg_skb(ctx))
 {
 	struct sock_common *skc_common;
 	reset_event_t *e;
@@ -751,9 +768,7 @@ DEFINE_TRACE_INIT(tcp_v4_send_reset, tcp_v4_send_reset,
 	return handle_entry_output(info, (event_t *)e);
 }
 
-DEFINE_TRACE_INIT(tcp_v6_send_reset, tcp_v6_send_reset,
-		  .sk = ctx_get_arg(ctx, 0),
- 		  .skb = ctx_get_arg(ctx, 1))
+DEFINE_TRACE_INIT(tcp_v6_send_reset, tcp_v6_send_reset, .sk = arg_sk(ctx), .skb = arg_skb(ctx))
 {
 	struct sock_common *skc_common;
 	reset_event_t *e;
@@ -769,8 +784,7 @@ DEFINE_TRACE_INIT(tcp_v6_send_reset, tcp_v6_send_reset,
 	return handle_entry_output(info, (event_t *)e);
 }
 
-DEFINE_TRACE_INIT(tcp_send_active_reset, tcp_send_active_reset,
-		 .sk = ctx_get_arg(ctx, 0))
+DEFINE_TRACE_INIT(tcp_send_active_reset, tcp_send_active_reset, .sk = arg_sk(ctx))
 {
 	struct sock_common *skc_common;
 	reset_event_t *e;
@@ -797,7 +811,7 @@ DEFINE_TRACE_INIT(inet_listen, inet_listen, .sk = ((struct socket *)ctx_get_arg(
 	return default_handle_entry(info);
 }
 
-DEFINE_TRACE_INIT(tcp_ack_update_rtt, tcp_ack_update_rtt, .sk = ctx_get_arg(ctx, 0))
+DEFINE_TRACE_INIT(tcp_ack_update_rtt, tcp_ack_update_rtt, .sk = arg_sk(ctx))
 {
 	u64 first_rtt, last_rtt;
 	rtt_event_t *e;

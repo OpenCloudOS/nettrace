@@ -48,8 +48,6 @@ bool	kernel_has_config(char *name);
 int	kernel_hz();
 u32	file_inode(char *path);
 char	*get_tracing_path();
-bool	symbol_in_available_filter_functions(const char *symbol, bool prefix,
-					     char *target);
 
 static inline int sym_get_type(const char *name)
 {

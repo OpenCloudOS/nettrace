@@ -46,23 +46,6 @@
 #define DEFINE_TRACE_INIT(name, target, info_init...)			\
 	__DEFINE_TRACE_INIT(name, target, info_init)
 
-/* init the skb by the index of func args */
-#define DEFINE_TRACE_SKB(name, skb_index)				\
-	DEFINE_TRACE_INIT(name, name,					\
-			  .skb = ctx_get_arg(ctx, skb_index))
-
-#define TRACE_DEFAULT(name, skb_index, sk_index)			\
-	DEFINE_TRACE_INIT(name, name,					\
-		.skb = nt_ternary_take(skb_index,			\
-				       ctx_get_arg(ctx, skb_index),	\
-				       NULL),				\
-		.sk = nt_ternary_take(sk_index,				\
-				      ctx_get_arg(ctx, sk_index),	\
-				      NULL))				\
-	{								\
-		return default_handle_entry(info);			\
-	}
-
 #define DEFINE_TP_INIT(name, info_init...)				\
 	DECLARE_FAKE_FUNC(fake__##name);				\
 	SEC("tp_btf/"#name)						\
@@ -71,10 +54,3 @@
 		TRACE_INIT_WRAPPER(name, false, info_init)		\
 	}								\
 	DECLARE_FAKE_FUNC(fake__##name)
-#define DEFINE_TP(name, skb_index)					\
-	DEFINE_TP_INIT(name, .skb = ctx_get_arg(ctx, skb_index))
-#define TP_DEFAULT(name, skb_index)					\
-	DEFINE_TP(name, skb_index)					\
-	{								\
-		return default_handle_entry(info);			\
-	}

@@ -132,7 +132,7 @@ typedef struct trace_args {
 typedef struct {
 	/* open and initialize the bpf program */
 	int (*trace_load)();
-	int (*trace_pre_load)();
+	int (*trace_open)();
 	/* load and attach the bpf program */
 	int (*trace_attach)();
 	void (*trace_poll)(void *ctx, void *data, u32 size);
