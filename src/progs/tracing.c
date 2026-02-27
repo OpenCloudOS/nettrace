@@ -251,10 +251,11 @@ static inline int pre_handle_entry(context_info_t *info, u16 func, bool is_retur
 
 	info->func_status = get_func_flags(func);
 	if (mode_has_context()) {
-		skb_ctx_t *sctx = info->sctx ?: bpf_map_lookup_elem(&m_skb_ctx, &info->skb);
+		skb_ctx_t *sctx = info->sctx;
 
 		info->is_return = is_return;
 		if (!sctx) {
+			sctx = bpf_map_lookup_elem(&m_skb_ctx, &info->skb);
 			/* skip no-matcher function in match mode if it is not
 			 * matched.
 			 */
@@ -263,6 +264,7 @@ static inline int pre_handle_entry(context_info_t *info, u16 func, bool is_retur
 			/* If the first function is a free, just ignore it. */
 			if (func_is_free(info->func_status))
 				return -1;
+			info->sctx = sctx;
 		}
 
 		/* skip handle_entry() for tiny case */
@@ -270,8 +272,6 @@ static inline int pre_handle_entry(context_info_t *info, u16 func, bool is_retur
 			ret = pre_tiny_output(info);
 		else if (trace_mode_latency())
 			ret = pre_handle_latency(info, sctx);
-		else if (sctx)
-			info->sctx = sctx;
 	}
 
 	if (m_config.func_stats) {
