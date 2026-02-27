@@ -17,7 +17,6 @@
 #include "sys_utils.h"
 
 static int __hz = -1;
-static char *available_filter_funcs = NULL;
 static char *proc_syms;
 static struct sym_result *result_list;
 int log_level = 0;

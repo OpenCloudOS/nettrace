@@ -96,6 +96,101 @@ static bool btf_param_type_match(struct btf *btf, __u32 type_id,
 static struct btf_module_cache *module_btf_cache;
 static bool module_btf_loaded;
 
+#define BTF_TYPE_HASH_BITS	12
+#define BTF_TYPE_HASH_SIZE	(1U << BTF_TYPE_HASH_BITS)
+
+struct btf_type_cache_entry {
+	char *name;
+	const struct btf_type *type;
+	struct btf *btf;
+	bool found;
+	struct btf_type_cache_entry *next;
+};
+
+static struct btf_type_cache_entry *local_type_cache[BTF_TYPE_HASH_SIZE];
+static struct btf_type_cache_entry *module_type_cache[BTF_TYPE_HASH_SIZE];
+
+static unsigned int btf_type_hash_name(const char *name)
+{
+	unsigned long hash = 5381;
+	unsigned char c;
+
+	while ((c = (unsigned char)*name++))
+		hash = ((hash << 5) + hash) + c;
+
+	return (unsigned int)hash & (BTF_TYPE_HASH_SIZE - 1);
+}
+
+static struct btf_type_cache_entry *btf_type_cache_lookup(
+	struct btf_type_cache_entry **table, const char *name)
+{
+	struct btf_type_cache_entry *entry;
+	unsigned int idx;
+
+	idx = btf_type_hash_name(name);
+	for (entry = table[idx]; entry; entry = entry->next) {
+		if (strcmp(entry->name, name) == 0)
+			return entry;
+	}
+
+	return NULL;
+}
+
+static void btf_type_cache_store(struct btf_type_cache_entry **table,
+				 const char *name, const struct btf_type *type,
+				 struct btf *btf, bool found)
+{
+	struct btf_type_cache_entry *entry;
+	unsigned int idx;
+	size_t len;
+
+	entry = btf_type_cache_lookup(table, name);
+	if (entry) {
+		entry->type = type;
+		entry->btf = btf;
+		entry->found = found;
+		return;
+	}
+
+	len = strlen(name) + 1;
+	entry = calloc(1, sizeof(*entry));
+	if (!entry)
+		return;
+
+	entry->name = malloc(len);
+	if (!entry->name) {
+		free(entry);
+		return;
+	}
+	memcpy(entry->name, name, len);
+
+	entry->type = type;
+	entry->btf = btf;
+	entry->found = found;
+
+	idx = btf_type_hash_name(name);
+	entry->next = table[idx];
+	table[idx] = entry;
+}
+
+static void btf_type_cache_clear(struct btf_type_cache_entry **table)
+{
+	struct btf_type_cache_entry *entry;
+	struct btf_type_cache_entry *next;
+	unsigned int i;
+
+	for (i = 0; i < BTF_TYPE_HASH_SIZE; i++) {
+		entry = table[i];
+		while (entry) {
+			next = entry->next;
+			free(entry->name);
+			free(entry);
+			entry = next;
+		}
+		table[i] = NULL;
+	}
+}
+
 static int btf_prepare()
 {
 	if (!local_btf) {
@@ -125,11 +220,13 @@ static void btf_release_module_cache()
 
 	module_btf_cache = NULL;
 	module_btf_loaded = false;
+	btf_type_cache_clear(module_type_cache);
 }
 
 void btf_release_cache(void)
 {
 	btf_release_module_cache();
+	btf_type_cache_clear(local_type_cache);
 	if (local_btf) {
 		btf__free(local_btf);
 		local_btf = NULL;
@@ -191,9 +288,10 @@ static const struct btf_type *btf_find_func_type(struct btf *btf, const char *na
 }
 
 static const struct btf_type *btf_get_type_ext_opt(char *name,
-						    struct btf **type_btf,
-						    bool load_module_btf)
+						   struct btf **type_btf,
+						   bool load_module_btf)
 {
+	struct btf_type_cache_entry *entry;
 	struct btf_module_cache *cache;
 	const struct btf_type *t;
 
@@ -203,15 +301,36 @@ static const struct btf_type *btf_get_type_ext_opt(char *name,
 	if (btf_prepare())
 		return NULL;
 
-	t = btf_find_func_type(local_btf, name);
-	if (t) {
-		if (type_btf)
-			*type_btf = local_btf;
-		return t;
+	entry = btf_type_cache_lookup(local_type_cache, name);
+	if (entry) {
+		if (entry->found) {
+			if (type_btf)
+				*type_btf = local_btf;
+			return entry->type;
+		}
+	} else {
+		t = btf_find_func_type(local_btf, name);
+		if (t) {
+			btf_type_cache_store(local_type_cache, name, t, local_btf, true);
+			if (type_btf)
+				*type_btf = local_btf;
+			return t;
+		}
+		btf_type_cache_store(local_type_cache, name, NULL, NULL, false);
 	}
 
 	if (!load_module_btf)
 		return NULL;
+
+	entry = btf_type_cache_lookup(module_type_cache, name);
+	if (entry) {
+		if (entry->found) {
+			if (type_btf)
+				*type_btf = entry->btf;
+			return entry->type;
+		}
+		return NULL;
+	}
 
 	btf_load_all_module_btf();
 	for (cache = module_btf_cache; cache; cache = cache->next) {
@@ -222,11 +341,13 @@ static const struct btf_type *btf_get_type_ext_opt(char *name,
 		if (!t)
 			continue;
 
+		btf_type_cache_store(module_type_cache, name, t, cache->btf, true);
 		if (type_btf)
 			*type_btf = cache->btf;
 		return t;
 	}
 
+	btf_type_cache_store(module_type_cache, name, NULL, NULL, false);
 	return NULL;
 }
 
