@@ -131,12 +131,12 @@ static int do_parse_args(int argc, char *argv[])
 			.desc = "enable 'diagnose' mode",
 		},
 		{
-			.lname = "diag-quiet", .dest = &trace_args->intel_quiet,
+			.lname = "diag-quiet", .dest = &trace_args->diag_quiet,
 			.type = OPTION_BOOL,
 			.desc = "only print abnormal packet",
 		},
 		{
-			.lname = "diag-keep", .dest = &trace_args->intel_keep,
+			.lname = "diag-keep", .dest = &trace_args->diag_keep,
 			.type = OPTION_BOOL,
 			.desc = "don't quit when abnormal packet found",
 		},

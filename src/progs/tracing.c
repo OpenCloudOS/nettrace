@@ -169,18 +169,18 @@ static __always_inline void update_stats_log(u32 val)
 	update_stats_key(key);
 }
 
-static __always_inline void check_skb_dead(u8 func_flags, skb_ctx_t *sctx)
+static __always_inline void check_skb_dead(u8 func_flags, skb_ctx_t *sctx, struct sk_buff *skb)
 {
 	if (!sctx->dead && func_is_free(func_flags)) {
 		sctx->dead = true;
-		put_skb_ctx(sctx, (void *)&sctx);
+		put_skb_ctx(sctx, (void *)&skb);
 	}
 }
 
 static inline int pre_tiny_output(context_info_t *info)
 {
 	handle_tiny_output(info);
-	check_skb_dead(info->func_status, info->sctx);
+	check_skb_dead(info->func_status, info->sctx, info->skb);
 
 	return 1;
 }
@@ -206,7 +206,7 @@ static inline int pre_handle_latency(context_info_t *info, skb_ctx_t *sctx)
 			if (!sctx->func2 || /* skip a single match function */
 			    delta < m_config.latency_min ||
 			    m_config.latency_summary) {
-				check_skb_dead(info->func_status, sctx);
+				check_skb_dead(info->func_status, sctx, info->skb);
 				if (m_config.latency_summary)
 					update_stats_log(delta);
 
@@ -251,11 +251,10 @@ static inline int pre_handle_entry(context_info_t *info, u16 func, bool is_retur
 
 	info->func_status = get_func_flags(func);
 	if (mode_has_context()) {
-		skb_ctx_t *sctx = info->sctx;
+		skb_ctx_t *sctx = info->sctx ?: bpf_map_lookup_elem(&m_skb_ctx, &info->skb);
 
 		info->is_return = is_return;
 		if (!sctx) {
-			sctx = bpf_map_lookup_elem(&m_skb_ctx, &info->skb);
 			/* skip no-matcher function in match mode if it is not
 			 * matched.
 			 */
@@ -264,9 +263,9 @@ static inline int pre_handle_entry(context_info_t *info, u16 func, bool is_retur
 			/* If the first function is a free, just ignore it. */
 			if (func_is_free(info->func_status))
 				return -1;
-			info->sctx = sctx;
 		}
 
+		info->sctx = sctx;
 		/* skip handle_entry() for tiny case */
 		if (sctx && m_config.tiny_output)
 			ret = pre_tiny_output(info);
@@ -309,12 +308,6 @@ static inline void handle_entry_finish(context_info_t *info, int err)
 
 	sctx = info->sctx;
 	if (sctx) {
-		/* free the skb context in two conditions:
-		 *   1. free function called
-		 *   2. no pending return for the fentry+fexit progs
-		 */
-		check_skb_dead(info->func_status, sctx);
-
 		/* for fentry+fexit case, check the free of skb context in put_skb_ctx().
 		 * In other case, check it if it is a free function.
 		 */
@@ -324,6 +317,16 @@ static inline void handle_entry_finish(context_info_t *info, int err)
 			else
 				get_skb_ctx(sctx);
 		}
+
+		/* free the skb context in two conditions:
+		 *   1. free function called
+		 *   2. no pending return for the fentry+fexit progs
+		 *
+		 * check_skb_dead() must be called after the return checking.
+		 * If this is the entry of a free function, we need to make
+		 * sure the return pending is counted first.
+		 */
+		check_skb_dead(info->func_status, sctx, info->skb);
 	} else {
 		init_skb_ctx((void *)&info->skb, info->func, trace_mode_latency(),
 			     func_is_ret(info->func_status));

@@ -101,8 +101,8 @@ typedef struct trace_args {
 	bool timeline;
 	bool ret;
 	bool intel;
-	bool intel_quiet;
-	bool intel_keep;
+	bool diag_quiet;
+	bool diag_keep;
 	bool basic;
 	bool monitor;
 	bool drop;

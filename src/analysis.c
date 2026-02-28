@@ -432,7 +432,7 @@ static void analy_diag_handle(analy_ctx_t *ctx)
 		pr_info("\n");
 	}
 
-	if ((ctx->status & ANALY_CTX_ERROR) && !trace_ctx.args.intel_keep) {
+	if ((ctx->status & ANALY_CTX_ERROR) && !trace_ctx.args.diag_keep) {
 		pr_info_color("analysis finished!");
 		trace_stop();
 	} else if (!rule) {
@@ -448,7 +448,7 @@ void analy_ctx_output(analy_ctx_t *ctx)
 	fake_analy_ctx_t *fake;
 	u32 latency = 0;
 
-	if (trace_mode_diag() && trace_ctx.args.intel_quiet &&
+	if (trace_mode_diag() && trace_ctx.args.diag_quiet &&
 	    !ctx->status)
 		goto free_ctx;
 
