@@ -26,11 +26,11 @@
 
 ## 二、编译安装
 
-nettrace是采用C语言编写的基于eBPF（libbpf）的命令行工具，在使用和安装时可以用编译好的RPM包和二进制程序。本工具对各个版本的内核都进行了兼容，最低可支持centos7的3.10版本的内核（需要自己编译）。
+nettrace是采用C语言编写的基于eBPF（libbpf）的命令行工具，支持通过RPM/DEB包、二进制包或源码编译方式安装。当前版本仅支持BTF内核环境（即`/sys/kernel/btf/vmlinux`可用）。
 
 ### 2.1 RPM/DEB安装
 
-对于支持BTF特性（内核版本 >= 5.3，并且配置了`CONFIG_DEBUG_INFO_BTF=y`内核配置项）的内核，可以直接下载[releases](https://github.com/OpenCloudOS/nettrace/releases)中编译好的`nettrace-xxx-1.btf.x86_64.rpm`、`nettrace-xxx-1.btf.x86_64.deb`安装包进行安装使用；对于不支持BTF的低版本的内核，需要在对应的系统上手动编译后才能使用。对于OpenCloudOS/TencentOS系统，可以直接使用yum命令来进行在线安装：
+对于支持BTF特性（内核版本 >= 5.3，并且配置了`CONFIG_DEBUG_INFO_BTF=y`）的内核，可以直接下载[releases](https://github.com/OpenCloudOS/nettrace/releases)中编译好的`nettrace-xxx-1.btf.x86_64.rpm`、`nettrace-xxx-1.btf.x86_64.deb`安装包进行安装使用。对于OpenCloudOS/TencentOS系统，可以直接使用yum命令来进行在线安装：
 
 ```shell
 sudo yum install nettrace
@@ -40,34 +40,36 @@ sudo yum install nettrace
 
 ### 2.2 二进制下载
 
-直接从[releases](https://github.com/OpenCloudOS/nettrace/releases)下载编译好的二进制包也是可以的，[releases](https://github.com/OpenCloudOS/nettrace/releases)中的`tar.bz2`格式的压缩包即为二进制程序。由于里面的工具采用的都是静态编译的方式，因此在内核版本支持的情况下，都是可以直接下载解压后运行的。**再次提醒**：对于不支持BTF的内核版本，需要手动编译才能使用。
+直接从[releases](https://github.com/OpenCloudOS/nettrace/releases)下载编译好的二进制包也是可以的，[releases](https://github.com/OpenCloudOS/nettrace/releases)中的`tar.bz2`格式的压缩包即为二进制程序。由于里面的工具采用的都是静态编译的方式，因此在内核版本支持的情况下，都是可以直接下载解压后运行的。**注意**：运行环境需要支持BTF。
 
 ### 2.3 手动编译
 
-下面来介绍下如何在Centos、ubuntu等环境上进行nettrace工具的手动编译和安装。本工具目前在3.10/4.14/4.15/5.4/5.15/6.4等版本的内核上均进行过适配和测试。由于本工具对于libbpf的版本要求比较高，因此建议使用**基于docker**的方式来进行编译。
+下面介绍如何在CentOS、Ubuntu等环境上进行nettrace源码编译和安装。
 
 #### 2.3.1 依赖安装
 
-本工具在编译的时候依赖于`libelf`、`libbpf`和`bpftool`组件，`clang`和`gcc`编译工具。对于不支持BTF的内核，还需要安装`kernel-headers`头文件，可以通过查看目录`/lib/modules/$(uname -a)/build`是否存在来判断`headers`是否已经被安装了。
+本工具在编译时依赖`libelf`、`libbpf`、`bpftool`、`clang`、`gcc`和`make`。
 
 **注意事项**：
-1. 请尽量使用较高版本的libbpf（v0.2以上版本）。如果当前发行版的libbpf库版本达不到要求，可以手动进行libbpf的编译安装：
+1. `libbpf`版本要求：`>= v1.4.0`。nettrace使用了`bpf_core_cast()`，该宏在`libbpf v1.4.0`引入（参考：https://github.com/libbpf/libbpf/releases/tag/v1.4.0）。
 
     ```shell
-    wget https://github.com/libbpf/libbpf/archive/refs/tags/v1.1.0.tar.gz
-    tar -xf v1.1.0.tar.gz
-    cd libbpf-1.1/src
-    make install
+    pkg-config --modversion libbpf
     ```
 
-2. clang版本要在10+
+2. `clang`版本建议`>= 12`
+3. 运行时内核需支持BTF，可通过以下命令确认：
+
+    ```shell
+    ls /sys/kernel/btf/vmlinux
+    ```
 
 ##### ubuntu/debian
 
 对于ubuntu系统，使用以下命令安装依赖：
 
 ```shell
-sudo apt install python3 python3-yaml libelf-dev libbpf-dev linux-headers-`uname -r` clang llvm gcc linux-tools-`uname -r` linux-tools-generic -y
+sudo apt install python3 python3-yaml libelf-dev libbpf-dev clang llvm gcc make bpftool -y
 ```
 
 ##### opencloudos/tencentos/centos
@@ -75,7 +77,7 @@ sudo apt install python3 python3-yaml libelf-dev libbpf-dev linux-headers-`uname
 对于opencloudos/tencentos/centos用户，使用以下命令来安装依赖：
 
 ```shell
-sudo yum install python3-yaml elfutils-devel elfutils-devel-static libbpf-devel libbpf-static kernel-headers kernel-devel clang llvm bpftool -y
+sudo yum install python3-yaml elfutils-devel elfutils-devel-static libbpf-devel libbpf-static clang llvm gcc make bpftool -y
 ```
 
 #### 2.3.2 编译
@@ -91,24 +93,6 @@ make all
 #### 2.3.3 打包
 
 使用命令`make rpm`可制作rpm包；使用命令`make pack`可制作二进制包（二进制程序打包到压缩包中，默认存放路径为output文件夹）。
-
-### 2.4 基于docker编译
-
-对于**支持BTF**的内核，无需安装任何依赖，可以直接使用以下命令来进行nettrace的编译：
-
-```shell
-docker run -it --rm --network=host --privileged -v $(pwd):$(pwd) -v /lib/modules/:/lib/modules/ -v /usr/src/:/usr/src/ imagedong/nettrace-build make -C $(pwd) all
-```
-
-对于**不支持BTF**的系统，这需要先安装`kernel-headers`软件包，如上面的手动编译里面所说的。ubuntu系统使用命令`apt install linux-headers-$(uname -r) -y`进行安装；centos使用命令`yum install kernel-headers kernel-devel -y`进行安装。然后使用下面的命令进行编译：
-
-```shell
-docker run -it --rm --network=host --privileged -v $(pwd):$(pwd) -v /lib/modules/:/lib/modules/ -v /usr/src/:/usr/src/ imagedong/nettrace-build make -C $(pwd) NO_BTF=1 all
-```
-
-**注意：** 兼容模式编译出来的nettrace工具只能运行在和`KERNEL`内核版本相同的环境上。如果没有指定`KERNEL`，那采用的就是当前编译环境上的内核头文件，这就要求编译环境和运行环境所使用的内核要完全相同才能正常运行。否则，会发生意想不到的意外。
-
-**注意：** docker镜像可能会更新，为了使用最新的镜像，建议先试用命令`docker pull imagedong/nettrace-build`来获取最新的容器镜像。
 
 ## 三、使用方法
 
@@ -231,7 +215,7 @@ sudo ./nettrace -p icmp --saddr 169.254.128.15
 begin trace...
 ***************** e8fbc700,e8fbdc00 ***************
 [1273445.360831] [dev_gro_receive     ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 54754
-[1273445.360844] [__netif_receive_skb_core] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 54754
+[1273445.360844] [netif_receive_skb] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 54754
 [1273445.360847] [ip_rcv              ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 54754
 [1273445.360850] [ip_rcv_core         ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 54754
 [1273445.360854] [skb_clone           ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 54754
@@ -260,7 +244,7 @@ sudo ./nettrace -p icmp --saddr 169.254.128.15 --detail
 begin trace...
 ***************** e8fbcd00,e8fbcc00 ***************
 [1273732.110173] [e8fbcd00][dev_gro_receive     ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
-[1273732.110185] [e8fbcd00][__netif_receive_skb_core][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
+[1273732.110185] [e8fbcd00][netif_receive_skb][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
 [1273732.110189] [e8fbcd00][ip_rcv              ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
 [1273732.110192] [e8fbcd00][ip_rcv_core         ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
 [1273732.110196] [e8fbcd00][skb_clone           ][cpu:40 ][ens5 ][pid:0      ][swapper/40  ] ICMP: 169.254.128.15 -> 172.27.0.6 ping request, seq: 56464
@@ -290,10 +274,10 @@ begin trace...
 $ sudo ./nettrace -p icmp --addr 192.168.122.8
 begin tracing......
 <------------------- skb: 8f02f900 ---------------------->
-463697.331957: [__netif_receive_skb_core]: ICMP: 192.168.122.8 -> 10.123.119.98, ping request   , seq: 0
+463697.331957: [netif_receive_skb]: ICMP: 192.168.122.8 -> 10.123.119.98, ping request   , seq: 0
 463697.331972: [nf_hook_slow            ]: ICMP: 192.168.122.8 -> 10.123.119.98, ping request   , seq: 0
 463697.331985: [nf_hook_slow            ]: ICMP: 192.168.122.8 -> 10.123.119.98, ping request   , seq: 0
-463697.331990: [__netif_receive_skb_core]: ICMP: 192.168.122.8 -> 10.123.119.98, ping request   , seq: 0
+463697.331990: [netif_receive_skb]: ICMP: 192.168.122.8 -> 10.123.119.98, ping request   , seq: 0
 463697.331994: [ip_rcv                  ]: ICMP: 192.168.122.8 -> 10.123.119.98, ping request   , seq: 0
 463697.331998: [ip_rcv_core             ]: ICMP: 192.168.122.8 -> 10.123.119.98, ping request   , seq: 0
 463697.332001: [nf_hook_slow            ]: ICMP: 192.168.122.8 -> 10.123.119.98, ping request   , seq: 0
@@ -325,7 +309,7 @@ begin trace...
 [2846531.810619] [__dev_queue_xmit    ] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956
 [2846531.810621] [dev_hard_start_xmit ] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956 *skb is successfully sent to the NIC driver*
 [2846531.810623] [enqueue_to_backlog  ] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956
-[2846531.810630] [__netif_receive_skb_core.constprop.0] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956
+[2846531.810630] [netif_receive_skb] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956
 [2846531.810632] [ip_rcv              ] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956
 [2846531.810634] [ip_rcv_core         ] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956
 [2846531.810635] [nf_hook_slow        ] ICMP: 127.0.0.1 -> 127.0.0.1 ping reply, seq: 3, id: 51956 *ipv4 in chain: PRE_ROUTING*
@@ -381,10 +365,10 @@ Call Stack:
 
 #### 3.1.5 降低开销
 
-默认情况下，每个被跟踪的函数都会尝试进行报文的解析和匹配，这个是比较产生较大的开销的。在网络带宽较大的情况下，会严重影响系统的性能。最坏的情况下，可能会导致性能下降80%。为了提升跟踪所产生的开销，可以指定进行报文匹配的函数。例如，对于收包阶段，可以指定`__netif_receive_skb_core`作为报文匹配函数。由于GRO相关的函数调用频率比较高，如果定位的问题和GRO无关，可以将GRO的两个函数从跟踪列表中排出掉：
+默认情况下，每个被跟踪的函数都会尝试进行报文的解析和匹配，这个是比较产生较大的开销的。在网络带宽较大的情况下，会严重影响系统的性能。最坏的情况下，可能会导致性能下降80%。为了提升跟踪所产生的开销，可以指定进行报文匹配的函数。例如，对于收包阶段，可以指定`netif_receive_skb`作为报文匹配函数。由于GRO相关的函数调用频率比较高，如果定位的问题和GRO无关，可以将GRO的两个函数从跟踪列表中排出掉：
 
 ```shell
-./nettrace --trace-matcher __netif_receive_skb_core --trace-exclude napi_gro_receive_entry,dev_gro_receive -p tcp --port 12345 --tcp-flags S
+./nettrace --trace-matcher netif_receive_skb --trace-exclude napi_gro_receive_entry,dev_gro_receive -p tcp --port 12345 --tcp-flags S
 ```
 
 使用这种方式进行跟踪所产生的性能开销要小得多，预计在10-20%的样子。
@@ -410,7 +394,7 @@ begin trace...
 [11485.683435] [__dev_queue_xmit    ]
 [11485.683437] [dev_hard_start_xmit ]
 [11485.683438] [enqueue_to_backlog  ]
-[11485.683441] [__netif_receive_skb_core.constprop.0]
+[11485.683441] [netif_receive_skb]
 [11485.683442] [ip_rcv              ]
 [11485.683444] [ip_rcv_core         ]
 [11485.683445] [nf_hook_slow        ]
@@ -440,11 +424,11 @@ begin trace...
 ./nettrace -p icmp --diag --saddr 192.168.122.8
 begin trace...
 ***************** ad356200 ***************
-[3445.575957] [__netif_receive_skb_core] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
+[3445.575957] [netif_receive_skb] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
 [3445.575978] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *ipv4 in chain: PRE_ROUTING*
 [3445.575990] [nft_do_chain        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *iptables table:nat, chain:PREROUT* *packet is accepted*
 [3445.576005] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *bridge in chain: PRE_ROUTING*
-[3445.576014] [__netif_receive_skb_core] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
+[3445.576014] [netif_receive_skb] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
 [3445.576024] [ip_rcv              ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
 [3445.576029] [ip_rcv_core         ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
 [3445.576040] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *ipv4 in chain: PRE_ROUTING*
@@ -475,11 +459,11 @@ begin trace...
 ./nettrace -p icmp --diag --saddr 192.168.122.8
 begin trace...
 ***************** b3c64f00 ***************
-[4049.295546] [__netif_receive_skb_core] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
+[4049.295546] [netif_receive_skb] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
 [4049.295566] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *ipv4 in chain: PRE_ROUTING*
 [4049.295578] [nft_do_chain        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *iptables table:nat, chain:PREROUT* *packet is accepted*
 [4049.295594] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *bridge in chain: PRE_ROUTING*
-[4049.295612] [__netif_receive_skb_core] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
+[4049.295612] [netif_receive_skb] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
 [4049.295624] [ip_rcv              ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
 [4049.295629] [ip_rcv_core         ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
 [4049.295640] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *ipv4 in chain: PRE_ROUTING*
@@ -525,11 +509,11 @@ end trace...
 ./nettrace -p icmp --diag --saddr 192.168.122.8 --hooks
 begin trace...
 ***************** aa054500 ***************
-[5810.702473] [__netif_receive_skb_core] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943
+[5810.702473] [netif_receive_skb] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943
 [5810.702491] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943 *ipv4 in chain: PRE_ROUTING*
 [5810.702504] [nft_do_chain        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943 *iptables table:nat, chain:PREROUT* *packet is accepted*
 [5810.702519] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943 *bridge in chain: PRE_ROUTING*
-[5810.702527] [__netif_receive_skb_core] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943
+[5810.702527] [netif_receive_skb] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943
 [5810.702535] [ip_rcv              ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943
 [5810.702540] [ip_rcv_core         ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943
 [5810.702546] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 943 *ipv4 in chain: PRE_ROUTING*
@@ -585,7 +569,7 @@ begin trace...
 [365673.326032] [__dev_queue_xmit    ] TCP: 127.0.0.1:40392 -> 127.0.0.1:9999 seq:3067626996, ack:0, flags:S
 [365673.326039] [dev_hard_start_xmit ] TCP: 127.0.0.1:40392 -> 127.0.0.1:9999 seq:3067626996, ack:0, flags:S
 [365673.326042] [enqueue_to_backlog  ] TCP: 127.0.0.1:40392 -> 127.0.0.1:9999 seq:3067626996, ack:0, flags:S
-[365673.326051] [__netif_receive_skb_core] TCP: 127.0.0.1:40392 -> 127.0.0.1:9999 seq:3067626996, ack:0, flags:S
+[365673.326051] [netif_receive_skb] TCP: 127.0.0.1:40392 -> 127.0.0.1:9999 seq:3067626996, ack:0, flags:S
 [365673.326059] [ip_rcv              ] TCP: 127.0.0.1:40392 -> 127.0.0.1:9999 seq:3067626996, ack:0, flags:S
 [365673.326061] [ip_rcv_core         ] TCP: 127.0.0.1:40392 -> 127.0.0.1:9999 seq:3067626996, ack:0, flags:S
 [365673.326068] [ip_rcv_finish       ] TCP: 127.0.0.1:40392 -> 127.0.0.1:9999 seq:3067626996, ack:0, flags:S
@@ -613,11 +597,11 @@ XDP导致的丢包（XDP转发会给提示）：
 ./nettrace -p icmp --diag --diag-quiet 
 begin trace...
 ***************** 015acc00 ***************
-[18490.607809] [__netif_receive_skb_core] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
+[18490.607809] [netif_receive_skb] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
 [18490.607828] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *ipv4 in chain: PRE_ROUTING*
 [18490.607840] [nft_do_chain        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *iptables table:nat, chain:PREROUT* *packet is accepted*
 [18490.607855] [nf_hook_slow        ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *bridge in chain: PRE_ROUTING*
-[18490.607874] [__netif_receive_skb_core] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
+[18490.607874] [netif_receive_skb] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0
 [18490.607882] [netif_receive_generic_xdp] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *packet is dropped by XDP program*
 [18490.607888] [kfree_skb           ] ICMP: 192.168.122.8 -> 10.123.119.98 ping request, seq: 0 *packet is dropped by kernel*
 ---------------- ANALYSIS RESULT ---------------------
@@ -753,9 +737,9 @@ begin trace...
 $ sudo ./nettrace -p icmp --latency-show
 begin trace...
 ***************** 723c4700 ***************
-[37898.357352] [__netif_receive_skb_core.constprop.0] ICMP: 192.168.122.9 -> 192.168.122.1 ping request, seq: 3, id: 9573
+[37898.357352] [netif_receive_skb] ICMP: 192.168.122.9 -> 192.168.122.1 ping request, seq: 3, id: 9573
 [37898.357368] [enqueue_to_backlog  ] ICMP: 192.168.122.9 -> 192.168.122.1 ping request, seq: 3, id: 9573 latency: 0.016ms
-[37898.357374] [__netif_receive_skb_core.constprop.0] ICMP: 192.168.122.9 -> 192.168.122.1 ping request, seq: 3, id: 9573 latency: 0.005ms
+[37898.357374] [netif_receive_skb] ICMP: 192.168.122.9 -> 192.168.122.1 ping request, seq: 3, id: 9573 latency: 0.005ms
 [37898.357378] [ip_rcv              ] ICMP: 192.168.122.9 -> 192.168.122.1 ping request, seq: 3, id: 9573 latency: 0.003ms
 [37898.357381] [ip_rcv_core         ] ICMP: 192.168.122.9 -> 192.168.122.1 ping request, seq: 3, id: 9573 latency: 0.003ms
 [37898.357384] [nf_hook_slow        ] ICMP: 192.168.122.9 -> 192.168.122.1 ping request, seq: 3, id: 9573 latency: 0.003ms *ipv4 in chain: PRE_ROUTING*
@@ -786,7 +770,7 @@ nettrace -p tcp --latency -t tcp_queue_rcv,tcp_data_queue_ofo --trace-matcher tc
 跟踪网卡驱动收包报文 -> 放到套接口收包队列的延迟。这部分如果存在延迟，那说明是CPU处理的延迟：
 
 ```shell
-nettrace -p tcp --latency -t __netif_receive_skb_core,tcp_queue_rcv,tcp_data_queue_ofo --trace-matcher __netif_receive_skb_core --trace-free tcp_queue_rcv,tcp_data_queue_ofo --min-latency 1000
+nettrace -p tcp --latency -t netif_receive_skb,tcp_queue_rcv,tcp_data_queue_ofo --trace-matcher netif_receive_skb --trace-free tcp_queue_rcv,tcp_data_queue_ofo --min-latency 1000
 ```
 
 **发包阶段**
