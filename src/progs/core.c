@@ -194,7 +194,7 @@ static __always_inline void update_stats_log(u32 val)
  */
 static inline int pre_tiny_output(context_info_t *info)
 {
-	if (!(info->func_status & FUNC_STATUS_RET) || !info->matched)
+	if (info->func_status & FUNC_STATUS_RET || !info->matched)
 		return 0;
 
 	handle_tiny_output(info);
@@ -253,7 +253,7 @@ static inline bool trace_mode_latency(bpf_args_t *args)
 
 static inline bool trace_mode_tiny(bpf_args_t *args)
 {
-	return args->trace_mode & TRACE_MODE_TINY_MASK;
+	return args->tiny_output;
 }
 
 /* return value:
