@@ -70,7 +70,8 @@ static inline fake_analy_ctx_t
 	analy_fake_ctx_add(fake);
 
 	get_fake_analy_ctx(fake);
-	pr_debug("fake ctx alloc: %llx, %llx\n", PTR2X(fake), key);
+	pr_debug_ctx("fctx=%llx, fake ctx alloc\n", (u32)key, ctx,
+		     PTR2X(fake));
 	return fake;
 }
 
@@ -147,7 +148,9 @@ static void analy_entry_output(analy_entry_t *entry, analy_entry_t *prev)
 	trace_t *t;
 
 	t = get_trace_from_analy_entry(entry);
-	pr_debug("output entry(%llx)\n", PTR2X(entry));
+	pr_debug_ctx("fctx=%llx, entry=%llx entry output\n", entry->event->key,
+		      entry->fake_ctx ? entry->fake_ctx->ctx : NULL,
+		      PTR2X(entry->fake_ctx), PTR2X(entry));
 	if (e->meta == FUNC_TYPE_TINY) {
 		ts_print_ts(buf, ((tiny_event_t *)(void *)e)->ts, date);
 		sprintf_end(buf, "[%-20s]", t->name);
@@ -492,7 +495,8 @@ void do_async_poll(int cpu, void *data, u32 size, async_cb cb)
 	}
 }
 
-static int ctx_handle_ret(data_list_t *dlist, analy_ctx_t **analy_ctx)
+static int ctx_handle_ret(data_list_t *dlist, analy_ctx_t **analy_ctx,
+			  u32 *ctx_key)
 {
 	analy_exit_t analy_exit = {
 		.event = *(retevent_t *)dlist->data,
@@ -510,10 +514,11 @@ static int ctx_handle_ret(data_list_t *dlist, analy_ctx_t **analy_ctx)
 	}
 	entry = analy_exit.entry;
 	if (!entry) {
-		pr_err("entry for exit not found: %llx\n",
-		       analy_exit.event.val);
+		pr_err("entry for exit not found: func=%s\n", t->name);
 		return -1;
 	}
+	if (ctx_key)
+		*ctx_key = entry->event->key;
 
 	analyzer = t->analyzer;
 	*analy_ctx = entry->ctx;
@@ -533,9 +538,10 @@ static void ctx_async_poll_cb(data_list_t *dlist)
 	analy_entry_t *entry;
 	analyzer_t *analyzer;
 	event_t *e;
+	u32 ctx_key = 0;
 
 	if (func_get_type(dlist->data) == FUNC_TYPE_RET) {
-		if (ctx_handle_ret(dlist, &analy_ctx))
+		if (ctx_handle_ret(dlist, &analy_ctx, &ctx_key))
 			return;
 		goto check_pending;
 	}
@@ -546,7 +552,7 @@ static void ctx_async_poll_cb(data_list_t *dlist)
 		return;
 	}
 	e = entry->event;
-	pr_debug("create entry: %llx, %x\n", PTR2X(entry), e->key);
+	ctx_key = e->key;
 
 	fake = analy_fake_ctx_fetch(e->key);
 	if (!fake) {
@@ -554,6 +560,8 @@ static void ctx_async_poll_cb(data_list_t *dlist)
 		return;
 	}
 	analy_ctx = fake->ctx;
+	pr_debug_ctx("fctx=%llx, entry=%llx entry create\n", ctx_key, analy_ctx,
+		     PTR2X(fake), PTR2X(entry));
 
 	trace = get_trace_from_analy_entry(entry);
 	if (!trace) {
@@ -577,7 +585,8 @@ static void ctx_async_poll_cb(data_list_t *dlist)
 		goto check_pending;
 
 	if (trace->status & TRACE_CFREE) {
-		pr_debug("custom free hit %s\n", trace ? trace->name : "");
+		pr_debug_ctx("fctx=%llx, custom free: %s\n", ctx_key, analy_ctx,
+			     PTR2X(fake), trace ? trace->name : "");
 		put_fake_analy_ctx(fake);
 		hlist_del(&fake->hash);
 	}
@@ -585,8 +594,8 @@ static void ctx_async_poll_cb(data_list_t *dlist)
 	list_add_tail(&entry->list, &analy_ctx->entries);
 check_pending:
 	if (analy_ctx->refs <= 0) {
-		pr_debug("ctx(%llx) finished with %s\n", PTR2X(analy_ctx),
-			 trace ? trace->name : "");
+		pr_debug_ctx("ctx finish with %s\n", ctx_key, analy_ctx,
+			     trace ? trace->name : "");
 		analy_ctx_output(analy_ctx);
 	}
 }
@@ -899,7 +908,9 @@ DEFINE_ANALYZER_EXIT(clone, TRACE_MODE_CTX_MASK | TRACE_MODE_TINY_MASK)
 		goto out;
 	}
 
-	pr_debug("clone analyzer triggered on: %llx\n", e->event.val);
+	pr_debug_ctx("fctx=%llx, new cloned key=%llx\n", entry->event->key,
+		     entry->fake_ctx ? entry->fake_ctx->ctx : entry->ctx,
+		     PTR2X(entry->fake_ctx), e->event.val);
 	analy_fake_ctx_alloc(e->event.val, entry->ctx);
 	if (trace_mode_diag())
 		rule_run_ret(entry, trace, 0);

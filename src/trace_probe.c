@@ -188,13 +188,14 @@ static struct list_head *entry_head(u32 key)
 static analyzer_result_t probe_analy_exit(trace_t *trace, analy_exit_t *e)
 {
 	struct list_head *head;
-	u32 key = e->event.pid;
+	u32 pid = e->event.pid;
 	analy_entry_t *pos;
 
-	head = entry_head(key);
+	head = entry_head(pid);
 	if (list_empty(head)) {
-		pr_debug("no entry found for exit: %s pid=%d (list empty)\n",
-			 trace->name, key);
+		pr_debug_ctx("func=%s, func-index=%d, no entry found for exit "
+			     "(list empty), pid=%d\n",
+			     pid, NULL, trace->name, e->event.func, pid);
 		goto out;
 	}
 
@@ -203,12 +204,13 @@ static analyzer_result_t probe_analy_exit(trace_t *trace, analy_exit_t *e)
 	 */
 	list_for_each_entry(pos, head, ret_list) {
 		if (pos->event->func == e->event.func &&
-		    pos->event->pid == key)
+		    pos->event->pid == pid)
 			goto found;
 	}
-	pr_debug("no entry found for exit: %s pid: %d; func: %d, "
-		 "last_func: %d\n", trace->name, key,
-		 e->event.func, pos->event->func);
+	pr_debug_ctx("func=%s, func-index=%d, no entry found for exit, "
+		     "pid=%d, last_func=%d\n",
+		     pid, NULL, trace->name, e->event.func, pid,
+		     pos->event->func);
 	goto out;
 found:
 	pos->status |= ANALY_ENTRY_RETURNED;
@@ -217,10 +219,10 @@ found:
 	put_fake_analy_ctx(pos->fake_ctx);
 	e->entry = pos;
 	pos->status &= ~ANALY_ENTRY_ONLIST;
-	pr_debug("found exit for entry: %s(%x) pid=%d with return "
-		 "value %llx, ctx:%llx:%u\n", trace->name, pos->event->key,
-		 key, e->event.val, PTR2X(pos->ctx),
-		 pos->ctx->refs);
+	pr_debug_ctx("func=%s, func-index=%d, entry found for exit, "
+		     "pid=%d, retval=%llx\n",
+		     pos->event->key, pos->ctx, trace->name, e->event.func,
+		     pid, e->event.val);
 out:
 	return RESULT_CONT;
 }
@@ -230,17 +232,15 @@ static analyzer_result_t probe_analy_entry(trace_t *trace, analy_entry_t *e)
 	struct list_head *head;
 
 	if (!trace_is_ret(trace)) {
-		pr_debug("entry found for %s(%llx), ctx:%llx:%d\n", trace->name,
-			 (u64)e->event->key, PTR2X(e->ctx),
-			 e->ctx->refs);
+		pr_debug_ctx("func=%s, entry without return\n",
+			     e->event->key, e->ctx, trace->name);
 		goto out;
 	}
 	head = entry_head(e->event->pid);
 	list_add(&e->ret_list, head);
 	get_fake_analy_ctx(e->fake_ctx);
-	pr_debug("mounted entry %s(%llx) pid %d, ctx:%llx:%d\n", trace->name,
-		 (u64)e->event->key, e->event->pid, PTR2X(e->ctx),
-		 e->ctx->refs);
+	pr_debug_ctx("func=%s, mount entry, pid=%d\n", e->event->key, e->ctx,
+		     trace->name, e->event->pid);
 	e->status |= ANALY_ENTRY_ONLIST;
 
 out:
@@ -276,7 +276,7 @@ static void probe_print_stack(int key)
 		sym = sym_parse(ip[i]);
 		if (!sym)
 			break;
-		pr_info("    -> %s\n", sym->desc);
+		pr_info("    -> [%llx]%s\n", ip[i], sym->desc);
 	}
 	pr_info("\n");
 }
