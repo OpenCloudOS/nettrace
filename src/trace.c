@@ -483,6 +483,11 @@ static int trace_prepare_args()
 		trace_parse_traces(traces, 1);
 	}
 
+	if (trace_ctx.mode == TRACE_MODE_LATENCY && bpf_args->func_stats) {
+		pr_err("function stats is not supported in latency mode\n");
+		goto err;
+	}
+
 	trace_parse_traces(traces_stack, 2);
 	if (!debugfs_mounted()) {
 		pr_err("debugfs is not mounted! Please mount it with the "
