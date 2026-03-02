@@ -19,6 +19,13 @@
 static int __hz = -1;
 int log_level = 0;
 
+char *get_tracing_path()
+{
+	if (file_exist("/sys/kernel/debug/tracing/trace"))
+		return "/sys/kernel/debug/tracing/";
+	return "/sys/kernel/tracing/";
+}
+
 int exec(char *cmd, char *output)
 {
 	FILE *f = popen(cmd, "r");
@@ -94,7 +101,11 @@ char *kernel_version_str()
 
 bool debugfs_mounted()
 {
-	return simple_exec("mount | grep debugfs") == 0;
+	char path[128];
+
+	sprintf(path, "%s/trace", get_tracing_path());
+
+	return file_exist(path);
 }
 
 int kernel_get_config(char *name, char *output)

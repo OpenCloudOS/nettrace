@@ -25,6 +25,7 @@ bool	debugfs_mounted();
 bool	kernel_has_config(char *name);
 int	kernel_hz();
 u32	file_inode(char *path);
+char	*get_tracing_path();
 
 static inline int simple_exec(char *cmd)
 {

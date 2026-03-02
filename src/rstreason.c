@@ -33,19 +33,19 @@ static const char *tcp_state_str[] = {
 /* check if rst reason is supported */
 bool reset_reason_support() 
 {
-	return simple_exec("cat /sys/kernel/debug/tracing/events/tcp/"
-			   "tcp_send_reset/format 2>/dev/null | "
-			   "grep NOT_SPECIFIED") == 0;
+	return execf(NULL, "cat %s/events/tcp/tcp_send_reset/format 2>/dev/null | grep NOT_SPECIFIED",
+		     get_tracing_path()) == 0;
 }
 
 static int parse_reason_enum() 
 {
-	char name[REASON_MAX_LEN];
+	char name[REASON_MAX_LEN], path[128];
 	int index = 0;
 	FILE *f;
 	int symbolics_found = 1;
 
-	f = fopen("/sys/kernel/debug/tracing/events/tcp/tcp_send_reset/format", "r");
+	sprintf(path, "%s/events/tcp/tcp_send_reset/format", get_tracing_path());
+	f = fopen(path, "r");
 
 	if (!f || !fsearch(f, "__print_symbolic")) {
 		if (f)

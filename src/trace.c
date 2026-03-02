@@ -653,8 +653,7 @@ static int trace_prepare_traces()
 
 		if (!trace_is_func(trace)) {
 			/* For tracepoint, check the exist of the path */
-			sprintf(name, "/sys/kernel/debug/tracing/events/%s",
-				trace->tp);
+			sprintf(name, "%s/events/%s", get_tracing_path(), trace->tp);
 			if (!file_exist(name))
 				trace_set_invalid_reason(trace, "tp not found");
 			continue;
