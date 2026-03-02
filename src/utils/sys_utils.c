@@ -21,7 +21,38 @@ static char *proc_syms;
 static struct sym_result *result_list;
 int log_level = 0;
 
+#define SYM_BULK_HASH_BITS	10
+#define SYM_BULK_HASH_SIZE	(1U << SYM_BULK_HASH_BITS)
+
+struct sym_bulk_req {
+	const char *name;
+	int index;
+	struct sym_bulk_req *next;
+};
+
 #define SWAP(a, b) { typeof(a) _tmp = (b); (b) = (a); (a) = _tmp; }
+
+static unsigned int sym_bulk_hash_name(const char *name)
+{
+	unsigned long hash = 5381;
+	unsigned char c;
+
+	while ((c = (unsigned char)*name++))
+		hash = ((hash << 5) + hash) + c;
+
+	return (unsigned int)hash & (SYM_BULK_HASH_SIZE - 1);
+}
+
+static unsigned int sym_bulk_hash_slice(const char *name, size_t len)
+{
+	unsigned long hash = 5381;
+	size_t i;
+
+	for (i = 0; i < len; i++)
+		hash = ((hash << 5) + hash) + (unsigned char)name[i];
+
+	return (unsigned int)hash & (SYM_BULK_HASH_SIZE - 1);
+}
 
 static int sym_init_data()
 {
@@ -213,6 +244,104 @@ found:
 		strcpy(result, func);
 
 	return count == 2 ? SYM_MODULE : SYM_KERNEL;
+}
+
+int sym_get_types_bulk(const char **names, int nr, int *types)
+{
+	struct sym_bulk_req *table[SYM_BULK_HASH_SIZE] = {};
+	const char *p, *line_end;
+	int unresolved = 0;
+	int i;
+
+	if (!names || !types || nr <= 0)
+		return -EINVAL;
+
+	sym_init_data();
+	/* generate a hash table for the symbol names. */
+	for (i = 0; i < nr; i++) {
+		struct sym_bulk_req *req;
+		unsigned int idx;
+
+		types[i] = SYM_NOT_EXIST;
+		if (!names[i] || !names[i][0])
+			continue;
+
+		req = calloc(1, sizeof(*req));
+		if (!req)
+			continue;
+
+		req->name = names[i];
+		req->index = i;
+		idx = sym_bulk_hash_name(names[i]);
+		req->next = table[idx];
+		table[idx] = req;
+		unresolved++;
+	}
+
+	p = proc_syms;
+	while (*p && unresolved > 0) {
+		const char *sp1, *sp2, *name_start, *name_end, *meta;
+		struct sym_bulk_req *req;
+		size_t name_len;
+		unsigned int idx;
+		int type = SYM_KERNEL;
+
+		line_end = strchr(p, '\n');
+		if (!line_end)
+			line_end = p + strlen(p);
+		if (line_end <= p)
+			goto next_line;
+
+		sp1 = memchr(p, ' ', line_end - p);
+		if (!sp1 || sp1 + 2 >= line_end)
+			goto next_line;
+		sp2 = memchr(sp1 + 2, ' ', line_end - (sp1 + 2));
+		if (!sp2 || sp2 + 1 >= line_end)
+			goto next_line;
+
+		name_start = sp2 + 1;
+		name_end = name_start;
+		while (name_end < line_end && *name_end != ' ')
+			name_end++;
+		if (name_end <= name_start)
+			goto next_line;
+		name_len = name_end - name_start;
+
+		meta = name_end;
+		while (meta < line_end && *meta == ' ')
+			meta++;
+		if (meta < line_end && *meta == '[')
+			type = SYM_MODULE;
+
+		idx = sym_bulk_hash_slice(name_start, name_len);
+		/* check if the symbol exists in the hash table */
+		for (req = table[idx]; req; req = req->next) {
+			if (types[req->index] != SYM_NOT_EXIST)
+				continue;
+			if (strlen(req->name) != name_len)
+				continue;
+			if (strncmp(req->name, name_start, name_len))
+				continue;
+			types[req->index] = type;
+			unresolved--;
+		}
+
+next_line:
+		p = line_end;
+		if (*p == '\n')
+			p++;
+	}
+
+	for (i = 0; i < SYM_BULK_HASH_SIZE; i++) {
+		struct sym_bulk_req *req = table[i];
+		while (req) {
+			struct sym_bulk_req *next = req->next;
+			free(req);
+			req = next;
+		}
+	}
+
+	return 0;
 }
 
 int exec(char *cmd, char *output)

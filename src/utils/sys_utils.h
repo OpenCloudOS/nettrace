@@ -36,6 +36,7 @@ struct sym_result {
 struct sym_result *sym_parse_exact(__u64 pc);
 struct sym_result *sym_parse(__u64 pc);
 int sym_search_pattern(const char *name, char *result, bool partial);
+int sym_get_types_bulk(const char **names, int nr, int *types);
 
 int	execf(char *output, char *fmt, ...);
 int	exec(char *cmd, char *output);

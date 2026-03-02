@@ -9,6 +9,36 @@
 
 static struct tracing *skel;
 
+static int tracing_lookup_sym_type(const char **names, const int *types,
+				   int nr, const char *name)
+{
+	int i;
+
+	for (i = 0; i < nr; i++) {
+		if (!names[i] || strcmp(names[i], name))
+			continue;
+		return types[i];
+	}
+
+	return SYM_NOT_EXIST;
+}
+
+static void tracing_prepare_symbols(const char **func_names, int func_nr,
+				    int *func_types)
+{
+	int i;
+
+	if (!func_names || !func_types || func_nr <= 0)
+		return;
+
+	for (i = 0; i < func_nr; i++)
+		func_types[i] = SYM_NOT_EXIST;
+
+	/* Extract symbol types for all targets in one pass from /proc/kallsyms. */
+	sym_get_types_bulk(func_names, func_nr, func_types);
+}
+
+
 /* check whether trampoline is supported by current arch */
 static bool tracing_arch_supported()
 {
@@ -36,15 +66,22 @@ failed:
 
 static bool tracing_support_feat_args_ext()
 {
+	static int cached = -1;
 	struct feat_args_ext *tmp;
-	int err;
+	bool supported = false;
 
+	if (cached >= 0)
+		return cached;
+
+	/* Verifier acceptance is enough for this feature probe. */
 	tmp = feat_args_ext__open_and_load();
-	if (tmp == NULL)
-		return false;
-	err = feat_args_ext__attach(tmp);
+	if (tmp)
+		supported = true;
+
 	feat_args_ext__destroy(tmp);
-	return err == 0;
+	cached = supported ? 1 : 0;
+
+	return supported;
 }
 
 static int tracing_trace_attach()
@@ -300,9 +337,24 @@ static void tracing_prepare_traces()
 {
 	bool support_feat_args_ext;
 	int checked = 0, resolved = 0, missing = 0;
+	const char *func_names[TRACE_MAX] = {};
+	int func_types[TRACE_MAX] = {};
+	int func_nr = 0;
 	trace_t *trace;
 
 	pr_debug("begin to resolve kernel symbol...\n");
+
+	trace_for_each(trace) {
+		if (trace_is_invalid(trace) || !trace_is_enable(trace) ||
+		    !trace_is_func(trace))
+			continue;
+		if (strchr(trace->name, '.'))
+			continue;
+		if (func_nr >= TRACE_MAX)
+			break;
+		func_names[func_nr++] = trace->name;
+	}
+	tracing_prepare_symbols(func_names, func_nr, func_types);
 
 	/* make the programs that target kernel function can't be found
 	 * load manually.
@@ -323,14 +375,17 @@ static void tracing_prepare_traces()
 
 		if (!trace_is_func(trace)) {
 			name = __name;
-			sprintf(__name, "__bpf_trace_%s", trace->name);
+			sprintf(__name, "btf_trace_%s", trace->name);
 		} else {
 			name = trace->name;
 		}
 
 		if (btf_get_trace_args_local(name, &trace->arg_count,
 					     &skb_idx, &sk_idx)) {
-			if (sym_get_type(name) == SYM_MODULE &&
+			if (tracing_lookup_sym_type(func_names,
+						    func_types,
+						    func_nr,
+						    name) == SYM_MODULE &&
 			    !btf_get_trace_args(name, &trace->arg_count,
 						&skb_idx, &sk_idx)) {
 				/* fallback to module BTF for module symbols */

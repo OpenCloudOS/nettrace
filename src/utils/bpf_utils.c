@@ -103,7 +103,6 @@ struct btf_type_cache_entry {
 	char *name;
 	const struct btf_type *type;
 	struct btf *btf;
-	bool found;
 	struct btf_type_cache_entry *next;
 };
 
@@ -136,9 +135,22 @@ static struct btf_type_cache_entry *btf_type_cache_lookup(
 	return NULL;
 }
 
+static int btf_type_prefer_score(const struct btf_type *t)
+{
+	if (!t)
+		return 0;
+	if (btf_is_func(t) || btf_is_func_proto(t))
+		return 3;
+	if (btf_is_typedef(t) || btf_is_ptr(t) || btf_is_const(t) ||
+	    btf_is_volatile(t) || btf_is_restrict(t) ||
+	    btf_is_type_tag(t) || btf_is_decl_tag(t))
+		return 2;
+	return 1;
+}
+
 static void btf_type_cache_store(struct btf_type_cache_entry **table,
 				 const char *name, const struct btf_type *type,
-				 struct btf *btf, bool found)
+				 struct btf *btf)
 {
 	struct btf_type_cache_entry *entry;
 	unsigned int idx;
@@ -146,9 +158,11 @@ static void btf_type_cache_store(struct btf_type_cache_entry **table,
 
 	entry = btf_type_cache_lookup(table, name);
 	if (entry) {
+		if (btf_type_prefer_score(type) <=
+		    btf_type_prefer_score(entry->type))
+			return;
 		entry->type = type;
 		entry->btf = btf;
-		entry->found = found;
 		return;
 	}
 
@@ -166,7 +180,6 @@ static void btf_type_cache_store(struct btf_type_cache_entry **table,
 
 	entry->type = type;
 	entry->btf = btf;
-	entry->found = found;
 
 	idx = btf_type_hash_name(name);
 	entry->next = table[idx];
@@ -274,17 +287,49 @@ static int btf_load_all_module_btf()
 	return loaded ? 0 : -ENOENT;
 }
 
-static const struct btf_type *btf_find_func_type(struct btf *btf, const char *name)
+static const struct btf_type *btf_find_type_by_name(struct btf *btf,
+						    const char *name)
 {
-	const struct btf_type *t;
 	int id;
 
 	id = btf__find_by_name_kind(btf, name, BTF_KIND_FUNC);
 	if (id < 0)
+		id = btf__find_by_name(btf, name);
+	if (id < 0)
 		return NULL;
 
-	t = btf__type_by_id(btf, id);
-	return t;
+	return btf__type_by_id(btf, id);
+}
+
+static const struct btf_type *btf_resolve_func_proto(struct btf *btf,
+						     const struct btf_type *func_type)
+{
+	const struct btf_type *t = func_type;
+	int i;
+
+	if (!btf || !t)
+		return NULL;
+
+	for (i = 0; i < 32; i++) {
+		if (btf_is_func_proto(t))
+			return t;
+
+		if (btf_is_func(t) || btf_is_typedef(t) || btf_is_ptr(t) ||
+		    btf_is_const(t) || btf_is_volatile(t) ||
+		    btf_is_restrict(t) || btf_is_type_tag(t) ||
+		    btf_is_decl_tag(t)) {
+			if (!t->type)
+				return NULL;
+			t = btf__type_by_id(btf, t->type);
+			if (!t)
+				return NULL;
+			continue;
+		}
+
+		return NULL;
+	}
+
+	return NULL;
 }
 
 static const struct btf_type *btf_get_type_ext_opt(char *name,
@@ -303,20 +348,20 @@ static const struct btf_type *btf_get_type_ext_opt(char *name,
 
 	entry = btf_type_cache_lookup(local_type_cache, name);
 	if (entry) {
-		if (entry->found) {
+		/* Keep module fallback path for local negative cache. */
+		if (entry->type || !load_module_btf) {
 			if (type_btf)
-				*type_btf = local_btf;
+				*type_btf = entry->btf;
 			return entry->type;
 		}
-	} else {
-		t = btf_find_func_type(local_btf, name);
-		if (t) {
-			btf_type_cache_store(local_type_cache, name, t, local_btf, true);
-			if (type_btf)
-				*type_btf = local_btf;
-			return t;
-		}
-		btf_type_cache_store(local_type_cache, name, NULL, NULL, false);
+	}
+
+	t = btf_find_type_by_name(local_btf, name);
+	btf_type_cache_store(local_type_cache, name, t, local_btf);
+	if (t) {
+		if (type_btf)
+			*type_btf = local_btf;
+		return t;
 	}
 
 	if (!load_module_btf)
@@ -324,12 +369,9 @@ static const struct btf_type *btf_get_type_ext_opt(char *name,
 
 	entry = btf_type_cache_lookup(module_type_cache, name);
 	if (entry) {
-		if (entry->found) {
-			if (type_btf)
-				*type_btf = entry->btf;
-			return entry->type;
-		}
-		return NULL;
+		if (type_btf)
+			*type_btf = entry->btf;
+		return entry->type;
 	}
 
 	btf_load_all_module_btf();
@@ -337,17 +379,16 @@ static const struct btf_type *btf_get_type_ext_opt(char *name,
 		if (!cache->btf)
 			continue;
 
-		t = btf_find_func_type(cache->btf, name);
+		t = btf_find_type_by_name(cache->btf, name);
 		if (!t)
 			continue;
 
-		btf_type_cache_store(module_type_cache, name, t, cache->btf, true);
+		btf_type_cache_store(module_type_cache, name, t, cache->btf);
 		if (type_btf)
 			*type_btf = cache->btf;
 		return t;
 	}
 
-	btf_type_cache_store(module_type_cache, name, NULL, NULL, false);
 	return NULL;
 }
 
@@ -363,18 +404,18 @@ const struct btf_type *btf_get_type(char *name)
 
 int btf_get_arg_count(char *name)
 {
-	const struct btf_type *t;
+	const struct btf_type *t, *func_proto;
 	struct btf *type_btf;
 
 	t = btf_get_type_ext(name, &type_btf);
 	if (!t)
 		return -ENOENT;
 
-	t = btf__type_by_id(type_btf, t->type);
-	if (!t || !btf_is_func_proto(t))
+	func_proto = btf_resolve_func_proto(type_btf, t);
+	if (!func_proto)
 		return -ENOENT;
 
-	return btf_vlen(t);
+	return btf_vlen(func_proto);
 }
 
 static int btf_get_trace_args_opt(char *name, int *arg_count, int *skb, int *sk,
@@ -391,8 +432,8 @@ static int btf_get_trace_args_opt(char *name, int *arg_count, int *skb, int *sk,
 	if (!func_type)
 		return -ENOENT;
 
-	func_proto = btf__type_by_id(type_btf, func_type->type);
-	if (!func_proto || !btf_is_func_proto(func_proto))
+	func_proto = btf_resolve_func_proto(type_btf, func_type);
+	if (!func_proto)
 		return -ENOENT;
 
 	nr = btf_vlen(func_proto);
@@ -480,8 +521,8 @@ int btf_get_trace_param_index(char *name, const char *struct_name)
 	if (!func_type)
 		return -ENOENT;
 
-	func_proto = btf__type_by_id(type_btf, func_type->type);
-	if (!func_proto || !btf_is_func_proto(func_proto))
+	func_proto = btf_resolve_func_proto(type_btf, func_type);
+	if (!func_proto)
 		return -ENOENT;
 
 	nr = btf_vlen(func_proto);
