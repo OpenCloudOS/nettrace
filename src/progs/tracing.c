@@ -182,9 +182,10 @@ static __always_inline void check_skb_dead(u8 func_flags, skb_ctx_t *sctx, struc
 
 static inline int pre_tiny_output(context_info_t *info)
 {
-	handle_tiny_output(info);
-	check_skb_dead(info->func_status, info->sctx, info->skb);
+	if (func_is_ret(info->func_status) || !info->sctx)
+		return 0;
 
+	handle_tiny_output(info);
 	return 1;
 }
 
@@ -240,7 +241,7 @@ static inline bool trace_mode_latency(void)
 
 static inline bool trace_mode_tiny(void)
 {
-	return m_config.trace_mode & TRACE_MODE_TINY_MASK;
+	return m_config.tiny_output;
 }
 
 /* return value:
