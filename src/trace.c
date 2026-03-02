@@ -389,6 +389,11 @@ static int trace_prepare_args()
 
 	trace_ctx.mode_mask = 1 << trace_ctx.mode;
 
+	if (trace_ctx.mode == TRACE_MODE_LATENCY && bpf_args->func_stats) {
+		pr_err("function stats is not supported in latency mode\n");
+		goto err;
+	}
+
 	if (drop_reason_support()) {
 		bpf_args->drop_reason = true;
 		trace_ctx.drop_reason = true;

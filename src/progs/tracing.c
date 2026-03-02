@@ -41,6 +41,8 @@ struct {
 #define event_output(e) { bpf_ringbuf_submit(e, 0); }
 #define event_discard(e) { bpf_ringbuf_discard(e, 0); }
 
+static inline void handle_entry_finish(context_info_t *info, int err);
+
 static __always_inline int check_rate_limit()
 {
 	u64 last_ts = m_data.__last_update, ts = 0;
@@ -155,6 +157,7 @@ static __always_inline void update_stats_key(u32 key)
 	m_stats[key]++;
 }
 
+/* stats for latency mode */
 static __always_inline void update_stats_log(u32 val)
 {
 	u32 key = 0, i = 0, tmp = 2;
@@ -226,13 +229,18 @@ static inline int pre_handle_latency(context_info_t *info, skb_ctx_t *sctx)
 			return 1;
 		}
 	}
-	info->no_event = true;
+	info->no_output = true;
 	return 0;
 }
 
 static inline bool trace_mode_latency(void)
 {
 	return m_config.trace_mode & TRACE_MODE_LATENCY_MASK;
+}
+
+static inline bool trace_mode_tiny(void)
+{
+	return m_config.trace_mode & TRACE_MODE_TINY_MASK;
 }
 
 /* return value:
@@ -266,24 +274,28 @@ static inline int pre_handle_entry(context_info_t *info, u16 func, bool is_retur
 		}
 
 		info->sctx = sctx;
-		/* skip handle_entry() for tiny case */
-		if (sctx && m_config.tiny_output)
+		if (trace_mode_tiny())
 			ret = pre_tiny_output(info);
 		else if (trace_mode_latency())
 			ret = pre_handle_latency(info, sctx);
-	}
 
-	if (m_config.func_stats) {
-		if (ret) {
-			update_stats_key(func);
-		} else if (!m_config.has_filter) {
+		/* skip the entry handle and goto the entry finish directly. */
+		if (ret > 0)
+			handle_entry_finish(info, 0);
+	} else {
+		/* function call count stats mode, no output is needed in this mode.
+		 * Can't be used together with latency mode.
+		 *
+		 * Skip the entry handle if there is no filter or it is required to
+		 * skip the entry already.
+		 */
+		if (m_config.func_stats && !m_config.has_filter) {
 			update_stats_key(func);
 			m_data.event_count++;
-			ret = 1;
-		} else {
-			info->no_event = true;
+			return 1;
 		}
 	}
+	info->no_output = info->no_output || m_config.func_stats;
 
 	return ret;
 }
@@ -386,7 +398,7 @@ static int handle_entry(context_info_t *info, event_t *e)
 		goto err;
 
 	/* latency total mode with filter condition case */
-	if (info->no_event)
+	if (info->no_output)
 		return 1;
 
 	if (!m_config.detail || !skb)

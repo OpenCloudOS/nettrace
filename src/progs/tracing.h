@@ -26,7 +26,7 @@ typedef struct {
 	u16 func;
 	u8  func_status;
 	/* don't output the event for this skb */
-	u8  no_event:1;
+	u8  no_output:1;
 	u8  is_return:1;
 } context_info_t;
 
