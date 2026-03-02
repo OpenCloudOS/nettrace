@@ -386,7 +386,7 @@ static int handle_entry(context_info_t *info, event_t *e)
 	} else {
 		if (!skb)
 			goto err;
-		filter = !info->sctx;
+		filter = !(mode_has_context() && info->sctx);
 		err = probe_parse_skb(skb, info->sk, pkt, filter);
 	}
 
@@ -502,7 +502,7 @@ static __always_inline int pre_handle_exit(context_info_t *info, int func)
 	u8 func_flags;
 
 	func_flags = get_func_flags(func);
-	if (func_is_retonly(func_flags))
+	if (func_is_retonly(func_flags) || !mode_has_context())
 		goto on_retonly;
 	/* 
 	 * check if the entry has matched according to the skb context in the

@@ -546,15 +546,8 @@ static int trace_prepare_mode(trace_args_t *args)
 				trace_set_invalid_reason(trace, "monitor");
 				continue;
 			}
-			if (!trace_is_func(trace))
-				continue;
-			switch (trace->monitor) {
-			case TRACE_MONITOR_EXIT:
+			if (trace_is_func(trace) && trace->monitor == TRACE_MONITOR_EXIT)
 				trace_set_retonly(trace);
-				break;
-			default:
-				break;
-			}
 		}
 		break;
 	case TRACE_MODE_RTT:
