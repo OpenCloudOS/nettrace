@@ -375,8 +375,8 @@ static int auto_inline handle_entry(context_info_t *info)
 	int err;
 
 	pr_debug_skb("begin to handle, func=%d", info->func);
+	filter = !(mode_has_context(args) && info->matched);
 	pid = (u32)bpf_get_current_pid_tgid();
-	filter = !info->matched;
 	pkt_args = &args->pkt;
 	pkt = &e->pkt;
 
