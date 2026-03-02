@@ -27,7 +27,7 @@ static int sym_init_data()
 {
 	size_t size = 1024 * 1024 * 4; // begin with 4M
 	char *cur, *tmp;
-	int count;
+	size_t count;
 	FILE *f;
 
 	if (proc_syms)
@@ -39,19 +39,24 @@ static int sym_init_data()
 		exit(-1);
 	}
 
-	proc_syms = malloc(size);
+	proc_syms = malloc(size + 1);
 	cur = proc_syms;
 	while (true) {
+		size_t offset;
+
 		count = fread(cur, sizeof(char), size + proc_syms - cur, f);
+		cur += count;
 		if (feof(f))
 			break;
 
-		count += cur - proc_syms;
+		offset = cur - proc_syms;
 		size <<= 1;
-		tmp = realloc(proc_syms, size);
-		cur = tmp + count;
+		tmp = realloc(proc_syms, size + 1);
+		cur = tmp + offset;
 		proc_syms = tmp;
 	}
+	*cur = '\0';
+	fclose(f);
 
 	return 0;
 }
@@ -100,36 +105,46 @@ static struct sym_result *sym_lookup_cache(__u64 pc, bool exact)
 
 static struct sym_result *sym_lookup_proc(__u64 pc, bool exact)
 {
-	char _cname[1024], _pname[1024], *pname = _pname, *cname = _cname;
-	struct sym_result *result;
+	char cname[MAX_SYM_LENGTH], pname[MAX_SYM_LENGTH] = {}, *line;
+	bool has_prev = false;
 	__u64 cpc, ppc = 0;
-	FILE *f;
 
-	f = fopen("/proc/kallsyms", "r");
-	if (!f)
+	if (sym_init_data())
 		return NULL;
 
-	result = malloc(sizeof(*result));
-	if (!result)
-		goto err_out;
+	line = proc_syms;
+	while (*line) {
+		struct sym_result *result;
+		char tname, *line_end;
+		int count;
 
-	while (true) {
-		if (fscanf(f, "%llx %*s %s [ %*[^]] ]", &cpc, cname) < 0)
-			break;
+		line_end = strchr(line, '\n');
+		if (line_end)
+			*line_end = '\0';
+		count = sscanf(line, "%llx %c %255s", &cpc, &tname, cname);
+		if (line_end)
+			*line_end = '\n';
+		if (count != 3 || (tname != 'T' && tname != 't'))
+			goto next_line;
+
+		if (!has_prev) {
+			strcpy(pname, cname);
+			ppc = cpc;
+			has_prev = true;
+			goto next_line;
+		}
 
 		if (exact) {
-			if (ppc != pc) {
-				SWAP(cname, pname);
-				ppc = cpc;
-				continue;
-			}
+			if (ppc != pc)
+				goto update_prev;
 		} else {
-			if (pc < ppc || pc >= cpc) {
-				SWAP(cname, pname);
-				ppc = cpc;
-				continue;
-			}
+			if (pc < ppc || pc >= cpc)
+				goto update_prev;
 		}
+
+		result = malloc(sizeof(*result));
+		if (!result)
+			return NULL;
 
 		strcpy(result->name, pname);
 		result->start = ppc;
@@ -138,12 +153,17 @@ static struct sym_result *sym_lookup_proc(__u64 pc, bool exact)
 		sprintf(result->desc, "%s+0x%llx", result->name,
 			pc - result->start);
 		sym_add_cache(result);
-		fclose(f);
 		return result;
+
+update_prev:
+		strcpy(pname, cname);
+		ppc = cpc;
+next_line:
+		if (!line_end)
+			break;
+		line = line_end + 1;
 	}
-	free(result);
-err_out:
-	fclose(f);
+
 	return NULL;
 }
 
