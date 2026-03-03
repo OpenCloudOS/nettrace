@@ -40,7 +40,7 @@ struct {
 #endif
 	__uint(max_entries, 102400);
 	__uint(key_size, sizeof(u64));
-	__uint(value_size, sizeof(match_val_t));
+	__uint(value_size, sizeof(skb_ctx_t));
 } m_matched SEC(".maps");
 
 struct {
@@ -49,6 +49,8 @@ struct {
 	__uint(value_size, sizeof(__u64));
 	__uint(max_entries, 512);
 } m_stats SEC(".maps");
+
+static inline void handle_entry_finish(context_info_t *info, int err);
 
 #ifdef __F_STACK_TRACE
 static inline void try_trace_stack(context_info_t *info)
@@ -154,7 +156,7 @@ static inline void free_map_ctx(bpf_args_t *args, void *key)
 
 static inline void init_ctx_match(void *skb, u16 func, bool ts)
 {
-	match_val_t matched = {
+	skb_ctx_t matched = {
 		.ts1 = ts ? bpf_ktime_get_ns() / 1000 : 0,
 		.func1 = func,
 	};
@@ -170,6 +172,7 @@ static __always_inline void update_stats_key(u32 key)
 		(*stats)++;
 }
 
+/* stats for latency mode */
 static __always_inline void update_stats_log(u32 val)
 {
 	u32 key = 0, i = 0, tmp = 2;
@@ -185,61 +188,61 @@ static __always_inline void update_stats_log(u32 val)
 	update_stats_key(key);
 }
 
+/* return value:
+ *   0: valid and continue to handle the entry event
+ *   1: skip the entry handle and goto entry_finish directly
+ */
 static inline int pre_tiny_output(context_info_t *info)
 {
+	if (info->func_status & FUNC_STATUS_RET || !info->matched)
+		return 0;
+
 	handle_tiny_output(info);
-	if (func_is_free(info->func_status))
-		consume_map_ctx(info->args, &info->skb);
-	else
-		get_ret(info);
 	return 1;
 }
 
+/* return value:
+ *   0: valid and continue to handle the entry event
+ *   1: skip the entry handle and goto entry_finish directly
+ */
 static inline int pre_handle_latency(context_info_t *info,
-				     match_val_t *match_val)
+				     skb_ctx_t *sctx)
 {
 	bpf_args_t *args = (void *)info->args;
 	u32 delta;
 
-	if (match_val) {
+	if (sctx) {
 		if (args->latency_free || !func_is_free(info->func_status) ||
 		    func_is_cfree(info->func_status)) {
-			match_val->ts2 = bpf_ktime_get_ns() / 1000;
-			match_val->func2 = info->func;
+			sctx->ts2 = bpf_ktime_get_ns() / 1000;
+			sctx->func2 = info->func;
 		}
 
 		/* reentry the matcher, or the free of skb is not traced. */
-		if (info->func_status & FUNC_STATUS_MATCHER &&
-		    match_val->func1 == info->func)
-			match_val->ts1 = bpf_ktime_get_ns() / 1000;
+		if (info->func_status & FUNC_STATUS_MATCHER && sctx->func1 == info->func)
+			sctx->ts1 = bpf_ktime_get_ns() / 1000;
 
 		if (func_is_free(info->func_status)) {
-			delta = match_val->ts2 - match_val->ts1;
-			/* skip a single match function */
-			if (!match_val->func2 || delta < args->latency_min) {
-				free_map_ctx(info->args, &info->skb);
+			delta = sctx->ts2 - sctx->ts1;
+
+			if (!sctx->func2 || /* skip a single match function */
+			    delta < args->latency_min ||
+			    args->latency_summary) {
+				if (args->latency_summary)
+					update_stats_log(delta);
 				return 1;
 			}
-			if (args->latency_summary) {
-				update_stats_log(delta);
-				consume_map_ctx(info->args, &info->skb);
-				return 1;
-			}
-			info->match_val = *match_val;
+
+			info->match_val = *sctx;
 			return 0;
 		}
 		return 1;
 	} else {
-		/* skip single free function for latency total mode */
-		if (func_is_free(info->func_status))
-			return 1;
 		/* if there isn't any filter, skip handle_entry() */
-		if (!args->has_filter) {
-			init_ctx_match(info->skb, info->func, true);
+		if (!args->has_filter)
 			return 1;
-		}
 	}
-	info->no_event = true;
+	info->no_output = true;
 	return 0;
 }
 
@@ -248,10 +251,14 @@ static inline bool trace_mode_latency(bpf_args_t *args)
 	return args->trace_mode & TRACE_MODE_LATENCY_MASK;
 }
 
+static inline bool trace_mode_tiny(bpf_args_t *args)
+{
+	return args->tiny_output;
+}
+
 /* return value:
- *   -1: invalid and return
- *    0: valid and continue
- *    1: valid and return
+ *   0: valid and continue to handle the entry event
+ *   otherwise: finish directly
  */
 static inline int pre_handle_entry(context_info_t *info, u16 func)
 {
@@ -266,8 +273,7 @@ static inline int pre_handle_entry(context_info_t *info, u16 func)
 
 	info->func_status = get_func_status(info->args, func);
 	if (mode_has_context(args)) {
-		match_val_t *match_val = bpf_map_lookup_elem(&m_matched,
-							     &info->skb);
+		skb_ctx_t *match_val = bpf_map_lookup_elem(&m_matched, &info->skb);
 
 		if (!match_val) {
 			/* skip no-matcher function in match mode if it is not
@@ -279,28 +285,32 @@ static inline int pre_handle_entry(context_info_t *info, u16 func)
 			/* If the first function is a free, just ignore it. */
 			if (func_is_free(info->func_status))
 				return -1;
+		} else {
+			info->match_val = *match_val;
 		}
 
-		/* skip handle_entry() for tiny case */
-		if (match_val && args->tiny_output)
+		if (trace_mode_tiny(args))
 			ret = pre_tiny_output(info);
 		else if (trace_mode_latency(args))
 			ret = pre_handle_latency(info, match_val);
-		else if (match_val)
-			info->match_val = *match_val;
-	}
 
-	if (args->func_stats) {
-		if (ret) {
-			update_stats_key(func);
-		} else if (!args->has_filter) {
+		/* skip the entry handle and goto the entry finish directly. */
+		if (ret > 0)
+			handle_entry_finish(info, 0);
+	} else {
+		/* function call count stats mode, no output is needed in this mode.
+		 * Can't be used together with latency mode.
+		 *
+		 * Skip the entry handle if there is no filter or it is required to
+		 * skip the entry already.
+		 */
+		if (args->func_stats && !args->has_filter) {
 			update_stats_key(func);
 			args->event_count++;
-			ret = 1;
-		} else {
-			info->no_event = true;
+			return 1;
 		}
 	}
+	info->no_output = info->no_output || args->func_stats;
 
 	return ret;
 }
@@ -315,24 +325,28 @@ static inline void handle_entry_finish(context_info_t *info, int err)
 	if (err < 0)
 		return;
 
-	if (mode_has_context(info->args)) {
-		if (func_is_free(info->func_status)) {
-			if (info->matched)
-				consume_map_ctx(info->args, &info->skb);
-		} else if (!info->matched) {
-			init_ctx_match(info->skb, info->func,
-				       trace_mode_latency(info->args));
-		}
-	} else {
+	/* the event count will be increased in skb ctx free for context mode */
+	if (!mode_has_context(info->args)) {
 		info->args->event_count++;
+		goto out;
 	}
 
+	if (info->matched) {
+		if (func_is_free(info->func_status))
+			consume_map_ctx(info->args, &info->skb);
+	} else {
+		init_ctx_match(info->skb, info->func, trace_mode_latency(info->args));
+	}
+
+	/* try to get the function entry reference if there is kretprobe on it */
+	get_ret(info);
+out:
 	if (info->args->func_stats)
 		update_stats_key(info->func);
 }
 
 static inline void try_set_latency(bpf_args_t *args, event_t *e,
-				   match_val_t *val)
+				   skb_ctx_t *val)
 {
 	if (!val->func1 || !trace_mode_latency(args))
 		return;
@@ -355,15 +369,14 @@ static int auto_inline handle_entry(context_info_t *info)
 	detail_event_t *detail;
 	event_t *e = info->e;
 	pkt_args_t *pkt_args;
-	bool mode_ctx, filter;
+	bool filter;
 	packet_t *pkt;
 	u32 pid;
 	int err;
 
 	pr_debug_skb("begin to handle, func=%d", info->func);
+	filter = !(mode_has_context(args) && info->matched);
 	pid = (u32)bpf_get_current_pid_tgid();
-	mode_ctx = mode_has_context(args);
-	filter = !info->matched;
 	pkt_args = &args->pkt;
 	pkt = &e->pkt;
 
@@ -404,7 +417,7 @@ no_filter:
 		goto err;
 
 	/* latency total mode with filter condition case */
-	if (info->no_event)
+	if (info->no_output)
 		return 1;
 
 	if (!args->detail)
@@ -441,9 +454,6 @@ out:
 #ifdef __PROG_TYPE_TRACING
 	e->retval = info->retval;
 #endif
-
-	if (mode_ctx)
-		get_ret(info);
 	return 0;
 err:
 	return -1;
@@ -509,28 +519,30 @@ DEFINE_ALL_PROBES(KPROBE_DEFAULT, TP_DEFAULT, FNC)
 
 
 #ifdef __PROG_TYPE_TRACING
-#define info_tp_args(info, offset, index) (void *)((u64 *)(info->ctx) + index)
+#define info_tp_args_ptr(info, offset, index) ((u64 *)(info->ctx) + index)
+#define info_tp_args(info, offset, index, type) (type)*info_tp_args_ptr(info, offset, index)
 #else
-#define info_tp_args(info, offset, index) ((void *)(info->ctx) + offset)
+#define info_tp_args_ptr(info, offset, index) ((void *)(info->ctx) + offset)
+#define info_tp_args(info, offset, index, type) *(type *)info_tp_args_ptr(info, offset, index)
 #endif
 
 DEFINE_TP(kfree_skb, skb, kfree_skb, 0, 8)
 {
-	int reason = 0;
+	u32 reason = 0;
 
 	if (bpf_core_type_exists(enum skb_drop_reason)) {
 		if (bpf_core_field_exists(struct trace_event_raw_kfree_skb, rx_sk))
-			reason = *(int *)info_tp_args(info, 36, 3);
+			reason = info_tp_args(info, 36, 2, u32);
 		else
-			reason = *(int *)info_tp_args(info, 28, 2);
+			reason = info_tp_args(info, 28, 2, u32);
 	} else if (info->args->drop_reason) {
 		/* use probe, or we will fail if drop reason not supported */
-		reason = _(*(int *)info_tp_args(info, 28, 0));
+		reason = _(*(u32 *)info_tp_args_ptr(info, 28, 0));
 	}
 
 	DECLARE_EVENT(drop_event_t, e)
 
-	e->location = *(u64 *)info_tp_args(info, 16, 1);
+	e->location = info_tp_args(info, 16, 1, u64);
 	e->reason = reason;
 
 	return handle_entry_output(info, e);
@@ -643,13 +655,13 @@ bpf_qdisc_handle(context_info_t *info, struct Qdisc *q)
 
 DEFINE_TP(qdisc_dequeue, qdisc, qdisc_dequeue, 3, 32)
 {
-	struct Qdisc *q = *(struct Qdisc **)info_tp_args(info, 8, 0);
+	struct Qdisc *q = info_tp_args(info, 8, 0, struct Qdisc *);
 	return bpf_qdisc_handle(info, q);
 }
 
 DEFINE_TP(qdisc_enqueue, qdisc, qdisc_enqueue, 2, 24)
 {
-	struct Qdisc *q = *(struct Qdisc **)info_tp_args(info, 8, 0);
+	struct Qdisc *q = info_tp_args(info, 8, 0, struct Qdisc *);
 	return bpf_qdisc_handle(info, q);
 }
 

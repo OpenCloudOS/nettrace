@@ -305,16 +305,8 @@ static int trace_prepare_mode(trace_args_t *args)
 				trace_set_invalid_reason(trace, "monitor");
 				continue;
 			}
-			if (!trace_is_func(trace))
-				continue;
-			switch (trace->monitor) {
-			case TRACE_MONITOR_EXIT:
+			if (trace_is_func(trace) && trace->monitor == TRACE_MONITOR_EXIT)
 				trace_set_retonly(trace);
-				trace_set_ret(trace);
-				break;
-			default:
-				break;
-			}
 		}
 		break;
 	case TRACE_MODE_RTT:
@@ -481,6 +473,11 @@ static int trace_prepare_args()
 			goto err;
 		}
 		trace_parse_traces(traces, 1);
+	}
+
+	if (trace_ctx.mode == TRACE_MODE_LATENCY && bpf_args->func_stats) {
+		pr_err("function stats is not supported in latency mode\n");
+		goto err;
 	}
 
 	trace_parse_traces(traces_stack, 2);
@@ -653,8 +650,7 @@ static int trace_prepare_traces()
 
 		if (!trace_is_func(trace)) {
 			/* For tracepoint, check the exist of the path */
-			sprintf(name, "/sys/kernel/debug/tracing/events/%s",
-				trace->tp);
+			sprintf(name, "%s/events/%s", get_tracing_path(), trace->tp);
 			if (!file_exist(name))
 				trace_set_invalid_reason(trace, "tp not found");
 			continue;

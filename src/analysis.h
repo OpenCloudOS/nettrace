@@ -138,6 +138,11 @@ DECLARE_ANALYZER(rtt);
 DECLARE_ANALYZER(reset);
 DECLARE_ANALYZER(default);
 
+#define pr_debug_ctx(fmt, key, ctx, args...)	\
+	pr_debug("key=%x, ctx=%llx, ctx-ref=%d, " fmt, key, \
+		 PTR2X((ctx)), \
+		 ((ctx) ? ((analy_ctx_t *)(ctx))->refs : 0), ##args)
+
 #define define_pure_event(type, name, data)			\
 	pure_##type *name =					\
 		(!trace_ctx.detail ? (void *)(data) +		\
@@ -215,8 +220,11 @@ static inline void get_fake_analy_ctx(fake_analy_ctx_t *ctx)
 static inline void put_fake_analy_ctx(fake_analy_ctx_t *ctx)
 {
 	ctx->refs--;
-	if (ctx->refs <= 0)
+	if (ctx->refs <= 0) {
 		put_analy_ctx(ctx->ctx);
+		pr_debug_ctx("fctx=%llx, fake ctx done\n", ctx->key, ctx->ctx,
+			     PTR2X(ctx));
+	}
 }
 
 static inline void entry_set_extinfo(analy_entry_t *e, char *info)
