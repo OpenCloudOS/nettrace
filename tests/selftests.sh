@@ -2,20 +2,24 @@
 # Run README demo smoke tests directly on VM.
 #
 # Usage:
-#   ./tests/selftests.sh [-t case1,case2] [-v] [./src/nettrace-x86] [/tmp/nettrace-selftest]
+#   ./tests/selftests.sh [-t case1,case2] [-s case3,case4] [-v] [./src/nettrace-x86] [/tmp/nettrace-selftest]
 
 set -euo pipefail
 
 usage() {
-	echo "Usage: $0 [-t case1,case2] [-v] [BIN] [OUT]"
+	echo "Usage: $0 [-t case1,case2] [-s case3,case4] [-v] [BIN] [OUT]"
 }
 
 TEST_ITEMS=""
+SKIP_ITEMS=""
 VERBOSE=0
-while getopts ":t:vh" opt; do
+while getopts ":t:s:vh" opt; do
 	case "$opt" in
 	t)
 		TEST_ITEMS="$OPTARG"
+		;;
+	s)
+		SKIP_ITEMS="$OPTARG"
 		;;
 	v)
 		VERBOSE=1
@@ -69,6 +73,7 @@ TRACE_MATCHER_RX=""
 DEFAULT_FORBID_RE="ERROR: trace not found:|ERROR: entry for exit not found"
 
 declare -A selected=()
+declare -A skipped=()
 declare -A matched=()
 
 normalize_case_name() {
@@ -107,10 +112,22 @@ if [ -n "$TEST_ITEMS" ]; then
 		selected["$local_name"]=1
 	done
 fi
+if [ -n "$SKIP_ITEMS" ]; then
+	IFS=',' read -r -a __items <<< "$SKIP_ITEMS"
+	for item in "${__items[@]}"; do
+		local_name=""
+		item="${item#"${item%%[![:space:]]*}"}"
+		item="${item%"${item##*[![:space:]]}"}"
+		[ -z "$item" ] && continue
+		local_name="$(normalize_case_name "$item")"
+		skipped["$local_name"]=1
+	done
+fi
 
 should_run_case() {
 	local name="$1"
 
+	[ -n "${skipped[$name]:-}" ] && return 1
 	[ "${#selected[@]}" -eq 0 ] && return 0
 	[ -n "${selected[$name]:-}" ]
 }
