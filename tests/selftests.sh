@@ -83,10 +83,12 @@ normalize_case_name() {
 	drop_mode) echo "tcp_drop_mode" ;;
 	sock_mode) echo "tcp_sock_mode" ;;
 	latency_show) echo "icmp_latency_show" ;;
+	monitor_mode) echo "tcp_monitor_mode" ;;
 	rtt_detail) echo "tcp_rtt_detail" ;;
 	ns_icmp_addr) echo "icmp_addr_filter" ;;
 	ns_icmp_saddr) echo "icmp_saddr_filter" ;;
 	ns_tcp_dport) echo "tcp_dport_filter" ;;
+	ns_monitor_drop) echo "tcp_monitor_drop" ;;
 	ns_diag_hooks_drop) echo "tcp_diag_hooks_drop" ;;
 	tcp_latency_recv) echo "tcp_latency_rx" ;;
 	tcp_latency_send) echo "tcp_latency_tx" ;;
@@ -149,6 +151,7 @@ needs_ns_env() {
 		"icmp_addr_filter"
 		"icmp_saddr_filter"
 		"tcp_dport_filter"
+		"tcp_monitor_drop"
 		"tcp_diag_hooks_drop"
 		"tcp_latency_rx"
 		"tcp_latency_tx"
@@ -289,6 +292,170 @@ check_expect() {
 	return 1
 }
 
+STRICT_MISSING=""
+STRICT_BAD_LINES=""
+STRICT_IGNORE_RE='__kfree_skb|skb_clone'
+POST_MISSING=""
+POST_BAD_LINES=""
+
+escape_ip_re() {
+	printf '%s' "$1" | sed 's/\./\\./g'
+}
+
+allow_icmp_pair_re() {
+	local saddr
+	local daddr
+
+	saddr="$(escape_ip_re "$1")"
+	daddr="$(escape_ip_re "$2")"
+	printf 'ICMP: %s -> %s' "$saddr" "$daddr"
+}
+
+allow_icmp_saddr_re() {
+	local saddr
+
+	saddr="$(escape_ip_re "$1")"
+	printf 'ICMP: %s ->' "$saddr"
+}
+
+allow_icmp_addr_re() {
+	local addr
+
+	addr="$(escape_ip_re "$1")"
+	printf 'ICMP: %s ->|ICMP: .* -> %s' "$addr" "$addr"
+}
+
+allow_tcp_port_re() {
+	local port="$1"
+
+	printf 'TCP: .*:%s ->|TCP: .* -> .*:%s' "$port" "$port"
+}
+
+allow_tcp_dport_re() {
+	local port="$1"
+
+	printf 'TCP: .* -> .*:%s' "$port"
+}
+
+run_case_icmp_pair() {
+	local saddr="$1"
+	local daddr="$2"
+	shift 2
+
+	run_case_with_strict "$(allow_icmp_pair_re "$saddr" "$daddr")" "icmp $saddr->$daddr" "$@"
+}
+
+run_case_icmp_saddr() {
+	local saddr="$1"
+	shift 1
+
+	run_case_with_strict "$(allow_icmp_saddr_re "$saddr")" "icmp saddr $saddr" "$@"
+}
+
+run_case_icmp_addr() {
+	local addr="$1"
+	shift 1
+
+	run_case_with_strict "$(allow_icmp_addr_re "$addr")" "icmp addr $addr" "$@"
+}
+
+run_case_tcp_port() {
+	local port="$1"
+	shift 1
+
+	run_case_with_strict "$(allow_tcp_port_re "$port")" "tcp port $port" "$@"
+}
+
+run_case_tcp_dport() {
+	local port="$1"
+	shift 1
+
+	run_case_with_strict "$(allow_tcp_dport_re "$port")" "tcp dport $port" "$@"
+}
+
+run_case_with_strict() {
+	local strict_re="$1"
+	local strict_desc="$2"
+	shift 2
+	local base=("${@:1:8}")
+	local extra=("${@:9}")
+
+	run_case "${base[@]}" "$strict_re" "$strict_desc" "${extra[@]}"
+}
+
+check_filtered_traces() {
+	local log="$1"
+	local allow_re="$2"
+	local desc="${3:-filtered trace}"
+	local trace_re='(TCP|UDP|ICMP|ARP):|ether protocol:|unknow'
+	local lines
+	local bad
+
+	STRICT_MISSING=""
+	STRICT_BAD_LINES=""
+
+	[ -z "$allow_re" ] && return 0
+
+	lines="$(grep -E "$trace_re" "$log" || true)"
+	[ -z "$lines" ] && return 0
+
+	bad="$(printf '%s\n' "$lines" | grep -E -v -- "$allow_re" | grep -E -v -- "$STRICT_IGNORE_RE" || true)"
+	if [ -n "$bad" ]; then
+		STRICT_MISSING="$desc"
+		STRICT_BAD_LINES="$bad"
+		{
+			echo "ERROR: unexpected trace record(s) for filter: $desc"
+			printf '%s\n' "$bad"
+		} >> "$log"
+		return 1
+	fi
+
+	return 0
+}
+
+check_tiny_show() {
+	local log="$1"
+	local proto_re="${2:-TCP:}"
+	local out
+	local rc
+
+	POST_MISSING=""
+	POST_BAD_LINES=""
+
+	out="$(awk -v proto_re="$proto_re" '
+		BEGIN { bad=0; in_block=0; first=0; }
+		/^\*{5}/ { in_block=1; first=1; next }
+		/^end trace\.\.\./ { in_block=0; next }
+		/^\[/ {
+			if (!in_block)
+				next
+			if (first) {
+				if ($0 !~ proto_re) {
+					print "first line missing packet info: " $0
+					bad=1
+				}
+				first=0
+			} else if ($0 ~ proto_re) {
+				print "unexpected packet info: " $0
+				bad=1
+			}
+		}
+		END { exit bad }
+	' "$log")"
+	rc=$?
+	if [ "$rc" -ne 0 ]; then
+		POST_MISSING="tiny-show only first line has packet info"
+		POST_BAD_LINES="$out"
+		{
+			echo "ERROR: tiny-show should only show packet info on the first function line of each block"
+			[ -n "$out" ] && printf '%s\n' "$out"
+		} >> "$log"
+		return 1
+	fi
+
+	return 0
+}
+
 run_case() {
 	local name="$1"
 	local cmd="$2"
@@ -298,11 +465,17 @@ run_case() {
 	local xfail_re="${6:-}"
 	local forbid_re="${7:-}"
 	local expect_mode="${8:-any}"
+	local strict_re="${9:-}"
+	local strict_desc="${10:-}"
+	local post_check="${11:-}"
+	local post_arg="${12:-}"
 	local combined_forbid_re="$DEFAULT_FORBID_RE"
 	local log="$OUT/$name.log"
 	local trig_log="$OUT/$name.trigger.log"
 	local rc
 	local result="FAIL"
+	local strict_ok=1
+	local post_ok=1
 
 	if ! should_run_case "$name"; then
 		skip=$((skip + 1))
@@ -338,6 +511,17 @@ run_case() {
 	fi
 	set -e
 
+	if [ -n "$strict_re" ]; then
+		if ! check_filtered_traces "$log" "$strict_re" "${strict_desc:-$strict_re}"; then
+			strict_ok=0
+		fi
+	fi
+	if [ -n "$post_check" ]; then
+		if ! "$post_check" "$log" "$post_arg"; then
+			post_ok=0
+		fi
+	fi
+
 	if [ "$mode" = "xfail" ]; then
 		if grep -Eq "$xfail_re" "$log"; then
 			result="XFAIL"
@@ -354,12 +538,18 @@ run_case() {
 		if grep -Eq "$combined_forbid_re" "$log"; then
 			result="SOFTFAIL"
 			soft=$((soft + 1))
-		elif check_expect "$log" "$expect_re" "$expect_mode"; then
-			result="PASS"
-			pass=$((pass + 1))
-		else
+		elif ! check_expect "$log" "$expect_re" "$expect_mode"; then
 			result="SOFTFAIL"
 			soft=$((soft + 1))
+		elif [ "$strict_ok" -eq 0 ]; then
+			result="SOFTFAIL"
+			soft=$((soft + 1))
+		elif [ "$post_ok" -eq 0 ]; then
+			result="SOFTFAIL"
+			soft=$((soft + 1))
+		else
+			result="PASS"
+			pass=$((pass + 1))
 		fi
 	else
 		if [ -n "$forbid_re" ]; then
@@ -370,13 +560,21 @@ run_case() {
 			result="FAIL"
 			fail=$((fail + 1))
 			failed_cmds+=$'\n'"[$name] timeout 20 $BIN $cmd"$'\n'"  trigger: $trigger"$'\n'"  forbidden_re: $combined_forbid_re"$'\n'
-		elif check_expect "$log" "$expect_re" "$expect_mode"; then
-			result="PASS"
-			pass=$((pass + 1))
-		else
+		elif ! check_expect "$log" "$expect_re" "$expect_mode"; then
 			result="FAIL"
 			fail=$((fail + 1))
 			failed_cmds+=$'\n'"[$name] timeout 20 $BIN $cmd"$'\n'"  trigger: $trigger"$'\n'"  expect_mode: $expect_mode"$'\n'"  missing: $EXPECT_MISSING"$'\n'
+		elif [ "$strict_ok" -eq 0 ]; then
+			result="FAIL"
+			fail=$((fail + 1))
+			failed_cmds+=$'\n'"[$name] timeout 20 $BIN $cmd"$'\n'"  trigger: $trigger"$'\n'"  strict_filter: ${STRICT_MISSING:-unexpected trace record}"$'\n'
+		elif [ "$post_ok" -eq 0 ]; then
+			result="FAIL"
+			fail=$((fail + 1))
+			failed_cmds+=$'\n'"[$name] timeout 20 $BIN $cmd"$'\n'"  trigger: $trigger"$'\n'"  post_check: ${POST_MISSING:-$post_check}"$'\n'
+		else
+			result="PASS"
+			pass=$((pass + 1))
 		fi
 	fi
 
@@ -384,9 +582,9 @@ run_case() {
 }
 
 # 3.1.1 basic trace
-run_case \
+run_case_icmp_pair 127.0.0.1 127.0.0.1 \
 	"icmp_lifecycle_basic" \
-	"-p icmp --saddr 127.0.0.1 -c 1" \
+	"-p icmp --saddr 127.0.0.1 --daddr 127.0.0.1 -c 1" \
 	"for i in \$(seq 1 8); do ping -c 1 -W 1 127.0.0.1 >/dev/null 2>&1 || true; sleep 0.15; done" \
 	$'eq:begin trace...\nre:ICMP: 127\\.0\\.0\\.1 -> 127\\.0\\.0\\.1\neq:end trace...' \
 	"pass" \
@@ -395,9 +593,9 @@ run_case \
 	"all"
 
 # 3.1.2 detail output
-run_case \
+run_case_icmp_pair 127.0.0.1 127.0.0.1 \
 	"icmp_lifecycle_detail" \
-	"-p icmp --saddr 127.0.0.1 --detail -c 1" \
+	"-p icmp --saddr 127.0.0.1 --daddr 127.0.0.1 --detail -c 1" \
 	"for i in \$(seq 1 8); do ping -c 1 -W 1 127.0.0.1 >/dev/null 2>&1 || true; sleep 0.15; done" \
 	$'eq:begin trace...\nre:\\[cpu:\nre:\\[ns:\neq:end trace...' \
 	"pass" \
@@ -406,9 +604,9 @@ run_case \
 	"all"
 
 # 3.1.4 call stack
-run_case \
+run_case_icmp_pair 127.0.0.1 127.0.0.1 \
 	"icmp_trace_stack" \
-	"-p icmp --trace-stack consume_skb,icmp_rcv -c 1" \
+	"-p icmp --saddr 127.0.0.1 --daddr 127.0.0.1 --trace-stack consume_skb,icmp_rcv -c 1" \
 	"for i in \$(seq 1 8); do ping -c 1 -W 1 127.0.0.1 >/dev/null 2>&1 || true; sleep 0.15; done" \
 	$'eq:Call Stack:\nre:-> \\[\neq:end trace...' \
 	"pass" \
@@ -418,7 +616,7 @@ run_case \
 
 # 3.1.5 trace matcher/exclude
 if detect_trace_matcher_rx; then
-	run_case \
+	run_case_tcp_port 12345 \
 		"tcp_trace_matcher" \
 		"--trace-matcher $TRACE_MATCHER_RX --trace-exclude napi_gro_receive_entry,dev_gro_receive -p tcp --port 12345 --tcp-flags S -c 1" \
 		"for i in \$(seq 1 8); do echo hi | nc -w 1 127.0.0.1 12345 >/dev/null 2>&1 || true; sleep 0.15; done" \
@@ -434,18 +632,19 @@ else
 fi
 
 # 3.1.6 tiny-show
-run_case \
+run_case_tcp_port 9999 \
 	"tcp_tiny_show" \
-	"--tiny-show -p tcp --port 9999 -c 2" \
+	"--tiny-show -p tcp --port 9999 -c 10" \
 	"for i in \$(seq 1 8); do echo hi | nc -w 1 127.0.0.1 9999 >/dev/null 2>&1 || true; sleep 0.15; done" \
 	$'eq:begin trace...\nre:TCP:\neq:end trace...' \
 	"pass" \
 	"" \
 	"" \
-	"all"
+	"all" \
+	"check_tiny_show"
 
 # 3.2.3 diag quiet
-run_case \
+run_case_tcp_port 9999 \
 	"tcp_diag_quiet" \
 	"--diag --diag-quiet -p tcp --port 9999" \
 	"for i in \$(seq 1 10); do echo hi | nc -w 1 127.0.0.1 9999 >/dev/null 2>&1 || true; sleep 0.12; done" \
@@ -467,9 +666,9 @@ run_case \
 	"all"
 
 # 3.4 sock mode
-run_case \
+run_case_tcp_port 10000 \
 	"tcp_sock_mode" \
-	"-p tcp --port 10000 --sock -c 10" \
+	"-p tcp --port 10000 --sock -c 1" \
 	"timeout 5 nc -l 127.0.0.1 10000 >/dev/null 2>&1 & s=\$!; sleep 0.3; echo hi | nc -w 1 127.0.0.1 10000 >/dev/null 2>&1 || true; wait \$s || true" \
 	$'eq:begin trace...\nre:__tcp_transmit_skb\nre:TCP: 127\\.0\\.0\\.1:.* -> 127\\.0\\.0\\.1:10000\neq:end trace...' \
 	"pass" \
@@ -478,11 +677,22 @@ run_case \
 	"all"
 
 # 3.6.1 latency show
-run_case \
+run_case_icmp_pair 127.0.0.1 127.0.0.1 \
 	"icmp_latency_show" \
-	"-p icmp --latency-show -c 1" \
+	"-p icmp --saddr 127.0.0.1 --daddr 127.0.0.1 --latency-show -c 1" \
 	"for i in \$(seq 1 8); do ping -c 1 -W 1 127.0.0.1 >/dev/null 2>&1 || true; sleep 0.15; done" \
 	$'re:latency:\nre:total latency' \
+	"pass" \
+	"" \
+	"" \
+	"all"
+
+# 3.5 monitor mode (kernel feature dependent)
+run_case_tcp_port 9999 \
+	"tcp_monitor_mode" \
+	"--monitor -p tcp --port 9999 -c 20" \
+	"for i in \$(seq 1 30); do echo hi | nc -w 1 127.0.0.1 9999 >/dev/null 2>&1 || true; sleep 0.05; done" \
+	$'eq:begin trace...\nre:TCP:\nre:reason: NO_SOCKET\neq:end trace...' \
 	"pass" \
 	"" \
 	"" \
@@ -510,7 +720,7 @@ if should_run_case "icmp_diag_hooks"; then
 		-s "$NS0_IP" -d "$NS1_IP" -j DROP
 	ns_icmp_diag_rule_added=1
 fi
-run_case \
+run_case_icmp_pair "$NS0_IP" "$NS1_IP" \
 	"icmp_diag_hooks" \
 	"--diag --hooks -p icmp --saddr $NS0_IP --daddr $NS1_IP -c 2" \
 	"for i in \$(seq 1 8); do ip netns exec $NS0 ping -c 1 -W 1 $NS1_IP >/dev/null 2>&1 || true; sleep 0.12; done" \
@@ -525,7 +735,7 @@ if [ "$ns_icmp_diag_rule_added" -eq 1 ]; then
 	ns_icmp_diag_rule_added=0
 fi
 
-run_case \
+run_case_icmp_addr "$NS1_IP" \
 	"icmp_addr_filter" \
 	"-p icmp --addr $NS1_IP -c 1" \
 	"for i in \$(seq 1 8); do ip netns exec $NS0 ping -c 1 -W 1 $NS1_IP >/dev/null 2>&1 || true; sleep 0.12; done" \
@@ -535,7 +745,7 @@ run_case \
 	"" \
 	"all"
 
-run_case \
+run_case_icmp_saddr "$NS0_IP" \
 	"icmp_saddr_filter" \
 	"-p icmp --saddr $NS0_IP -c 1" \
 	"for i in \$(seq 1 8); do ip netns exec $NS0 ping -c 1 -W 1 $NS1_IP >/dev/null 2>&1 || true; sleep 0.12; done" \
@@ -545,7 +755,7 @@ run_case \
 	"" \
 	"all"
 
-run_case \
+run_case_tcp_dport "$NS_TCP_PORT" \
 	"tcp_dport_filter" \
 	"--basic -p tcp --dport $NS_TCP_PORT -c 1" \
 	"timeout 5 ip netns exec $NS1 nc -l -p $NS_TCP_PORT >/dev/null 2>&1 & s=\$!; sleep 0.3; echo hi | ip netns exec $NS0 nc -w 1 $NS1_IP $NS_TCP_PORT >/dev/null 2>&1 || true; wait \$s || true" \
@@ -555,8 +765,18 @@ run_case \
 	"" \
 	"all"
 
+run_case_tcp_dport "$NS_DROP_PORT" \
+	"tcp_monitor_drop" \
+	"--monitor -p tcp --dport $NS_DROP_PORT -c 20" \
+	"for i in \$(seq 1 30); do echo hi | ip netns exec $NS0 nc -w 1 $NS1_IP $NS_DROP_PORT >/dev/null 2>&1 || true; sleep 0.05; done" \
+	$'eq:begin trace...\nre:TCP: '"$NS0_IP"$':.* -> '"$NS1_IP:$NS_DROP_PORT"$'\nre:kfree_skb\nre:reason: NO_SOCKET\neq:end trace...' \
+	"pass" \
+	"" \
+	"" \
+	"all"
+
 # 3.7.1 TCP latency (RX path), based on README 3.6.1 receive-stage example
-run_case \
+run_case_tcp_port "$NS_LAT_RX_PORT" \
 	"tcp_latency_rx" \
 	"--latency -p tcp --port $NS_LAT_RX_PORT -t tcp_queue_rcv,tcp_data_queue_ofo --trace-matcher tcp_queue_rcv,tcp_data_queue_ofo --latency-free --min-latency 0 -c 1" \
 	"timeout 8 ip netns exec $NS1 nc -l -p $NS_LAT_RX_PORT >/dev/null 2>&1 & s=\$!; sleep 0.3; dd if=/dev/zero bs=1024 count=128 2>/dev/null | ip netns exec $NS0 nc -w 2 $NS1_IP $NS_LAT_RX_PORT >/dev/null 2>&1 || true; wait \$s || true" \
@@ -567,7 +787,7 @@ run_case \
 	"all"
 
 # 3.7.2 TCP latency (TX path), based on README 3.6.1 send-stage example
-run_case \
+run_case_tcp_port "$NS_LAT_TX_PORT" \
 	"tcp_latency_tx" \
 	"--latency -p tcp --port $NS_LAT_TX_PORT -t __ip_queue_xmit,dev_hard_start_xmit --trace-matcher __ip_queue_xmit --trace-free dev_hard_start_xmit --min-latency 0 -c 1" \
 	"timeout 8 ip netns exec $NS1 nc -l -p $NS_LAT_TX_PORT >/dev/null 2>&1 & s=\$!; sleep 0.3; dd if=/dev/zero bs=1024 count=128 2>/dev/null | ip netns exec $NS0 nc -w 2 $NS1_IP $NS_LAT_TX_PORT >/dev/null 2>&1 || true; wait \$s || true" \
@@ -582,7 +802,7 @@ if should_run_case "tcp_diag_hooks_drop"; then
 		-s "$NS0_IP" -d "$NS1_IP" -j DROP
 	ns_tcp_diag_rule_added=1
 fi
-run_case \
+run_case_tcp_dport "$NS_HOOK_PORT" \
 	"tcp_diag_hooks_drop" \
 	"--diag --hooks -p tcp --dport $NS_HOOK_PORT" \
 	"for i in \$(seq 1 8); do echo hi | ip netns exec $NS0 nc -w 1 $NS1_IP $NS_HOOK_PORT >/dev/null 2>&1 || true; sleep 0.12; done" \
