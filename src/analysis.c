@@ -346,16 +346,6 @@ static int try_run_entry(trace_t *trace, analyzer_t *analyzer,
 	return RESULT_CONT;
 }
 
-static int try_run_exit(trace_t *trace, analyzer_t *analyzer,
-			analy_exit_t *exit)
-{
-	if (analyzer && (analyzer->mode & (1 << trace_ctx.mode)) &&
-	    analyzer->analy_exit)
-		return analyzer->analy_exit(trace, exit);
-
-	return RESULT_CONT;
-}
-
 static inline void rule_run_ret(analy_entry_t *entry, trace_t *trace, int ret)
 {
 	bool hit = false;
@@ -605,28 +595,12 @@ void ctx_poll_handler(void *raw_ctx, int cpu, void *data, u32 size)
 	do_async_poll(cpu, data, size, ctx_async_poll_cb);
 }
 
-static inline bool trace_analyse_ret(trace_t *trace)
-{
-	return trace_ctx.mode == TRACE_MODE_MONITOR && trace_is_func(trace) &&
-	       trace->monitor == TRACE_MONITOR_EXIT;
-}
-
 static inline void entry_basic_poll(analy_entry_t *entry)
 {
 	trace_t *trace;
 
 	trace = get_trace_from_analy_entry(entry);
 	try_run_entry(trace, trace->analyzer, entry);
-
-	if (trace_analyse_ret(trace)) {
-		analy_exit_t analy_exit = {
-			.event = {
-				.val = entry->event->retval,
-			},
-			.entry = entry,
-		};
-		try_run_exit(trace, trace->analyzer, &analy_exit);
-	}
 
 	analy_entry_output(entry, NULL);
 }

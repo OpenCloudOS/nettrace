@@ -100,23 +100,6 @@ def gen_name(name, is_trace=False):
     return name
 
 
-btf_data = None
-
-
-def get_arg_count(name):
-    global btf_data
-    if not btf_data:
-        with open("btf.raw", 'r', encoding='utf-8') as btf_file:
-            btf_data = btf_file.read()
-    reg_text = f"'{name}' type_id=([0-9]+)"
-    match = re.search(reg_text, btf_data)
-    if not match:
-        return 0
-
-    type_id = match.group(1)
-    match = re.search(f"\\[{type_id}\\].*vlen=([0-9]+)", btf_data)
-    return match.group(1)
-
 
 def gen_rules(rules, name):
     rule_str, init_str = '', ''
@@ -220,19 +203,9 @@ def gen_trace(trace, group, p_name):
     else:
         trace_type = 'TRACE_FUNCTION'
         if 'skb' in trace or 'sk' in trace:
-            arg_count = ''
-            if 'monitor' in trace:
-                if 'arg_count' not in trace:
-                    trace['arg_count'] = get_arg_count(target)
-                    arg_count = trace['arg_count']
-                else:
-                    arg_count = trace['arg_count']
-                if not arg_count:
-                    print(
-                        f"BTF not found for {target}, skip monitor", file=sys.stderr)
-                    trace['monitor'] = 0
-                else:
-                    fields_str += append_trace_field('arg_count', trace, 'raw')
+            arg_count = trace.get('arg_count', '')
+            if arg_count:
+                fields_str += append_trace_field('arg_count', trace, 'raw')
             skb = trace['skb'] if 'skb' in trace else ''
             sk = trace['sk'] if 'sk' in trace else ''
             if 'custom' not in trace:
@@ -263,7 +236,6 @@ def gen_trace(trace, group, p_name):
     fields_str += append_trace_field('msg', trace)
     fields_str += append_trace_field('is_backup', trace, 'bool')
     fields_str += append_trace_field('probe', trace, 'bool')
-    fields_str += append_trace_field('monitor', trace, 'raw')
     fields_str += append_filed('name', target)
     fields_str += append_trace_field('skb', trace, 'raw')
     fields_str += append_trace_field('sk', trace, 'raw')

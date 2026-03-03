@@ -212,7 +212,6 @@ Usage:
     --drop           skb drop monitor mode, for replace of 'droptrace'
     --drop-stack     print the kernel function call stack of kfree_skb
     --sock           enable 'sock' mode
-    --monitor        enable 'monitor' mode
     --rtt            enable 'rtt' in statistics mode
     --rtt-detail     enable 'rtt' in detail mode
     --filter-srtt    filter by the minial first-acked rtt in ms
@@ -266,7 +265,6 @@ Usage:
 - `drop`：进行系统丢包监控，取代原先的`droptrace`
 - `drop-stack`: 打印kfree_skb内核函数的调用堆栈，等价于`--trace-stack kfree_skb`
 - `sock`：启用套接口模式。这个模式下，不会再跟踪报文，而会跟踪套接口。
-- `monitor`：启用监控模式。一种轻量化的实时监控系统中网络异常的模式（对内核版本有一定要求）。
 - `rtt`：启用RTT统计模式，会统计TCP RTT的分布情况
 - `rtt-detail`：启用RTT详细模式，输出符合过滤条件的每个报文的RTT数据
 - `filter-srtt`：根据srtt来进行过滤，`rtt/rtt-detail`模式下可用，单位ms
@@ -777,41 +775,6 @@ begin trace...
 ```
 
 其中，`info`里显示的内容分别是：报文在外数量、报文重传数量。`timer`显示的为当前套接口上的定时器和超时时间。目前，信息还在不断完善中。
-
-### 3.5 监控模式
-
-常规的网络定位手段，包括上面的报文跟踪、诊断等方式，由于开销过大，不适合在生产环境中部署和常态化运行。监控模式能够提供一种更加轻量级别的网络异常、丢包监控。由于这种模式是基于`TRACING`类型的BPF，因此其对于内核版本有较高的要求。以下是内核版本要求：
-
-| TencentOS       | 开源版本 | BPF特性           | monitor                                                 |
-| --------------- | -------- | ----------------- | ------------------------------------------------------- |
-| 5.4.119-19.0009 | 5.5      | TRACING           | 可用，不可监控内核模块中的函数和参数个数超过6的内核函数 |
-| 开发中          | 5.11     | BTF_MODULES       | 可用，不可监控参数个数超过6的内核函数                   |
-| 开发中          | upstream | TRACING支持6+参数 | 完全可用                                                |
-
-其中，“TRACING支持6+参数”内核特性已经合入到upstream：[bpf, x86: allow function arguments up to 12 for TRACING](https://git.kernel.org/pub/scm/linux/kernel/git/bpf/bpf-next.git/commit/?id=f892cac2371447b3a26dad117c7bcdf2c93215e1)
-
-基本用法（在内核特性完全支持的情况下）：
-
-```shell
-$ nettrace --monitor
-begin trace...
-[25.167980] [nft_do_chain        ] ICMP: 192.168.122.1 -> 192.168.122.9 ping request, seq: 1, id: 1523 *iptables table:filter, chain:INPUT* *packet is dropped by iptables/iptables-nft*
-[25.167996] [kfree_skb           ] ICMP: 192.168.122.1 -> 192.168.122.9 ping request, seq: 1, id: 1523, reason: NETFILTER_DROP, nf_hook_slow+0xa8
-[25.168000] [nf_hook_slow        ] ICMP: 192.168.122.1 -> 192.168.122.9 ping request, seq: 1, id: 1523 *ipv4 in chain: INPUT* *packet is dropped by netfilter (NF_DROP)*
-```
-
-监控模式下，也可以使用普通模式的下各种参数，如报文过滤、`--detail`详情显示等。默认情况下，monitor模式下不跟踪rtt。但是如果指定了`--filter-minrtt`或者`--filter-srtt`参数，那么就会跟踪rtt事件：
-
-```shell
-./src/nettrace --monitor --filter-minrtt 10 
-begin trace...
-[2651830.434898] [tcp_ack_update_rtt.isra.51] TCP: 127.0.0.1:14275 -> 127.0.0.1:62522 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:8ms, rtt:40ms*
-[2651830.435267] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:22 -> 10.85.114.159:53493 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:38ms, rtt:41ms*
-[2651830.484520] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:22 -> 10.85.114.159:53493 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:39ms, rtt:37ms*
-[2651830.529385] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:22 -> 10.85.114.159:53493 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:38ms, rtt:36ms*
-[2651830.578473] [tcp_ack_update_rtt.isra.51] TCP: 10.37.80.82:22 -> 10.85.114.159:53493 ESTABLISHED CA_Open info:(0 0) mem:(w0 r0) *srtt:38ms, rtt:41ms*
-[2651830.752827] [tcp_retransmit_timer] TCP: 10.37.80.82:100 -> 10.154.16.12:8603 SYN_SENT CA_Open info:(0 0) mem:(w0 r0) *TCP retransmission timer out*
-```
 
 ### 3.6 性能分析
 

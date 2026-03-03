@@ -35,7 +35,6 @@ children:
         msg: packet is dropped by GRO
     - name: enqueue_to_backlog:0
       analyzer: ret
-      monitor: 1
       rules:
       - <<: *rule_ret_err
         msg: failed to enqeueu to CPU backlog
@@ -55,7 +54,6 @@ children:
         msg: packet is redirected by XDP program
     - name: xdp_do_generic_redirect:1
       analyzer: ret
-      monitor: 1
       rules:
       - <<: *rule_ret_err
         msg: XDP failed to redirect skb
@@ -69,7 +67,6 @@ children:
     children:
     - name: __dev_queue_xmit:0
       analyzer: ret
-      monitor: 1
       rules:
       - <<: *rule_ret_err
         msg: failed to queue packet to qdisc
@@ -186,7 +183,6 @@ children:
         cond: '[ $(verlte "$(uname -r)" "5.16") -eq -1 ]' # valid when kernel < 5.16
         backup: *ipt_do_table
       analyzer: iptable
-      monitor: 1
       skb: 1
       custom: 
       target: ipt_do_table
@@ -200,7 +196,6 @@ children:
         msg: packet is accepted
     - name: nft_do_chain:0
       analyzer: iptable
-      monitor: 1
       custom: 1
       rules:
       - exp: eq 0
@@ -217,7 +212,6 @@ children:
         msg: NAT happens (packet address will change)
         level: warn
     - name: nf_hook_slow:0
-      monitor: 1
       analyzer: nf
       custom: 1
       rules:
@@ -242,7 +236,6 @@ children:
     - name: tcp_in_window:4
       default: true
       analyzer: ret
-      monitor: 1
       arg_count: 7
       rules:
       - exp: eq 0
@@ -314,7 +307,6 @@ children:
     visual: true
     children:
     - name: fib_validate_source:0
-      monitor: 1
       rules:
       - <<: *rule_ret_err
         msg: source address valid failed (properly rp_filter fail)
@@ -322,7 +314,6 @@ children:
           check you ip route config or disable rp_filter with command
           'echo 0 > /proc/sys/net/ipv4/conf/all/rp_filter'
     - name: ip_route_input_slow:0
-      monitor: 1
       rules:
       - <<: *rule_ret_err
         msg: failed to route packet in input path
@@ -372,7 +363,6 @@ children:
         level: info
         msg: send zero-window probe packet
     - name: __inet_lookup_listener:2
-      monitor: 1
       analyzer: ret
       rules:
       - exp: eq 0
@@ -381,7 +371,6 @@ children:
         adv: check your target tcp port
     - name: inet6_lookup_listener:2
       analyzer: ret
-      monitor: 1
       rules:
       - exp: eq 0
         level: warn
@@ -390,7 +379,6 @@ children:
     - name: tcp_bad_csum:0
       tp: tcp/tcp_bad_csum
       skboffset: 8
-      monitor: 2
       rules:
       - exp: any
         level: error
@@ -481,7 +469,6 @@ children:
     children:
     - tcp_write_timer_handler/0
     - name: tcp_retransmit_timer/0
-      monitor: 2
       rules:
       - exp: any
         level: warn
@@ -514,14 +501,10 @@ children:
     desc: TCP retransmission releated hooks
     children:
     - name: tcp_rtx_synack/0
-      monitor: 2
     - name: tcp_retransmit_skb/0
-      monitor: 2
     - name: tcp_rcv_spurious_retrans/0:1
-      monitor: 2
       arg_count: 2
     - name: tcp_dsack_set/0
-      monitor: 2
       arg_count: 3
       rules:
       - exp: any
@@ -551,7 +534,6 @@ children:
     skboffset: 8
     custom: 1
     analyzer: drop
-    monitor: 1
     rules:
     - exp: any
       level: error

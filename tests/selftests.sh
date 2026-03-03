@@ -83,12 +83,10 @@ normalize_case_name() {
 	drop_mode) echo "tcp_drop_mode" ;;
 	sock_mode) echo "tcp_sock_mode" ;;
 	latency_show) echo "icmp_latency_show" ;;
-	monitor_mode) echo "tcp_monitor_mode" ;;
 	rtt_detail) echo "tcp_rtt_detail" ;;
 	ns_icmp_addr) echo "icmp_addr_filter" ;;
 	ns_icmp_saddr) echo "icmp_saddr_filter" ;;
 	ns_tcp_dport) echo "tcp_dport_filter" ;;
-	ns_monitor_drop) echo "tcp_monitor_drop" ;;
 	ns_diag_hooks_drop) echo "tcp_diag_hooks_drop" ;;
 	tcp_latency_recv) echo "tcp_latency_rx" ;;
 	tcp_latency_send) echo "tcp_latency_tx" ;;
@@ -151,7 +149,6 @@ needs_ns_env() {
 		"icmp_addr_filter"
 		"icmp_saddr_filter"
 		"tcp_dport_filter"
-		"tcp_monitor_drop"
 		"tcp_diag_hooks_drop"
 		"tcp_latency_rx"
 		"tcp_latency_tx"
@@ -491,17 +488,6 @@ run_case \
 	"" \
 	"all"
 
-# 3.5 monitor mode (kernel feature dependent)
-run_case \
-	"tcp_monitor_mode" \
-	"--monitor -p tcp --port 9999 -c 20" \
-	"for i in \$(seq 1 30); do echo hi | nc -w 1 127.0.0.1 9999 >/dev/null 2>&1 || true; sleep 0.05; done" \
-	$'eq:begin trace...\nre:TCP:\nre:reason: NO_SOCKET\neq:end trace...' \
-	"pass" \
-	"" \
-	"" \
-	"all"
-
 # 3.6.2 rtt detail
 run_case \
 	"tcp_rtt_detail" \
@@ -564,16 +550,6 @@ run_case \
 	"--basic -p tcp --dport $NS_TCP_PORT -c 1" \
 	"timeout 5 ip netns exec $NS1 nc -l -p $NS_TCP_PORT >/dev/null 2>&1 & s=\$!; sleep 0.3; echo hi | ip netns exec $NS0 nc -w 1 $NS1_IP $NS_TCP_PORT >/dev/null 2>&1 || true; wait \$s || true" \
 	$'eq:begin trace...\nre:TCP: '"$NS0_IP"$':.* -> '"$NS1_IP:$NS_TCP_PORT"$'\neq:end trace...' \
-	"pass" \
-	"" \
-	"" \
-	"all"
-
-run_case \
-	"tcp_monitor_drop" \
-	"--monitor -p tcp --dport $NS_DROP_PORT -c 20" \
-	"for i in \$(seq 1 30); do echo hi | ip netns exec $NS0 nc -w 1 $NS1_IP $NS_DROP_PORT >/dev/null 2>&1 || true; sleep 0.05; done" \
-	$'eq:begin trace...\nre:TCP: '"$NS0_IP"$':.* -> '"$NS1_IP:$NS_DROP_PORT"$'\nre:kfree_skb\nre:reason: NO_SOCKET\neq:end trace...' \
 	"pass" \
 	"" \
 	"" \

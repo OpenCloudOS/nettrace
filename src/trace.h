@@ -45,11 +45,6 @@ typedef struct trace_group {
 	struct list_head traces;
 } trace_group_t;
 
-enum {
-	TRACE_MONITOR_EXIT = 1,
-	TRACE_MONITOR_ENTRY,
-};
-
 typedef struct trace {
 	/* name of the kernel function this trace targeted */
 	char	name[64];
@@ -83,7 +78,6 @@ typedef struct trace {
 	bool	def;
 	/* if the BPF program is custom of this trace */
 	bool	custom;
-	int	monitor;
 	int	index;
 	int	arg_count;
 	u32	status;
@@ -103,7 +97,6 @@ typedef struct trace_args {
 	bool intel_quiet;
 	bool intel_keep;
 	bool basic;
-	bool monitor;
 	bool drop;
 	bool date;
 	bool drop_stack;

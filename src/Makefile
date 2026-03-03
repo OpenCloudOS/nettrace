@@ -6,7 +6,7 @@ prog-nettrace-origin = \
 		$(utils)/parse_sym.c $(utils)/net_utils.c \
 		$(utils)/arg_parse.c $(utils)/sys_utils.c \
 		$(utils)/bpf_utils.c \
-		trace.c trace_probe.c output.c trace_tracing.c \
+		trace.c trace_probe.c output.c \
 		analysis.c trace_group.c \
 		dropreason.c rstreason.c
 prog-nettrace	= $(prog-nettrace-origin) nettrace.c
@@ -17,11 +17,7 @@ ifdef COMPAT
 	INLINE		:= 1
 endif
 
-ifndef NO_BTF
-	bpf_progs += progs/tracing progs/feat_args_ext
-endif
-
-BPF_EXTRA_DEP := kheaders.h progs/core.c progs/core.h
+BPF_EXTRA_DEP := kheaders.h progs/core.h
 include ../common.mk
 
 cmd_kversion := awk -F '=' 'NR>10{exit;}		\

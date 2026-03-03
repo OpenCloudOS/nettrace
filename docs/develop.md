@@ -26,7 +26,7 @@
 
 - src：nettrace的核心代码
 
-  - progs：BPF代码目录，其中kprobe.c是基于kprobe-BPF实现的BPF程序，tracing是基于tracing-BPF技术（还未实现，等待开发中）。除了该目录下，其他的代码都是用户态的代码。
+- progs：BPF代码目录，其中kprobe.c是基于kprobe-BPF实现的BPF程序。除了该目录下，其他的代码都是用户态的代码。
 
   - analysis.c：解析器代码，用来处理BPF程序采集到的数据
 
@@ -37,8 +37,6 @@
   - nettrace.c：nettrace主程序的入口函数，定义了命令行参数等
 
   - trace_probe.c：用于处理基于kprobe-BPF类型的BPF程序的加载和数据处理
-
-  - trace_tracing.c：用于处理基于tracing-BPF类型的BPF程序的加载和数据处理（暂未实现）
 
   - trace.c：BPF程序的检查、加载等部分的功能函数
 
@@ -198,5 +196,4 @@ DECLARE_ANALYZER(qdisc);
     - name: sch_direct_xmit
       analyzer: qdisc
 ```
-
 
