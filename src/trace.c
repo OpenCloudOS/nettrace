@@ -803,6 +803,26 @@ static inline int ringbuf_handler_wrap(void *ctx, void *data, size_t size)
 	return 0;
 }
 
+static int log_ringbuf_handler(void *ctx, void *data, size_t size)
+{
+	const log_event_t *log = data;
+
+	(void)ctx;
+	trace_stop();
+
+	if (size < sizeof(*log)) {
+		pr_err("bpf log event truncated (size=%zu)\n", size);
+		exit(EXIT_FAILURE);
+	}
+
+	if (log->msg[0])
+		pr_err("BPF error: %s\n", log->msg);
+	else
+		pr_err("BPF error: code=%u\n", log->code);
+
+	exit(EXIT_FAILURE);
+}
+
 static int poll_timeout(int err)
 {
 	if (trace_ctx.stop)
@@ -822,7 +842,7 @@ static int poll_timeout(int err)
 int trace_poll()
 {
 	struct ring_buffer *rb;
-	int err, map_fd;
+	int err, map_fd, log_fd;
 
 	if (trace_ctx.ops->raw_poll) {
 		trace_ctx.ops->trace_ready();
@@ -838,6 +858,20 @@ int trace_poll()
 	err = libbpf_get_error(rb);
 	if (err) {
 		pr_err("failed to setup ring_buffer: %d\n", err);
+		return err;
+	}
+
+	log_fd = bpf_object__find_map_fd_by_name(trace_ctx.obj, "m_log_ringbuf");
+	if (!log_fd) {
+		pr_err("failed to find BPF map m_log_ringbuf\n");
+		ring_buffer__free(rb);
+		return -1;
+	}
+
+	err = ring_buffer__add(rb, log_fd, log_ringbuf_handler, NULL);
+	if (err) {
+		pr_err("failed to add log ring_buffer: %d\n", err);
+		ring_buffer__free(rb);
 		return err;
 	}
 

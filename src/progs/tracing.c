@@ -29,11 +29,45 @@ struct {
 	__uint(max_entries, 1 << 24);
 } m_ringbuf SEC(".maps");
 
+struct {
+	__uint(type, BPF_MAP_TYPE_RINGBUF);
+	/* the size of the log ringbuf, 128Kb. */
+	__uint(max_entries, 1 << 16);
+} m_log_ringbuf SEC(".maps");
+
+/* output log event */
+static void log_output_alloc_fail(const char *msg)
+{
+	log_event_t *log = bpf_ringbuf_reserve(&m_log_ringbuf,
+					       sizeof(log_event_t), 0);
+	int i;
+
+	if (!log)
+		return;
+
+	log->ts = bpf_ktime_get_ns();
+	log->pid = (u32)bpf_get_current_pid_tgid();
+	log->code = LOG_ALLOC_FAIL;
+
+#pragma unroll
+	for (i = 0; i < LOG_MSG_LEN - 1; i++) {
+		char c = msg[i];
+
+		log->msg[i] = c;
+		if (!c)
+			break;
+	}
+	log->msg[LOG_MSG_LEN - 1] = '\0';
+
+	bpf_ringbuf_submit(log, 0);
+}
+
 /* allocate event data */
 #define event_define(type) ({						\
 	type *___tmp = bpf_ringbuf_reserve(&m_ringbuf, sizeof(type), 0);\
 	if (unlikely(!___tmp)) {					\
-		bpf_printk("ERROR: failed to alloc %s\n", #type);	\
+		m_data.ready = false;					\
+		log_output_alloc_fail("ringbuf alloc failed: " #type);	\
 		return -1;						\
 	}								\
 	___tmp;								\

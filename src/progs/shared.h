@@ -37,6 +37,18 @@ typedef struct {
 	bool ready;
 } bpf_data_t;
 
+enum log_code {
+	LOG_ALLOC_FAIL = 1,
+};
+
+#define LOG_MSG_LEN 128
+typedef struct {
+	u64 ts;
+	u32 pid;
+	u32 code;
+	char msg[LOG_MSG_LEN];
+} log_event_t;
+
 typedef struct {
 	u16		meta;
 	u16		func;
