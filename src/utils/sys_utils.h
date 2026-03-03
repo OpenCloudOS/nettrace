@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "net_utils.h"
 
@@ -86,8 +87,8 @@ do {						\
 
 #define pr_info(fmt, args...)	pr_level(0, stdout, fmt, ##args)
 #define pr_verb(fmt, args...)	pr_level(1, stdout, fmt, ##args)
-#define pr_warn(fmt, args...)	pr_level(0, stderr, "\033[0;34mWARN: "fmt"\033[0m", ##args)
-#define pr_err(fmt, args...)	pr_level(0, stderr, "\033[0;31mERROR: "fmt"\033[0m", ##args)
+#define pr_warn(fmt, args...)	pr_level(0, stderr, "WARN: "fmt, ##args)
+#define pr_err(fmt, args...)	pr_level(0, stderr, "ERROR: "fmt, ##args)
 #define pr_debug(fmt, args...)	pr_level(2, stdout, "DEBUG: "fmt, ##args)
 
 #define PFMT_EMPH	"\033[0;33m"
@@ -105,21 +106,86 @@ do {						\
 	sprintf(strlen(buf) + buf, fmt, ##args)
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 
-#define color_enable() (isatty(STDOUT_FILENO))
+static inline int color_env_mode(void)
+{
+	static int cached = -1;
+	const char *v = getenv("CLICOLOR_FORCE");
+
+	if (cached >= 0)
+		return cached;
+	if (v && !(v[0] == '0' && v[1] == '\0')) {
+		cached = 1;
+		return cached;
+	}
+
+	if (getenv("NO_COLOR"))
+		goto disable;
+
+	v = getenv("CLICOLOR");
+	if (v && v[0] == '0' && v[1] == '\0')
+		goto disable;
+
+	cached = 0;
+	return cached;
+
+disable:
+	cached = 2;
+	return cached;
+}
+
+static inline bool color_enable_stdout(void)
+{
+	static int cached = -1;
+	int mode;
+
+	if (cached >= 0)
+		return cached;
+
+	mode = color_env_mode();
+	if (mode == 1)
+		cached = 1;
+	else if (mode == 2)
+		cached = 0;
+	else
+		cached = isatty(STDOUT_FILENO) ? 1 : 0;
+
+	return cached;
+}
+
+static inline bool color_enable_stderr(void)
+{
+	static int cached = -1;
+	int mode;
+
+	if (cached >= 0)
+		return cached;
+
+	mode = color_env_mode();
+	if (mode == 1)
+		cached = 1;
+	else if (mode == 2)
+		cached = 0;
+	else
+		cached = isatty(STDERR_FILENO) ? 1 : 0;
+
+	return cached;
+}
+
+#define color_enable() (color_enable_stdout())
 #define pr_info_color(fmt, ...) \
-	pr_info((color_enable() ? (PFMT_EMPH fmt PFMT_END) : fmt), ##__VA_ARGS__)
+	pr_info((color_enable_stdout() ? (PFMT_EMPH fmt PFMT_END) : fmt), ##__VA_ARGS__)
 #define pr_warn_color(fmt, ...) \
-	pr_warn((color_enable() ? (PFMT_WARN fmt PFMT_END) : fmt), ##__VA_ARGS__)
+	pr_warn((color_enable_stderr() ? (PFMT_WARN fmt PFMT_END) : fmt), ##__VA_ARGS__)
 #define pr_error_color(fmt, ...) \
-	pr_error((color_enable() ? (PFMT_ERROR fmt PFMT_END) : fmt), ##__VA_ARGS__)
+	pr_err((color_enable_stderr() ? (PFMT_ERROR fmt PFMT_END) : fmt), ##__VA_ARGS__)
 #define sprintf_color(buf, fmt, ...) \
-	sprintf(buf, (color_enable() ? (PFMT_EMPH fmt PFMT_END) : fmt), ##__VA_ARGS__)
+	sprintf(buf, (color_enable_stdout() ? (PFMT_EMPH fmt PFMT_END) : fmt), ##__VA_ARGS__)
 #define sprintf_end_color(buf, fmt, ...) \
-	sprintf_end(buf, (color_enable() ? (PFMT_EMPH fmt PFMT_END) : fmt), ##__VA_ARGS__)
+	sprintf_end(buf, (color_enable_stdout() ? (PFMT_EMPH fmt PFMT_END) : fmt), ##__VA_ARGS__)
 #define sprintf_warn_color(buf, fmt, ...) \
-	sprintf_end(buf, (color_enable() ? (PFMT_WARN fmt PFMT_END) : fmt), ##__VA_ARGS__)
+	sprintf_end(buf, (color_enable_stderr() ? (PFMT_WARN fmt PFMT_END) : fmt), ##__VA_ARGS__)
 #define sprintf_error_color(buf, fmt, ...) \
-	sprintf_end(buf, (color_enable() ? (PFMT_ERROR fmt PFMT_END) : fmt), ##__VA_ARGS__)
+	sprintf_end(buf, (color_enable_stderr() ? (PFMT_ERROR fmt PFMT_END) : fmt), ##__VA_ARGS__)
 
 #define MIN(a, b) (a > b ? b : a)
 #define MAX(a, b) (a > b ? a : b)
