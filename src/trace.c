@@ -19,9 +19,7 @@ trace_context_t trace_ctx = {
 	.mode = TRACE_MODE_TIMELINE,
 };
 
-extern trace_ops_t tracing_ops;
 extern trace_ops_t probe_ops;
-trace_ops_t *trace_ops_all[] = { &tracing_ops, &probe_ops };
 
 static bool trace_group_valid(trace_group_t *group)
 {
@@ -89,9 +87,6 @@ print_trace:
 #endif
 		if (status & TRACE_INVALID)
 			sprintf_end(buf, ",%s", PFMT_WARN_STR("invalid"));
-
-		if (trace->monitor)
-			sprintf_end(buf, ",%s", PFMT_WARN_STR("monitor"));
 
 		/* skip the prefix of __trace_ */
 		name = trace->prog + TRACE_PREFIX_LEN - 1;
@@ -259,7 +254,7 @@ static int trace_check_force()
 	bpf_args_t *bpf_args = &trace_ctx.bpf_args;
 	trace_args_t *args = &trace_ctx.args;
 
-	if (args->drop || args->force || args->monitor || args->show_traces ||
+	if (args->drop || args->force || args->show_traces ||
 	    args->rtt)
 		return 0;
 
@@ -273,7 +268,7 @@ static int trace_check_force()
 }
 
 static int trace_prepare_mode(trace_args_t *args)
-{	trace_t *trace;
+{
 
 	switch (trace_ctx.mode) {
 	case TRACE_MODE_DIAG:
@@ -298,16 +293,6 @@ static int trace_prepare_mode(trace_args_t *args)
 		trace_set_enable(&trace_kfree_skb);
 	case TRACE_MODE_BASIC:
 	case TRACE_MODE_SOCK:
-		break;
-	case TRACE_MODE_MONITOR:
-		trace_for_each(trace) {
-			if (!trace->monitor) {
-				trace_set_invalid_reason(trace, "monitor");
-				continue;
-			}
-			if (trace_is_func(trace) && trace->monitor == TRACE_MONITOR_EXIT)
-				trace_set_retonly(trace);
-		}
 		break;
 	case TRACE_MODE_RTT:
 		trace_set_enable(&trace_tcp_ack_update_rtt);
@@ -399,7 +384,7 @@ static void trace_check_sock_skb()
 	require_sk = mode_mask & TRACE_MODE_SOCK_REQUIRE_MASK;
 
 	/* disable traces that don't support sk in SOCK_MODE, and disable
-	 * traces that don't support skb in !(SOCK_MODE || MONITOR_MODE).
+	 * traces that don't support skb in non-skb modes.
 	 */
 	trace_for_each_cond(trace, (require_skb && !trace->skb) ||
 				   (require_sk && !trace->sk))
@@ -454,7 +439,6 @@ static int trace_prepare_args()
 	ASSIGN_MODE(basic, BASIC);
 	ASSIGN_MODE(intel, DIAG);
 	ASSIGN_MODE(sock, SOCK);
-	ASSIGN_MODE(monitor, MONITOR);
 	ASSIGN_MODE(drop, DROP);
 	ASSIGN_MODE(rtt, RTT);
 	ASSIGN_MODE(latency, LATENCY);
@@ -538,11 +522,9 @@ static int trace_prepare_args()
 		bpf_args->latency_min = args->min_latency;
 	}
 
-	/* enable tcp_ack_update_rtt as monitor if rtt set */
 	if (bpf_args->first_rtt || bpf_args->last_rtt) {
 		bpf_args->first_rtt *= 1000;
 		bpf_args->last_rtt *= 1000;
-		trace_tcp_ack_update_rtt.monitor = 2;
 	}
 
 	if (trace_prepare_mode(args))
@@ -622,7 +604,7 @@ static void trace_prepare_status()
 		if (TRACE_HAS_ANALYZER(trace, free) || TRACE_HAS_ANALYZER(trace, drop))
 			trace_set_status(trace->index, FUNC_STATUS_FREE);
 
-		/* in the monitor mode, perfer to trace skb, then sk */
+		/* prefer to trace skb first, then sk */
 		if (!trace->skb || (mode & (TRACE_MODE_SOCK_MASK | TRACE_MODE_RTT_MASK))) {
 			if (trace->sk)
 				trace_set_status(trace->index, FUNC_STATUS_SK);
@@ -742,7 +724,7 @@ static void trace_print_enabled()
 
 int trace_prepare()
 {
-	int err, i = 0;
+	int err;
 
 #ifndef NO_BTF
 	if (!file_exist("/sys/kernel/btf/vmlinux") && !trace_ctx.args.btf_path) {
@@ -767,18 +749,12 @@ int trace_prepare()
 	if (err)
 		goto err;
 
-	for (; i < ARRAY_SIZE(trace_ops_all); i++) {
-		if (trace_ops_all[i]->trace_supported()) {
-			set_trace_ops(trace_ops_all[i]);
-			break;
-		}
-	}
-
-	if (i == ARRAY_SIZE(trace_ops_all)) {
-		pr_err("no ops found!\n");
+	if (!probe_ops.trace_supported()) {
+		pr_err("probe ops not supported!\n");
 		err = -EINVAL;
 		goto err;
 	}
+	set_trace_ops(&probe_ops);
 
 	err = trace_prepare_traces();
 	if (err)
@@ -871,7 +847,6 @@ static void trace_prepare_ops()
 	switch (trace_ctx.mode) {
 	case TRACE_MODE_BASIC:
 	case TRACE_MODE_DROP:
-	case TRACE_MODE_MONITOR:
 		trace_ctx.ops->trace_poll = basic_poll_handler;
 		break;
 	case TRACE_MODE_SOCK:

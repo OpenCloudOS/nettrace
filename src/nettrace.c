@@ -150,11 +150,6 @@ static void do_parse_args(int argc, char *argv[])
 			.desc = "enable 'sock' mode",
 		},
 		{
-			.lname = "monitor", .dest = &trace_args->monitor,
-			.type = OPTION_BOOL,
-			.desc = "enable 'monitor' mode",
-		},
-		{
 			.lname = "rtt", .dest = &trace_args->rtt,
 			.type = OPTION_BOOL,
 			.desc = "enable 'rtt' in statistics mode",

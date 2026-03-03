@@ -41,15 +41,9 @@ typedef struct {
 		packet_t	pkt;
 		sock_t		ske;
 	};
-	union {
-		/* For FEXIT program only for now */
-		u64	retval;
-		struct {
-			u16 latency_func1;
-			u16 latency_func2;
-			u32 latency;
-		};
-	};
+	u16		latency_func1;
+	u16		latency_func2;
+	u32		latency;
 #ifdef __F_STACK_TRACE
 	u32		stack_id;
 #endif
@@ -72,7 +66,9 @@ typedef struct {
 		packet_t	pkt;
 		sock_t		ske;
 	};
-	u64		retval;
+	u16		latency_func1;
+	u16		latency_func2;
+	u32		latency;
 #ifdef __F_STACK_TRACE
 	u32		stack_id;
 #endif
@@ -176,7 +172,6 @@ typedef enum trace_mode {
 	TRACE_MODE_TIMELINE,
 	TRACE_MODE_DIAG,
 	TRACE_MODE_SOCK,
-	TRACE_MODE_MONITOR,
 	TRACE_MODE_RTT,
 	TRACE_MODE_LATENCY,
 	/* following is some fake mode */
@@ -211,7 +206,6 @@ typedef struct {
 #define TRACE_MODE_DIAG_MASK		(1 << TRACE_MODE_DIAG)
 #define TRACE_MODE_DROP_MASK		(1 << TRACE_MODE_DROP)
 #define TRACE_MODE_SOCK_MASK		(1 << TRACE_MODE_SOCK)
-#define TRACE_MODE_MONITOR_MASK		(1 << TRACE_MODE_MONITOR)
 #define TRACE_MODE_RTT_MASK		(1 << TRACE_MODE_RTT)
 #define TRACE_MODE_LATENCY_MASK		(1 << TRACE_MODE_LATENCY)
 #define TRACE_MODE_TINY_MASK		(1 << TRACE_MODE_TINY)
@@ -222,8 +216,7 @@ typedef struct {
 	 TRACE_MODE_RTT_MASK | TRACE_MODE_LATENCY_MASK)
 #define TRACE_MODE_SOCK_REQUIRE_MASK	TRACE_MODE_SOCK_MASK
 #define TRACE_MODE_ALL_MASK					\
-	(TRACE_MODE_SKB_REQUIRE_MASK | TRACE_MODE_MONITOR_MASK |\
-	 TRACE_MODE_SOCK_REQUIRE_MASK)
+	(TRACE_MODE_SKB_REQUIRE_MASK | TRACE_MODE_SOCK_REQUIRE_MASK)
 #define TRACE_MODE_BPF_CTX_MASK		\
 	(TRACE_MODE_DIAG_MASK | TRACE_MODE_TIMELINE_MASK |	\
 	 TRACE_MODE_LATENCY_MASK)
