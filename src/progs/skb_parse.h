@@ -305,7 +305,6 @@ static inline int probe_parse_sk(struct sock *sk, sock_t *ske, bool filter)
 	struct inet_connection_sock *icsk;
 	struct sock_common *skc;
 	u8 saddr[16], daddr[16];
-	unsigned long tmo;
 	u16 l3_proto;
 	u8 l4_proto;
 
@@ -385,11 +384,16 @@ static inline int probe_parse_sk(struct sock *sk, sock_t *ske, bool filter)
 		1);
 
 	if (bpf_core_helper_exist(jiffies64)) {
-		if (bpf_core_field_exists(icsk->icsk_timeout))
-			tmo = icsk->icsk_timeout;
-		else
-			tmo = icsk->icsk_retransmit_timer.expires;
-		ske->timer_out = tmo - (unsigned long)bpf_jiffies64();
+		if (bpf_core_field_exists(icsk->icsk_timeout)) {
+			ske->timer_out = icsk->icsk_timeout - (unsigned long)bpf_jiffies64();
+		} else if (bpf_core_field_exists(icsk->icsk_retransmit_timer)) {
+			ske->timer_out = icsk->icsk_retransmit_timer.expires -
+				(unsigned long)bpf_jiffies64();
+		} else {
+			ske->timer_out = 0;
+		}
+	} else {
+		ske->timer_out = 0;
 	}
 
 	ske->timer_pending = icsk->icsk_pending;
