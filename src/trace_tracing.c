@@ -1,5 +1,8 @@
 #include <sys/sysinfo.h>
 #include <string.h>
+#include <errno.h>
+#include <unistd.h>
+#include <stdlib.h>
 #include <linux/bpf.h>
 
 #include "trace.h"
@@ -8,6 +11,10 @@
 #include "progs/feat_args_ext.skel.h"
 
 static struct tracing *skel;
+
+static int attach_trace_prog(trace_t *trace, int prog_fd,
+			     enum bpf_attach_type attach_type,
+			     int *link_fd);
 
 static int tracing_lookup_sym_type(const char **names, const int *types,
 				   int nr, const char *name)
@@ -86,7 +93,43 @@ static bool tracing_support_feat_args_ext()
 
 static int tracing_trace_attach()
 {
-	return tracing__attach(skel);
+	trace_t *trace;
+	int err;
+
+	err = tracing__attach(skel);
+	if (err) {
+		pr_err("failed to attach tracing programs: %d\n", err);
+		return err;
+	}
+
+	trace_for_each(trace) {
+		if (trace_is_invalid(trace) || !trace_is_enable(trace) ||
+		    trace->custom)
+			continue;
+
+		if (!trace_is_func(trace)) {
+			err = attach_trace_prog(trace, trace->prog_fd,
+						BPF_TRACE_RAW_TP,
+						&trace->link_fd);
+			if (err)
+				return err;
+			continue;
+		}
+
+		err = attach_trace_prog(trace, trace->prog_fd,
+					BPF_TRACE_FENTRY,
+					&trace->link_fd);
+		if (err)
+			return err;
+
+		err = attach_trace_prog(trace, trace->ret_prog_fd,
+					BPF_TRACE_FEXIT,
+					&trace->ret_link_fd);
+		if (err)
+			return err;
+	}
+
+	return 0;
 }
 
 static void tracing_load_rules()
@@ -130,32 +173,38 @@ static trace_t *find_trace_by_prog(const char *prog_name)
 	return NULL;
 }
 
-static int fixup_insn(struct bpf_program *prog, trace_t *trace)
+static int fixup_insn(struct bpf_insn *insns, size_t insn_cnt, trace_t *trace)
 {
-	const short magic_skb = (short)(BPF_MAGIC_SKB * sizeof(__u64));
-	const short magic_sk = (short)(BPF_MAGIC_SK * sizeof(__u64));
-	const short skb_off = (short)(trace->skb * sizeof(__u64));
-	const short sk_off = (short)(trace->sk * sizeof(__u64));
-	struct bpf_insn *insns;
-	size_t insn_cnt, i;
+	size_t i;
 	int fixed = 0;
-
-	insns = (struct bpf_insn *)bpf_program__insns(prog);
-	insn_cnt = bpf_program__insn_cnt(prog);
 
 	for (i = 0; i < insn_cnt; i++) {
 		struct bpf_insn *insn = &insns[i];
 
-		if (BPF_CLASS(insn->code) != BPF_LDX ||
-		    BPF_MODE(insn->code) != BPF_MEM ||
-		    BPF_SIZE(insn->code) != BPF_DW)
+		if (insn->code == (BPF_JMP | BPF_CALL) &&
+		    insn->src_reg == 0 &&
+		    insn->imm == BPF_FUNC_nt_get_func_index) {
+			insn->code = BPF_ALU64 | BPF_MOV | BPF_K;
+			insn->dst_reg = 0;
+			insn->src_reg = 0;
+			insn->off = 0;
+			insn->imm = trace->index;
+			fixed++;
 			continue;
+		}
 
-		if (insn->off == magic_skb) {
+		if (insn->code == (BPF_JMP | BPF_CALL) &&
+		    insn->src_reg == 0 &&
+		    insn->imm == BPF_FUNC_nt_get_skb) {
 			if (trace->skb >= 0) {
-				insn->off = skb_off;
+				insn->code = BPF_LDX | BPF_MEM | BPF_DW;
+				insn->dst_reg = 0;
+				insn->src_reg = 1;
+				insn->off = (short)(trace->skb * sizeof(__u64));
+				insn->imm = 0;
 			} else {
 				insn->code = BPF_ALU64 | BPF_MOV | BPF_K;
+				insn->dst_reg = 0;
 				insn->src_reg = 0;
 				insn->off = 0;
 				insn->imm = 0;
@@ -164,20 +213,39 @@ static int fixup_insn(struct bpf_program *prog, trace_t *trace)
 			continue;
 		}
 
-		if (insn->off == magic_sk) {
+		if (insn->code == (BPF_JMP | BPF_CALL) &&
+		    insn->src_reg == 0 &&
+		    insn->imm == BPF_FUNC_nt_get_sk) {
 			if (trace->sk >= 0) {
-				insn->off = sk_off;
+				insn->code = BPF_LDX | BPF_MEM | BPF_DW;
+				insn->dst_reg = 0;
+				insn->src_reg = 1;
+				insn->off = (short)(trace->sk * sizeof(__u64));
+				insn->imm = 0;
 			} else {
 				insn->code = BPF_ALU64 | BPF_MOV | BPF_K;
+				insn->dst_reg = 0;
 				insn->src_reg = 0;
 				insn->off = 0;
 				insn->imm = 0;
 			}
 			fixed++;
+			continue;
 		}
 	}
 
 	return fixed;
+}
+
+static int fixup_prog(struct bpf_program *prog, trace_t *trace)
+{
+	struct bpf_insn *insns;
+	size_t insn_cnt;
+
+	insns = (struct bpf_insn *)bpf_program__insns(prog);
+	insn_cnt = bpf_program__insn_cnt(prog);
+
+	return fixup_insn(insns, insn_cnt, trace);
 }
 
 static void fixup_programs()
@@ -190,10 +258,16 @@ static void fixup_programs()
 		trace_t *trace = find_trace_by_prog(prog_name);
 		int fixed;
 
+		pr_debug("checking prog=%s for fixup\n", prog_name);
+		if (!strcmp(prog_name, "nt__default") ||
+		    !strcmp(prog_name, "nt_ret__default") ||
+		    !strcmp(prog_name, "nt__default_tp"))
+			continue;
+
 		if (!trace || trace_is_invalid(trace))
 			continue;
 
-		fixed = fixup_insn(prog, trace);
+		fixed = fixup_prog(prog, trace);
 		if (!fixed)
 			continue;
 
@@ -205,11 +279,88 @@ static void fixup_programs()
 	pr_debug("instruction fixup done, total=%d\n", fixed_total);
 }
 
+static int load_cloned_prog(trace_t *trace, struct bpf_program *tmpl,
+			    const char *prog_name)
+{
+	struct bpf_insn *insns;
+	const struct bpf_insn *tmpl_insns;
+	size_t insn_cnt;
+	int fd;
+	int btf_fd;
+	__u32 func_info_cnt, line_info_cnt;
+	DECLARE_LIBBPF_OPTS(bpf_prog_load_opts, opts,
+		.expected_attach_type = bpf_program__expected_attach_type(tmpl),
+		.prog_flags = bpf_program__flags(tmpl),
+		.attach_btf_id = trace->attach_btf_id,
+		.attach_btf_obj_fd = trace->attach_btf_fd,
+	);
+
+	if (trace->attach_btf_id < 0) {
+		pr_verb("trace %s has invalid attach btf id\n", trace->name);
+		return -ENOENT;
+	}
+
+	insn_cnt = bpf_program__insn_cnt(tmpl);
+	tmpl_insns = bpf_program__insns(tmpl);
+	insns = calloc(insn_cnt, sizeof(*insns));
+	if (!insns)
+		return -ENOMEM;
+
+	memcpy(insns, tmpl_insns, insn_cnt * sizeof(*insns));
+	fixup_insn(insns, insn_cnt, trace);
+
+	btf_fd = bpf_object__btf_fd(skel->obj);
+	if (btf_fd > 0)
+		opts.prog_btf_fd = btf_fd;
+
+	func_info_cnt = bpf_program__func_info_cnt(tmpl);
+	if (func_info_cnt) {
+		opts.func_info = bpf_program__func_info(tmpl);
+		opts.func_info_cnt = func_info_cnt;
+		opts.func_info_rec_size = sizeof(struct bpf_func_info);
+	}
+
+	line_info_cnt = bpf_program__line_info_cnt(tmpl);
+	if (line_info_cnt) {
+		opts.line_info = bpf_program__line_info(tmpl);
+		opts.line_info_cnt = line_info_cnt;
+		opts.line_info_rec_size = sizeof(struct bpf_line_info);
+	}
+
+	fd = bpf_prog_load(bpf_program__type(tmpl), prog_name, "GPL",
+			   insns, insn_cnt, &opts);
+	pr_debug("loaded cloned prog %s for trace %s, fd=%d\n", prog_name, trace->name, fd);
+	free(insns);
+	return fd;
+}
+
+static int attach_trace_prog(trace_t *trace, int prog_fd,
+			     enum bpf_attach_type attach_type,
+			     int *link_fd)
+{
+	DECLARE_LIBBPF_OPTS(bpf_link_create_opts, opts);
+
+	if (prog_fd < 0)
+		return 0;
+
+	*link_fd = bpf_link_create(prog_fd, trace->attach_btf_fd,
+				   attach_type, &opts);
+	if (*link_fd < 0) {
+		pr_err("failed to attach prog for trace %s: btf_id=%d btf_fd=%d attach_type=%d fd=%d %s\n",
+		       trace->name, trace->attach_btf_id, trace->attach_btf_fd,
+		       attach_type, prog_fd, strerror(errno));
+		return -errno;
+	}
+
+	return 0;
+}
+
 static int tracing_trace_open()
 {
 	DECLARE_LIBBPF_OPTS(bpf_object_open_opts, opts,
 		.btf_custom_path = trace_ctx.args.btf_path,
 	);
+	trace_t *trace;
 
 	skel = tracing__open_opts(&opts);
 	if (!skel) {
@@ -221,9 +372,18 @@ static int tracing_trace_open()
 	tracing_load_rules();
 	trace_ctx.obj = skel->obj;
 
+	trace_for_each(trace) {
+		trace->prog_fd = -1;
+		trace->ret_prog_fd = -1;
+		trace->link_fd = -1;
+		trace->ret_link_fd = -1;
+	}
+
 	skel->rodata->m_config = trace_ctx.bpf_args;
 	skel->bss->m_data = trace_ctx.bpf_data;
 
+	/* make sure all the instructions are ready */
+	bpf_object__prepare(skel->obj);
 	fixup_programs();
 
 	return 0;
@@ -233,20 +393,119 @@ err:
 
 static int tracing_trace_load()
 {
+	struct bpf_program *tmpl_entry;
+	struct bpf_program *tmpl_exit;
+	struct bpf_program *tmpl_tp;
+	trace_t *trace;
+	int err = 0;
+
 	if (tracing__load(skel)) {
 		pr_err("failed to load tracing-based eBPF\n");
+		err = -1;
 		goto err;
 	}
 	pr_debug("eBPF is loaded successfully\n");
-	btf_release_cache();
+
+	tmpl_entry = bpf_pbn(skel->obj, "nt__default");
+	tmpl_exit = bpf_pbn(skel->obj, "nt_ret__default");
+	tmpl_tp = bpf_pbn(skel->obj, "nt__default_tp");
+
+	trace_for_each(trace) {
+		int fd;
+		bool need_entry, need_exit;
+
+		if (trace_is_invalid(trace) || !trace_is_enable(trace) ||
+		    trace->custom)
+			continue;
+
+		if (trace->attach_btf_id < 0) {
+			trace_set_invalid_reason(trace, "BTF invalid");
+			continue;
+		}
+
+		if (!trace_is_func(trace)) {
+			if (!tmpl_tp) {
+				pr_err("default tp template not found\n");
+				err = -ENOENT;
+				goto err;
+			}
+			fd = load_cloned_prog(trace, tmpl_tp, trace->prog);
+			if (fd < 0) {
+				pr_err("failed to load tp prog %s: %d\n",
+				       trace->prog, fd);
+				err = fd;
+				goto err;
+			}
+			trace->prog_fd = fd;
+			continue;
+		}
+
+		need_entry = !trace_is_retonly(trace);
+		need_exit = trace_is_ret(trace) || trace_is_retonly(trace);
+
+		if (need_entry) {
+			if (!tmpl_entry) {
+				pr_err("default entry template not found\n");
+				err = -ENOENT;
+				goto err;
+			}
+			fd = load_cloned_prog(trace, tmpl_entry, trace->prog);
+			if (fd < 0) {
+				pr_err("failed to load prog %s: %d\n",
+				       trace->prog, fd);
+				err = fd;
+				goto err;
+			}
+			trace->prog_fd = fd;
+		}
+
+		if (need_exit) {
+			if (!tmpl_exit) {
+				pr_err("default exit template not found\n");
+				err = -ENOENT;
+				goto err;
+			}
+			fd = load_cloned_prog(trace, tmpl_exit, trace->ret_prog);
+			if (fd < 0) {
+				pr_err("failed to load ret prog %s: %d\n",
+				       trace->ret_prog, fd);
+				err = fd;
+				goto err;
+			}
+			trace->ret_prog_fd = fd;
+		}
+	}
 
 	return 0;
 err:
-	return -1;
+	return err;
 }
 
 void tracing_trace_close()
 {
+	trace_t *trace;
+
+	trace_for_each(trace) {
+		if (trace->link_fd >= 0) {
+			close(trace->link_fd);
+			trace->link_fd = -1;
+		}
+		if (trace->ret_link_fd >= 0) {
+			close(trace->ret_link_fd);
+			trace->ret_link_fd = -1;
+		}
+		if (trace->prog_fd >= 0) {
+			close(trace->prog_fd);
+			trace->prog_fd = -1;
+		}
+		if (trace->ret_prog_fd >= 0) {
+			close(trace->ret_prog_fd);
+			trace->ret_prog_fd = -1;
+		}
+	}
+
+	btf_release_cache();
+
 	if (skel)
 		tracing__destroy(skel);
 	skel = NULL;
@@ -362,6 +621,11 @@ static void tracing_prepare_traces()
 	trace_for_each(trace) {
 		char __name[136], *name;
 		int skb_idx, sk_idx;
+		int btf_id = -1;
+		int btf_fd = 0;
+
+		trace->attach_btf_id = -1;
+		trace->attach_btf_fd = 0;
 
 		if (trace_is_invalid(trace) || !trace_is_enable(trace))
 			continue;
@@ -381,13 +645,15 @@ static void tracing_prepare_traces()
 		}
 
 		if (btf_get_trace_args_local(name, &trace->arg_count,
-					     &skb_idx, &sk_idx)) {
+					     &skb_idx, &sk_idx,
+					     &btf_id, &btf_fd)) {
 			if (tracing_lookup_sym_type(func_names,
 						    func_types,
 						    func_nr,
 						    name) == SYM_MODULE &&
 			    !btf_get_trace_args(name, &trace->arg_count,
-						&skb_idx, &sk_idx)) {
+						&skb_idx, &sk_idx,
+						&btf_id, &btf_fd)) {
 				/* fallback to module BTF for module symbols */
 			} else {
 				pr_verb("kernel function %s not founded, skipped\n",
@@ -399,6 +665,8 @@ static void tracing_prepare_traces()
 		}
 		trace->skb = skb_idx;
 		trace->sk = sk_idx;
+		trace->attach_btf_id = btf_id;
+		trace->attach_btf_fd = btf_fd;
 		if (!trace_is_func(trace)) {
 			trace->arg_count -= 1;
 			trace->skb -= 1;

@@ -109,9 +109,9 @@ static __always_inline int check_rate_limit()
 static inline int handle_tiny_output(context_info_t *info)
 {
 	tiny_event_t *e = event_define(tiny_event_t);
-	
+
 	*e = (tiny_event_t) {
-		.func = info->func,
+		.func = (u16)bpf_nt_get_func_index(),
 		.meta = FUNC_TYPE_TINY,
 		.key = (u32)(u64)_P(info->skb),
 		.ts = bpf_ktime_get_ns(),
@@ -173,11 +173,11 @@ static inline void put_skb_ctx(skb_ctx_t *sctx, u64 *key)
 	}
 }
 
-static inline void init_skb_ctx(u64 *key, u16 func, bool ts, bool entry_pending)
+static inline void init_skb_ctx(u64 *key, bool ts, bool entry_pending)
 {
 	skb_ctx_t matched = {
 		.ts1 = ts ? bpf_ktime_get_ns() / 1000 : 0,
-		.func1 = func,
+		.func1 = (u16)bpf_nt_get_func_index(),
 		.ref = entry_pending + 1,
 	};
 
@@ -231,11 +231,12 @@ static inline int pre_handle_latency(context_info_t *info, skb_ctx_t *sctx)
 		if (m_config.latency_free || !func_is_free(info->func_status) ||
 		    func_is_cfree(info->func_status)) {
 			sctx->ts2 = bpf_ktime_get_ns() / 1000;
-			sctx->func2 = info->func;
+			sctx->func2 = (u16)bpf_nt_get_func_index();
 		}
 
 		/* reenter the matcher, or the free of skb is not traced. */
-		if (info->func_status & FUNC_FLAG_MATCHER && sctx->func1 == info->func)
+		if (info->func_status & FUNC_FLAG_MATCHER &&
+		    sctx->func1 == (u16)bpf_nt_get_func_index())
 			sctx->ts1 = bpf_ktime_get_ns() / 1000;
 
 		if (func_is_free(info->func_status)) {
@@ -260,7 +261,7 @@ static inline int pre_handle_latency(context_info_t *info, skb_ctx_t *sctx)
 		 * the skb context will be created in handle_entry_finish().
 		 */
 		if (!m_config.has_filter) {
-			init_skb_ctx((void *)&info->skb, info->func, true, false);
+			init_skb_ctx((void *)&info->skb, true, false);
 			return 1;
 		}
 	}
@@ -282,8 +283,9 @@ static inline bool trace_mode_tiny(void)
  *   0: valid and continue to handle the entry event
  *   otherwise: finish directly
  */
-static inline int pre_handle_entry(context_info_t *info, u16 func, bool is_return)
+static inline int pre_handle_entry(context_info_t *info, bool is_return)
 {
+	u16 func = (u16)bpf_nt_get_func_index();
 	int ret = 0;
 
 	if (!m_data.ready || check_rate_limit())
@@ -375,13 +377,14 @@ static inline void handle_entry_finish(context_info_t *info, int err)
 		 */
 		check_skb_dead(info->func_status, sctx, info->skb);
 	} else {
-		init_skb_ctx((void *)&info->skb, info->func, trace_mode_latency(),
+		init_skb_ctx((void *)&info->skb,
+			     trace_mode_latency(),
 			     func_is_ret(info->func_status));
 	}
 
 out:
 	if (m_config.func_stats)
-		update_stats_key(info->func);
+		update_stats_key((u32)bpf_nt_get_func_index());
 }
 
 static inline void try_set_latency(event_t *e, skb_ctx_t *sctx)
@@ -454,7 +457,7 @@ static int handle_entry(context_info_t *info, event_t *e)
 out:
 	pkt->ts = bpf_ktime_get_ns();
 	e->key = (u64)(void *)_P(skb);
-	e->func = info->func;
+	e->func = (u16)bpf_nt_get_func_index();
 	if (info->func_status & FUNC_FLAG_STACK)
 		e->stack_id = bpf_get_stackid(info->ctx, &m_stack, 0);
 	e->retval = info->retval;
@@ -529,8 +532,9 @@ static __always_inline int handle_exit_rules(u64 retval, int func)
  *   0: continue deal it as entry
  *   1: finish directly
  */
-static __always_inline int pre_handle_exit(context_info_t *info, int func)
+static __always_inline int pre_handle_exit(context_info_t *info)
 {
+	u16 func = (u16)bpf_nt_get_func_index();
 	skb_ctx_t *sctx;
 	u64 retval = 0;
 	retevent_t *e;
@@ -552,7 +556,7 @@ on_retonly:
 	bpf_get_func_ret(info->ctx, &retval);
 	/* follow the cloned skb in skb context */
 	if (mode_has_context() && func == INDEX_skb_clone && retval)
-		init_skb_ctx((void *)&retval, func, false, false);
+		init_skb_ctx((void *)&retval, false, false);
 
 	/* this is a return only case, handle the fexit fully */
 	if (func_is_retonly(func_flags)) {
@@ -584,34 +588,28 @@ on_retonly:
 /**********************************************************************
  *
  * Following is the definntion of all kind of BPF program.
- * 
- * DEFINE_ALL_TRACES() will define all the default implement of BPF
- * program, and the customize handle of kernel function or tracepoint
- * is defined following.
+ *
+ * A single default implementation is defined here and cloned on
+ * userspace side for each enabled trace.
  *
  **********************************************************************/
 
-#define arg_skb(ctx) ctx_get_arg(ctx, BPF_MAGIC_SKB)
-#define arg_sk(ctx) ctx_get_arg(ctx, BPF_MAGIC_SK)
-
-#define TRACE_DEFAULT(name)						\
-	DEFINE_TRACE_INIT(name, name, .skb = arg_skb(ctx),		\
-			  .sk = arg_sk(ctx))				\
-	{								\
-		return default_handle_entry(info);			\
-	}
 /* init the skb by the index of func args */
 #define DEFINE_TRACE_SKB(name)						\
-	DEFINE_TRACE_INIT(name, name, .skb = arg_skb(ctx))
+	DEFINE_TRACE_INIT(name, name, .skb = bpf_nt_get_skb(ctx))
 
-#define DEFINE_TP(name) DEFINE_TP_INIT(name, .skb = arg_skb(ctx))
-#define TP_DEFAULT(name) DEFINE_TP(name)				\
-	{								\
-		return default_handle_entry(info);			\
-	}
+#define DEFINE_TP(name) DEFINE_TP_INIT(name, .skb = bpf_nt_get_skb(ctx))
 
-#define FNC(name)
-DEFINE_ALL_TRACES(TRACE_DEFAULT, TP_DEFAULT, FNC)
+DEFINE_TRACE_INIT(default, ip_v4_rcv, .sk = bpf_nt_get_sk(ctx),
+		  .skb = bpf_nt_get_skb(ctx))
+{
+	return default_handle_entry(info);
+}
+
+DEFINE_TP_INIT(default_tp, .skb = bpf_nt_get_skb(ctx))
+{
+	return default_handle_entry(info);
+}
 
 DEFINE_TP(kfree_skb)
 {
@@ -802,7 +800,9 @@ DEFINE_TRACE_INIT(nft_do_chain, nft_do_chain,
 }
 #endif
 
-DEFINE_TRACE_INIT(tcp_v4_send_reset, tcp_v4_send_reset, .sk = arg_sk(ctx), .skb = arg_skb(ctx))
+DEFINE_TRACE_INIT(tcp_v4_send_reset, tcp_v4_send_reset,
+		  .sk = bpf_nt_get_sk(ctx),
+		  .skb = bpf_nt_get_skb(ctx))
 {
 	struct sock_common *skc_common;
 	reset_event_t *e;
@@ -818,7 +818,9 @@ DEFINE_TRACE_INIT(tcp_v4_send_reset, tcp_v4_send_reset, .sk = arg_sk(ctx), .skb 
 	return handle_entry_output(info, (event_t *)e);
 }
 
-DEFINE_TRACE_INIT(tcp_v6_send_reset, tcp_v6_send_reset, .sk = arg_sk(ctx), .skb = arg_skb(ctx))
+DEFINE_TRACE_INIT(tcp_v6_send_reset, tcp_v6_send_reset,
+		  .sk = bpf_nt_get_sk(ctx),
+		  .skb = bpf_nt_get_skb(ctx))
 {
 	struct sock_common *skc_common;
 	reset_event_t *e;
@@ -834,7 +836,8 @@ DEFINE_TRACE_INIT(tcp_v6_send_reset, tcp_v6_send_reset, .sk = arg_sk(ctx), .skb 
 	return handle_entry_output(info, (event_t *)e);
 }
 
-DEFINE_TRACE_INIT(tcp_send_active_reset, tcp_send_active_reset, .sk = arg_sk(ctx))
+DEFINE_TRACE_INIT(tcp_send_active_reset, tcp_send_active_reset,
+		  .sk = bpf_nt_get_sk(ctx))
 {
 	struct sock_common *skc_common;
 	reset_event_t *e;
@@ -861,7 +864,8 @@ DEFINE_TRACE_INIT(inet_listen, inet_listen, .sk = ((struct socket *)ctx_get_arg(
 	return default_handle_entry(info);
 }
 
-DEFINE_TRACE_INIT(tcp_ack_update_rtt, tcp_ack_update_rtt, .sk = arg_sk(ctx))
+DEFINE_TRACE_INIT(tcp_ack_update_rtt, tcp_ack_update_rtt,
+		  .sk = bpf_nt_get_sk(ctx))
 {
 	u64 first_rtt, last_rtt;
 	rtt_event_t *e;

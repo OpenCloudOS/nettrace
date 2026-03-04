@@ -88,6 +88,12 @@ typedef struct trace {
 	int	index;
 	int	arg_count;
 	u32	status;
+	int	prog_fd;
+	int	ret_prog_fd;
+	int	link_fd;
+	int	ret_link_fd;
+	int	attach_btf_id;
+	int	attach_btf_fd;
 	trace_group_t *parent;
 	struct analyzer *analyzer;
 } trace_t;

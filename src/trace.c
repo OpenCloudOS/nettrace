@@ -765,6 +765,9 @@ int trace_pre_load()
 
 	/* disable all programs that is not enabled or invalid */
 	trace_for_each(trace) {
+		if (!trace->custom)
+			continue;
+
 		bool autoload = !trace_is_invalid(trace) && trace_is_enable(trace);
 
 		if (autoload && !trace_is_retonly(trace))
@@ -789,6 +792,22 @@ check_ret:
 		}
 		bpf_program__set_autoload(prog, false);
 		pr_debug("ret prog: %s is made no-autoload\n", trace->prog);
+	}
+
+	prog = bpf_pbn(trace_ctx.obj, "nt__default");
+	if (prog) {
+		bpf_program__set_autoload(prog, false);
+		bpf_program__set_autoattach(prog, false);
+	}
+	prog = bpf_pbn(trace_ctx.obj, "nt_ret__default");
+	if (prog) {
+		bpf_program__set_autoload(prog, false);
+		bpf_program__set_autoattach(prog, false);
+	}
+	prog = bpf_pbn(trace_ctx.obj, "nt__default_tp");
+	if (prog) {
+		bpf_program__set_autoload(prog, false);
+		bpf_program__set_autoattach(prog, false);
 	}
 
 	return 0;

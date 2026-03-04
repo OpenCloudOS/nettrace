@@ -7,6 +7,10 @@
 #include "trace_funcs.h"
 #include "shared.h"
 
+static long (*bpf_nt_get_func_index)(void) = (void *)BPF_FUNC_nt_get_func_index;
+static void *(*bpf_nt_get_skb)(void *ctx) = (void *)BPF_FUNC_nt_get_skb;
+static void *(*bpf_nt_get_sk)(void *ctx) = (void *)BPF_FUNC_nt_get_sk;
+
 #define ctx_get_arg(ctx, index) ((void *)((unsigned long long *)(ctx))[index])
 #define info_get_arg(info, index) ctx_get_arg(info->ctx, index)
 
@@ -15,13 +19,12 @@
 
 #define TRACE_INIT_WRAPPER(name, __is_return, info_init...) {		\
 	context_info_t info = (context_info_t) {			\
-		.func = INDEX_##name,					\
 		.ctx = (u64 *)ctx,					\
 		info_init						\
 	};								\
-	if (__is_return && pre_handle_exit(&info, INDEX_##name))	\
+	if (__is_return && pre_handle_exit(&info))			\
 		return 0;						\
-	if (pre_handle_entry(&info, INDEX_##name, __is_return))		\
+	if (pre_handle_entry(&info, __is_return))			\
 		return 0;						\
 	handle_entry_finish(&info, fake__##name(&info));		\
 	return 0;							\

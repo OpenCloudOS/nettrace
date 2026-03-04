@@ -23,7 +23,6 @@ typedef struct {
 		/* used in the return only case, to pass the retval to event */
 		u64 retval;
 	};
-	u16 func;
 	u8  func_status;
 	/* don't output the event for this skb */
 	u8  no_output:1;

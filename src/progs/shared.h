@@ -6,6 +6,10 @@
 #include "skb_shared.h"
 #include "trace_funcs.h"
 
+#define BPF_FUNC_nt_get_func_index 0x0FFF
+#define BPF_FUNC_nt_get_skb 0x0FFE
+#define BPF_FUNC_nt_get_sk 0x0FFD
+
 /* The read only fields for BPF prog */
 typedef struct {
 	pkt_args_t pkt;

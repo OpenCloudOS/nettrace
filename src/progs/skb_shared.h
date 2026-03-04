@@ -205,7 +205,4 @@ enum {
 };
 #undef FN
 
-#define BPF_MAGIC_SKB 0xFE1
-#define BPF_MAGIC_SK 0xFE2
-
 #endif
