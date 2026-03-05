@@ -12,3 +12,5 @@ build*.sh
 release.sh
 compile_commands.json
 testing
+pkg
+*.pkg.tar.zst
